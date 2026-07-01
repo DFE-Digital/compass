@@ -11,6 +11,9 @@ public class AdminHubViewModel
     /// <summary>Global product toggles (<c>feature-settings</c> panel).</summary>
     public List<AdminFeatureToggleRow> FeatureSettingsRows { get; set; } = new();
 
+    /// <summary>Environment sync panel (development instance only).</summary>
+    public EnvironmentSyncPanelViewModel? EnvironmentSync { get; set; }
+
     /// <summary>Active groups for the feature-settings &quot;on for some&quot; group dropdowns (same as <c>panel=groups</c> list).</summary>
     public List<AdminFeatureSettingsGroupOption> FeatureSettingsGroupOptions { get; set; } = new();
 
@@ -25,12 +28,16 @@ public class AdminHubViewModel
 
     public List<AdminLookupRow> ActivityTypes { get; set; } = new();
     public List<AdminLookupRow> WorkItemTags { get; set; } = new();
+    public List<AdminResourceBandRow> ResourceBands { get; set; } = new();
     public List<AdminLookupRow> MissionPillars { get; set; } = new();
     public List<AdminPriorityOutcomeRow> PriorityOutcomes { get; set; } = new();
     public List<AdminLookupRow> RiskTiers { get; set; } = new();
     public List<AdminLookupRow> RiskCategories { get; set; } = new();
     public List<AdminLookupRow> RiskOrigins { get; set; } = new();
     public List<AdminLookupRow> IssueCategories { get; set; } = new();
+
+    /// <summary>RAID register spreadsheet default column order (<c>raid-register-table-view</c> panel).</summary>
+    public AdminRaidRegisterTableViewPanel? RaidRegisterTableView { get; set; }
 
     // ── Generic RAID lookup rows (for any active RAID panel) ──
     public List<AdminLookupRow> RaidLookupRows { get; set; } = new();
@@ -68,6 +75,7 @@ public class AdminHubViewModel
     public List<AdminLookupRow> FipsTypes { get; set; } = new();
     public List<AdminLookupRow> FipsBusinessAreas { get; set; } = new();
     public List<AdminFipsUserGroupRow> FipsUserGroups { get; set; } = new();
+    public List<AdminFipsUserGroupParentOption> FipsUserGroupParentOptions { get; set; } = new();
     public List<AdminFipsContactRoleRow> FipsContactRoles { get; set; } = new();
     public List<AdminFipsCategorisationGroupRow> FipsCategorisationGroups { get; set; } = new();
 
@@ -107,6 +115,10 @@ public class AdminApiTokenRow
     public DateTime CreatedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public bool IsActive { get; set; }
+    public string? Environment { get; set; }
+    public string? AccessTier { get; set; }
+    public string? OwnerEmail { get; set; }
+    public bool IsSelfService { get; set; }
 }
 
 public sealed class AdminCmsAccessProductRow
@@ -134,8 +146,16 @@ public class AdminFipsUserGroupRow
     public string? Description { get; set; }
     public int DisplayOrder { get; set; }
     public bool Active { get; set; }
-    public List<string> ChildNames { get; set; } = new();
+    public int Depth { get; set; }
+    public string? ParentPath { get; set; }
+    public bool HasChildren { get; set; }
     public List<string> SynonymNames { get; set; } = new();
+}
+
+public class AdminFipsUserGroupParentOption
+{
+    public int Id { get; set; }
+    public string Label { get; set; } = string.Empty;
 }
 
 public class AdminFipsContactRoleRow
@@ -188,6 +208,18 @@ public class AdminRagRow
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public string? CssClass { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class AdminResourceBandRow
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public decimal MinFte { get; set; }
+    public decimal? MaxFte { get; set; }
     public string? CssClass { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; }

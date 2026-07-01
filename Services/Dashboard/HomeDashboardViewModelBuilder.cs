@@ -17,6 +17,9 @@ namespace Compass.Services.Dashboard;
 
 public class HomeDashboardViewModelBuilder : IHomeDashboardViewModelBuilder
 {
+    private static bool IsOpenForSubmissionWindow(Commission commission, DateTime now) =>
+        commission.IsActive && now >= commission.OpenDate && now <= commission.DueDate.AddDays(1);
+
     private readonly ILogger<HomeDashboardViewModelBuilder> _logger;
     private readonly IProductsApiService _productsApiService;
     private readonly IReturnStatusService _returnStatusService;
@@ -249,9 +252,8 @@ public class HomeDashboardViewModelBuilder : IHomeDashboardViewModelBuilder
 
         foreach (var commission in activeCommissions)
         {
-            // Check if commission is still open (not past due date, or past due but not submitted)
-            var isOpen = now >= commission.OpenDate;
-            var isPastDue = now > commission.DueDate;
+            if (!IsOpenForSubmissionWindow(commission, now))
+                continue;
 
             // Get user's products for this commission
             var userProductDocumentIds = myProducts
@@ -282,17 +284,15 @@ public class HomeDashboardViewModelBuilder : IHomeDashboardViewModelBuilder
                 var submission = existingSubmissions.GetValueOrDefault(documentId);
                 var status = submission?.Status ?? CommissionSubmissionStatus.NotStarted;
 
-                // Only include if not submitted and (open or past due)
-                if (status != CommissionSubmissionStatus.Submitted && (isOpen || isPastDue))
-                {
-                    var finalStatus = isPastDue && status != CommissionSubmissionStatus.Submitted
-                        ? CommissionSubmissionStatus.Late
-                        : status == CommissionSubmissionStatus.NotStarted && isOpen
-                        ? CommissionSubmissionStatus.NotStarted
-                        : status;
+                if (status == CommissionSubmissionStatus.Submitted)
+                    continue;
 
-                    productsNeedingCommissionReporting.Add((product, commission, finalStatus, commission.DueDate));
-                }
+                var isPastDue = now > commission.DueDate;
+                var finalStatus = isPastDue
+                    ? CommissionSubmissionStatus.Late
+                    : status;
+
+                productsNeedingCommissionReporting.Add((product, commission, finalStatus, commission.DueDate));
             }
         }
 

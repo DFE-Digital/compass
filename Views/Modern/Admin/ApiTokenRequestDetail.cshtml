@@ -1,0 +1,138 @@
+@using Compass.Models
+@{
+    var request = ViewBag.Request as ApiTokenRequest;
+    var permissions = ViewBag.Permissions as Dictionary<string, (bool read, bool create, bool update, bool delete)>;
+    var resources = ViewBag.Resources as string[] ?? Array.Empty<string>();
+    Layout = "~/Views/Modern/Shared/_ModernLayout.cshtml";
+    ViewData["Title"] = "Review API key request";
+}
+
+@if (request == null)
+{
+    <p class="govuk-body">Request not found.</p>
+    return;
+}
+
+<nav class="govuk-breadcrumbs govuk-!-margin-bottom-4">
+    <ol class="govuk-breadcrumbs__list">
+        <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+        <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin", new { panel = "api-token-requests" })">API key requests</a></li>
+        <li class="govuk-breadcrumbs__list-item" aria-current="page">Review</li>
+    </ol>
+</nav>
+
+@if (ViewBag.AdminMessage != null)
+{
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+        <div class="govuk-notification-banner__content"><p>@ViewBag.AdminMessage</p></div>
+    </div>
+}
+@if (ViewBag.AdminError != null)
+{
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
+        <div class="govuk-error-summary__body"><p>@ViewBag.AdminError</p></div>
+    </div>
+}
+
+<h1 class="govuk-heading-l">Review API key request</h1>
+
+<dl class="govuk-summary-list govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Requestor</dt>
+        <dd class="govuk-summary-list__value">@request.RequestorEmail</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Environment</dt>
+        <dd class="govuk-summary-list__value">@request.Environment</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Project</dt>
+        <dd class="govuk-summary-list__value">@request.ProjectSlug</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Read-only all data</dt>
+        <dd class="govuk-summary-list__value">@(request.IsReadOnlyAllData ? "Yes" : "No")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Justification</dt>
+        <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(request.Justification) ? "—" : request.Justification)</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Submitted</dt>
+        <dd class="govuk-summary-list__value">@request.CreatedAt.ToString("u")</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Status</dt>
+        <dd class="govuk-summary-list__value">@request.Status</dd>
+    </div>
+    @if (request.IssuedApiTokenId.HasValue)
+    {
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Issued token</dt>
+            <dd class="govuk-summary-list__value">
+                <a class="govuk-link" href="@Url.Action("ApiTokenDetail", "ModernAdmin", new { id = request.IssuedApiTokenId.Value })">View token #@request.IssuedApiTokenId.Value</a>
+            </dd>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(request.ReviewNotes))
+    {
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Review notes</dt>
+            <dd class="govuk-summary-list__value">@request.ReviewNotes</dd>
+        </div>
+    }
+</dl>
+
+<h2 class="govuk-heading-m">Requested permissions</h2>
+<table class="govuk-table govuk-!-margin-bottom-6">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th class="govuk-table__header">Resource</th>
+            <th class="govuk-table__header">Read</th>
+            <th class="govuk-table__header">Create</th>
+            <th class="govuk-table__header">Update</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        @foreach (var resource in resources)
+        {
+            if (permissions == null || !permissions.TryGetValue(resource, out var p))
+                continue;
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">@resource</td>
+                <td class="govuk-table__cell">@(p.read ? "Yes" : "—")</td>
+                <td class="govuk-table__cell">@(p.create ? "Yes" : "—")</td>
+                <td class="govuk-table__cell">@(p.update ? "Yes" : "—")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (request.Status == ApiTokenRequestStatus.Pending)
+{
+    <form method="post" action="@Url.Action("ApiTokenRequestApprove", "ModernAdmin", new { id = request.Id })" class="govuk-!-margin-bottom-4">
+        @Html.AntiForgeryToken()
+        <div class="govuk-form-group">
+            <label class="govuk-label" for="reviewNotesApprove">Notes for requestor (optional)</label>
+            <textarea class="govuk-textarea" id="reviewNotesApprove" name="reviewNotes" rows="2"></textarea>
+        </div>
+        <button type="submit" class="govuk-button">Approve and issue key</button>
+    </form>
+
+    <form method="post" action="@Url.Action("ApiTokenRequestReject", "ModernAdmin", new { id = request.Id })">
+        @Html.AntiForgeryToken()
+        <div class="govuk-form-group">
+            <label class="govuk-label" for="reviewNotesReject">Reason for rejection</label>
+            <textarea class="govuk-textarea" id="reviewNotesReject" name="reviewNotes" rows="2" required></textarea>
+        </div>
+        <button type="submit" class="govuk-button govuk-button--warning">Reject request</button>
+    </form>
+}
+else
+{
+    <p class="govuk-body">Status: <strong>@request.Status</strong></p>
+}
+
+<p class="govuk-body govuk-!-margin-top-6">
+    <a class="govuk-link" href="@Url.Action("Index", "ModernAdmin", new { panel = "api-token-requests" })">Back to requests</a>
+</p>

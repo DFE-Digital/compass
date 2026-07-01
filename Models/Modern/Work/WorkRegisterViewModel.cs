@@ -113,7 +113,12 @@ public class WorkRegisterRow
     public string? SroDisplayName { get; set; }
     public string? RagBackgroundColourKey { get; set; }
     public string? RagTextColourKey { get; set; }
+    /// <summary>Open (non-complete) milestones — shown on the work register UI.</summary>
     public int MilestoneCount { get; set; }
+
+    /// <summary>All non-deleted milestones — used in Excel work list exports.</summary>
+    public int TotalMilestoneCount { get; set; }
+
     public string? MonthlyUpdateStatus { get; set; }
     public string? MonthlyUpdateStatusLink { get; set; }
     public string? MonthlyUpdateFilterKey { get; set; }
@@ -124,7 +129,7 @@ public class WorkRegisterRow
     public string? LatestMonthlyDueUrl { get; set; }
     /// <summary>Full month/year for accessibility, e.g. "April 2026".</summary>
     public string? LatestMonthlyPeriodLabel { get; set; }
-    /// <summary>Badge text aligned with work dashboard: Submitted, Draft, Not due, Not started.</summary>
+    /// <summary>Badge text aligned with work dashboard: Submitted, Draft, Not due, Not started, Late.</summary>
     public string? LatestMonthlyStatusLabel { get; set; }
     /// <summary>Short action for aria-label: View, Complete, or empty.</summary>
     public string? LatestMonthlyActionLabel { get; set; }
@@ -135,6 +140,15 @@ public class WorkRegisterRow
 
     /// <summary>Comma-separated tag names for display / search.</summary>
     public string? TagNamesSummary { get; set; }
+
+    /// <summary>Comma-separated mission pillar names from <see cref="Project.ProjectMissions"/>.</summary>
+    public string? MissionPillarsSummary { get; set; }
+
+    /// <summary>Comma-separated priority outcome names from <see cref="Project.ProjectObjectives"/>.</summary>
+    public string? PriorityOutcomesSummary { get; set; }
+
+    /// <summary>Parallel to monthly period columns on work register Excel exports.</summary>
+    public List<string> MonthlyPeriodStatuses { get; set; } = new();
 
     /// <summary>Sort proxy aligned with monthly activity (maps from project updated time).</summary>
     public DateTime UpdatedAtUtc { get; set; }

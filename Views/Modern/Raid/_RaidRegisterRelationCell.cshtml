@@ -1,36 +1,49 @@
 @model Compass.ViewModels.Modern.RaidRegisterRelationParts
+@using Compass.ViewModels.Modern
 @{
-  var wdSection = string.IsNullOrWhiteSpace(Model.WorkDetailSection) ? "risks" : Model.WorkDetailSection!;
-  var wdHash = string.Equals(wdSection, "issues", StringComparison.OrdinalIgnoreCase) ? "wd-issues" : "wd-risks";
+  var targetName = (Model.RelatedTitle ?? Model.Target ?? "").Trim();
+  var hasViewLink = !string.IsNullOrEmpty(Model.LinkHref)
+    && Model.Kind != RaidRegisterRelationKinds.Organisation
+    && Model.Kind != RaidRegisterRelationKinds.Unknown
+    && !string.IsNullOrEmpty(targetName);
 }
-<td class="govuk-table__cell govuk-body-s">
-@if (Model.Kind == RaidRegisterRelationKinds.Organisation)
-{
-  <span>Organisation</span>
-}
-else if (Model.Kind == RaidRegisterRelationKinds.Work)
-{
-  <span>Work</span>
-  @if (Model.ProjectId.HasValue && !string.IsNullOrEmpty(Model.Target))
-  {
-    <span> · </span>
-    <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "ModernWork", new { id = Model.ProjectId.Value, tab = wdSection })#@wdHash">@Model.Target</a>
-  }
-  else if (!string.IsNullOrEmpty(Model.Target))
-  {
-    <span> · @Model.Target</span>
-  }
-}
-else if (Model.Kind == RaidRegisterRelationKinds.Fips)
-{
-  <span>FIPS</span>
-  @if (!string.IsNullOrEmpty(Model.Target))
-  {
-    <span> · @Model.Target</span>
-  }
-}
-else
-{
-  <span class="dfe-c-text-muted">—</span>
-}
+<td class="govuk-table__cell govuk-body-s raid-ss-relation-cell"
+    data-type="relation"
+    data-association-kind="@(Model.AssociationUiKind ?? "")"
+    data-project-id="@(Model.ProjectId?.ToString() ?? "")"
+    data-primary-product-id="@(Model.PrimaryProductId?.ToString() ?? "")"
+    data-relation-kind="@Model.Kind"
+    data-relation-source="@(Model.SourceLabel ?? "")"
+    data-relation-title="@(Model.RelatedTitle ?? Model.Target ?? "")"
+    data-relation-description="@(Model.RelatedDescription ?? "")"
+    data-relation-href="@(Model.LinkHref ?? "")">
+  <div class="raid-ss-relation-cell__content">
+    @if (hasViewLink)
+    {
+      <button type="button"
+              class="govuk-link govuk-link--no-visited-state raid-ss-relation-item-link raid-ss-relation-view-btn"
+              aria-label="View details for @targetName">@targetName</button>
+    }
+    else if (Model.Kind == RaidRegisterRelationKinds.Organisation)
+    {
+      <button type="button"
+              class="govuk-link govuk-link--no-visited-state raid-ss-relation-org-label raid-ss-relation-view-btn"
+              aria-label="View organisational relation details">Not linked to a work item or service</button>
+    }
+    else if (!string.IsNullOrEmpty(targetName))
+    {
+      <button type="button"
+              class="govuk-link govuk-link--no-visited-state raid-ss-relation-name raid-ss-relation-view-btn"
+              aria-label="View relation details for @targetName">@targetName</button>
+    }
+    else
+    {
+      <span class="raid-ss-relation-empty">—</span>
+    }
+    <div class="raid-ss-relation-actions">
+      <button type="button"
+              class="govuk-link govuk-body-s raid-ss-relation-change-btn"
+              aria-label="Change related item">Change</button>
+    </div>
+  </div>
 </td>

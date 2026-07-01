@@ -7,6 +7,16 @@ public sealed class ModernThematicReportViewModel
 {
     public IReadOnlyList<ThematicReportTagSummaryRow> SummaryRows { get; init; } = Array.Empty<ThematicReportTagSummaryRow>();
 
+    public IReadOnlyList<ModernBusinessAreaDashboardRow> DashboardRows { get; init; } = Array.Empty<ModernBusinessAreaDashboardRow>();
+
+    public IReadOnlyList<BusinessAreaProjectItem> ScopeProjectItems { get; init; } = Array.Empty<BusinessAreaProjectItem>();
+
+    public int ReportYear { get; init; }
+
+    public int ReportMonth { get; init; }
+
+    public string MonthName { get; init; } = "";
+
     public int? SelectedThemeId { get; init; }
 
     public string? SelectedThemeName { get; init; }
@@ -32,4 +42,13 @@ public sealed class ThematicReportTagSummaryRow
     public int CompletedCount { get; init; }
 
     public int TotalCount => ActiveCount + CompletedCount;
+}
+
+public sealed class ModernThematicReportDashboard
+{
+    public int ReportYear { get; init; }
+    public int ReportMonth { get; init; }
+    public string MonthName { get; init; } = "";
+    public List<ModernBusinessAreaDashboardRow> Rows { get; init; } = new();
+    public List<BusinessAreaProjectItem> ScopeProjectItems { get; init; } = new();
 }

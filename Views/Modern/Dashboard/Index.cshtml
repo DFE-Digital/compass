@@ -22,14 +22,43 @@
 
   var fipsServiceRegisterEnabled = ViewBag.FipsServiceRegisterEnabled as bool? == true;
   var dashboardServiceRegisterByCmdbKey = ViewBag.DashboardServiceRegisterProductIdByCmdbKey as IReadOnlyDictionary<string, Guid>;
+  var today = DateTime.Today;
+  var openPerformanceReturns = Model.ProductsNeedingCommissionReporting.ToList();
+
+  var performanceCommissionsHref = Url.Action("Index", "ModernPerformance") ?? "/modern/performance/commissions";
 
   string PerformanceReportingUrl(ProductDto pr)
   {
     var needle = (pr.DocumentId ?? pr.FipsId)?.Trim();
-    if (string.IsNullOrEmpty(needle))
-      return Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine" }) ?? "#";
-    return Url.Action("PerformanceMetrics", "ProductReporting", new { view = "mine", search = needle }) ?? "#";
+    var openReturn = Model.ProductsNeedingCommissionReporting
+        .FirstOrDefault(r => string.Equals(r.Product.DocumentId ?? r.Product.FipsId, needle, StringComparison.OrdinalIgnoreCase));
+    if (openReturn.Product != null && !string.IsNullOrEmpty(needle))
+    {
+      return Url.Action("Commission", "ModernPerformance", new
+      {
+        commissionId = openReturn.Commission.Id,
+        search = needle
+      }) ?? performanceCommissionsHref;
+    }
+    return performanceCommissionsHref;
   }
+
+  string CommissionProductHref(ProductDto product, Commission commission)
+  {
+    var needle = (product.DocumentId ?? product.FipsId)?.Trim();
+    return Url.Action("Commission", "ModernPerformance", new
+    {
+      commissionId = commission.Id,
+      search = needle
+    }) ?? performanceCommissionsHref;
+  }
+
+  string CommissionStatusLabel(CommissionSubmissionStatus status, DateTime dueDate) =>
+      status == CommissionSubmissionStatus.Late || (status != CommissionSubmissionStatus.Submitted && dueDate.Date < today)
+          ? "Late"
+          : status == CommissionSubmissionStatus.InProgress
+              ? "In progress"
+              : "Due";
 
   string? ServiceRegisterProductUrl(ProductDto pr)
   {
@@ -100,33 +129,34 @@
   };
 
   var workDashboardHref = Url.Action("Dashboard", "ModernWork") ?? "/modern/work/dashboard";
-  var today = DateTime.Today;
 
-  var rows = new List<(string Title, string Hint, DateTime? SortDate, string Href, string StatusTag)>();
+  var milestoneTasks = new List<(string Title, string Hint, string Href, string StatusTag, int? CompletionPercent)>();
 
   foreach (var m in Model.OverdueMilestones)
   {
     var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
     var milestoneHint = proj != null ? $"Milestone · {proj.Title}" : "Milestone";
     milestoneHint = $"Due {m.DueDate.ToString("d MMM yyyy", CultureInfo.GetCultureInfo("en-GB"))} · {milestoneHint}";
-    rows.Add((
+    milestoneTasks.Add((
       m.Name,
       milestoneHint,
-      m.DueDate,
       $"{Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })}#wd-milestones",
-      "Late"));
+      "Late",
+      null));
   }
 
   foreach (var m in Model.MilestonesDueThisWeek)
   {
     var proj = Model.MyProjects.FirstOrDefault(p => p.Id == m.ProjectId);
-    rows.Add((
+    milestoneTasks.Add((
       m.Name,
       proj != null ? $"Milestone · {proj.Title}" : "Milestone",
-      m.DueDate,
       $"{Url.Action("Detail", "ModernWork", new { id = m.ProjectId, tab = "milestones" })}#wd-milestones",
-      "Due"));
+      "Due",
+      null));
   }
+
+  var otherTasks = new List<(string Title, string Hint, string Href, string StatusTag, int? CompletionPercent)>();
 
   if (ViewBag.ShowRaidNavigation == true)
   {
@@ -134,68 +164,54 @@
     {
       var proj = Model.MyProjects.FirstOrDefault(p => p.Id == i.ProjectId);
       var issueLate = i.TargetResolutionDate.HasValue && i.TargetResolutionDate.Value.Date < today;
-      rows.Add((
+      otherTasks.Add((
         i.Title,
         proj != null ? $"Issue · {proj.Title}" : "Issue",
-        i.TargetResolutionDate ?? DateTime.MaxValue.AddDays(-365),
         Url.Action("Details", "Issue", new { id = i.Id }) ?? "#",
-        issueLate ? "Late" : "Due"));
+        issueLate ? "Late" : "Due",
+        null));
     }
-  }
-
-  foreach (var (product, retStatus, due) in Model.ProductsNeedingReturns.Take(8))
-  {
-    rows.Add((
-      product.Title,
-      "Performance return",
-      due,
-      Url.Action("PerformanceMetrics", "ProductReporting", new { documentId = product.DocumentId ?? product.FipsId }) ?? "#",
-      retStatus == ReturnStatus.Late ? "Late" : "Due"));
-  }
-
-  foreach (var (product, commission, subStatus, due) in Model.ProductsNeedingCommissionReporting.Take(8))
-  {
-    var commissionLate = due.Date < today;
-    rows.Add((
-      product.Title,
-      $"{commission.Name} · {subStatus}",
-      due,
-      Url.Action("Commission", "ModernPerformance", new { commissionId = commission.Id }) ?? "#",
-      commissionLate ? "Late" : "Due"));
   }
 
   foreach (var a in Model.AssignedActions.Take(15))
   {
     var actionLate = a.DueDate.HasValue && a.DueDate.Value.Date < today;
-    rows.Add((
+    otherTasks.Add((
       a.Title,
       a.Project?.Title ?? "Action",
-      a.DueDate ?? DateTime.MaxValue.AddDays(-365),
       Url.Action("Details", "Action", new { id = a.Id }) ?? "#",
-      actionLate ? "Late" : "Due"));
+      actionLate ? "Late" : "Due",
+      null));
   }
 
-  var orderedTasks = rows
-    .OrderBy(r => r.SortDate ?? DateTime.MaxValue)
-    .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
-    .Take(40)
+  var orderedHomeTasks = milestoneTasks
+    .Concat(otherTasks)
     .ToList();
 
+  const int visibleTaskLimit = 8;
   var showMonthlyReportingTask = Model.MonthlyReportingWindowOpen;
   var monthlyReportingComplete = Model.MonthlyReportingRemainingCount == 0;
-  var hasAnyTasks = showMonthlyReportingTask || orderedTasks.Any();
+  var monthlyTaskSlots = showMonthlyReportingTask ? 1 : 0;
+  var visibleHomeTaskSlots = Math.Max(0, visibleTaskLimit - monthlyTaskSlots);
+  var visibleHomeTasks = orderedHomeTasks.Take(visibleHomeTaskSlots).ToList();
+  var hiddenHomeTasks = orderedHomeTasks.Skip(visibleHomeTaskSlots).ToList();
+  var hasAnyTasks = showMonthlyReportingTask || orderedHomeTasks.Any();
 
   var dateCaption = DateTime.Today.ToString("dddd d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
   var pageTitle = $"{Greeting()}, {Model.FirstName}";
+
+  ViewBag.InverseServiceNav = true;
 }
 
 @section Masthead {
-<div class="dfe-f-masthead dfe-f-masthead--page modern-dashboard__masthead">
-  <div class="dfe-f-app-container dfe-f-app-container--wide govuk-width-container dfe-f-masthead__inner">
-    <p class="govuk-caption-m govuk-!-margin-bottom-2 govuk-!-margin-top-0">@dateCaption</p>
-    <h1 class="govuk-heading-xl govuk-!-margin-top-0 govuk-!-margin-bottom-0">@pageTitle</h1>
-    <div class="modern-dashboard__masthead-stats" aria-labelledby="dashboard-stats-heading">
-      @await Html.PartialAsync("~/Views/Modern/Dashboard/_DashboardAtAGlanceStats.cshtml", Model)
+<div class="dfe-f-masthead dfe-f-masthead--product modern-dashboard__masthead">
+  <div class="govuk-width-container dfe-f-masthead__inner">
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-two-thirds">
+        <p class="govuk-caption-m govuk-!-margin-bottom-2 govuk-!-margin-top-0 modern-dashboard__masthead-caption">@dateCaption</p>
+        <h1 class="govuk-heading-xl govuk-!-margin-top-0 govuk-!-margin-bottom-3">@pageTitle</h1>
+        <p class="govuk-body modern-dashboard__masthead-lede">Your live picture of delivery, performance and RAID across the products and programmes you support.</p>
+      </div>
     </div>
   </div>
 </div>
@@ -210,6 +226,9 @@
 }
 
 <div id="modern-dashboard" class="modern-dashboard modern-dashboard--with-masthead">
+
+<div class="govuk-grid-row modern-dashboard__layout">
+  <div class="govuk-grid-column-two-thirds modern-dashboard__main">
 
 <section class="modern-dashboard__section" aria-labelledby="dashboard-tasks-heading">
   <h2 id="dashboard-tasks-heading" class="govuk-heading-m govuk-!-margin-top-0 modern-dashboard__section-heading">Your tasks</h2>
@@ -254,19 +273,54 @@
           </div>
         </li>
       }
-      @for (var ti = 0; ti < orderedTasks.Count; ti++)
+      @for (var ti = 0; ti < visibleHomeTasks.Count; ti++)
       {
-        var t = orderedTasks[ti];
+        var t = visibleHomeTasks[ti];
         var statusId = $"dashboard-task-status-{ti + 1}";
         var hintId = $"dashboard-task-hint-{ti + 1}";
+        var statusBadgeClass = t.CompletionPercent is int pct
+          ? WorkBadgeCss.ServiceRegisterCompletionBadgeClass(pct)
+          : TaskStatusBadgeClass(t.StatusTag);
         <li class="govuk-task-list__item govuk-task-list__item--with-link">
           <div class="govuk-task-list__name-and-hint">
             <a class="govuk-link govuk-task-list__link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@t.Href" aria-describedby="@hintId @statusId">@Trunc(t.Title, 120)</a>
             <div id="@hintId" class="govuk-task-list__hint">@Trunc(t.Hint, 120)</div>
           </div>
           <div class="govuk-task-list__status" id="@statusId">
-            <span class="@TaskStatusBadgeClass(t.StatusTag)">@t.StatusTag</span>
+            <span class="@statusBadgeClass">@t.StatusTag</span>
           </div>
+        </li>
+      }
+      @if (hiddenHomeTasks.Count > 0)
+      {
+        <li class="govuk-task-list__item govuk-task-list__item--with-link">
+          <details class="govuk-details govuk-!-margin-bottom-0" data-module="govuk-details">
+            <summary class="govuk-details__summary">
+              <span class="govuk-details__summary-text">@hiddenHomeTasks.Count more task@(hiddenHomeTasks.Count == 1 ? "" : "s")</span>
+            </summary>
+            <div class="govuk-details__text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+              <ul class="govuk-task-list govuk-!-margin-bottom-0">
+                @for (var hi = 0; hi < hiddenHomeTasks.Count; hi++)
+                {
+                  var t = hiddenHomeTasks[hi];
+                  var statusId = $"dashboard-task-hidden-status-{hi + 1}";
+                  var hintId = $"dashboard-task-hidden-hint-{hi + 1}";
+                  var statusBadgeClass = t.CompletionPercent is int pct
+                    ? WorkBadgeCss.ServiceRegisterCompletionBadgeClass(pct)
+                    : TaskStatusBadgeClass(t.StatusTag);
+                  <li class="govuk-task-list__item govuk-task-list__item--with-link">
+                    <div class="govuk-task-list__name-and-hint">
+                      <a class="govuk-link govuk-task-list__link govuk-!-font-weight-bold govuk-link--no-visited-state" href="@t.Href" aria-describedby="@hintId @statusId">@Trunc(t.Title, 120)</a>
+                      <div id="@hintId" class="govuk-task-list__hint">@Trunc(t.Hint, 120)</div>
+                    </div>
+                    <div class="govuk-task-list__status" id="@statusId">
+                      <span class="@statusBadgeClass">@t.StatusTag</span>
+                    </div>
+                  </li>
+                }
+              </ul>
+            </div>
+          </details>
         </li>
       }
     </ul>
@@ -313,7 +367,7 @@
                 <div class="govuk-body-s dfe-c-text-muted modern-work-table__meta">WI-@p.Id.ToString("D8")</div>
               </td>
               <td class="govuk-table__cell"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(statusText == "—" ? null : statusText) dfe-f-badge--small">@statusText</span></td>
-              <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(ragCss, ragName == "—" ? null : ragName) dfe-f-badge--small">@(string.IsNullOrEmpty(ragName) || ragName == "—" ? "—" : ragName.ToUpperInvariant())</span></td>
+              <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagCompactBadgeClass(ragName == "—" ? null : ragName)">@(string.IsNullOrEmpty(ragName) || ragName == "—" ? "—" : ragName.ToUpperInvariant())</span></td>
               <td class="govuk-table__cell"><span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(priorityName) dfe-f-badge--small">@((priorityName ?? "—").ToUpperInvariant())</span></td>
               <td class="govuk-table__cell">@MonthlyStatusLabel(p.Id)</td>
             </tr>
@@ -325,6 +379,61 @@
     {
       <p class="govuk-body govuk-!-margin-top-3 govuk-!-margin-bottom-0">
         <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("AllWork", "ModernWork")">View more</a>
+      </p>
+    }
+  </section>
+}
+
+@if (openPerformanceReturns.Any())
+{
+  <section class="modern-dashboard__section" aria-labelledby="dashboard-performance-heading">
+    <h2 id="dashboard-performance-heading" class="govuk-heading-m govuk-!-margin-top-0 modern-dashboard__section-heading">Performance returns</h2>
+    <p class="govuk-body modern-dashboard__section-desc">Open commission periods that still need a product return from you.</p>
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-dashboard__table">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Performance returns due</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Product</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Commission</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Status</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Due</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var item in openPerformanceReturns.Take(12))
+          {
+            var statusLabel = CommissionStatusLabel(item.Status, item.DueDate);
+            var statusBadgeClass = statusLabel == "Late"
+              ? "dfe-f-badge dfe-f-badge--small dfe-f-badge--red"
+              : statusLabel == "In progress"
+                ? "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange"
+                : "dfe-f-badge dfe-f-badge--small dfe-f-badge--blue";
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@CommissionProductHref(item.Product, item.Commission)">@Trunc(item.Product.Title, 80)</a>
+              </td>
+              <td class="govuk-table__cell">@Trunc(item.Commission.Name, 60)</td>
+              <td class="govuk-table__cell"><span class="@statusBadgeClass">@statusLabel</span></td>
+              <td class="govuk-table__cell">@item.DueDate.ToString("d MMM yyyy", CultureInfo.GetCultureInfo("en-GB"))</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    @if (openPerformanceReturns.Count > 12)
+    {
+      <p class="govuk-body govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+        <a class="govuk-link govuk-link--no-visited-state" href="@performanceCommissionsHref">View all commissions</a>
       </p>
     }
   </section>
@@ -385,5 +494,14 @@
     }
   </section>
 }
+
+  </div>
+
+  <aside class="govuk-grid-column-one-third modern-dashboard__sidebar" aria-label="Dashboard summary">
+    <section class="modern-dashboard__section modern-dashboard__sidebar-section" aria-labelledby="dashboard-stats-heading">
+      @await Html.PartialAsync("~/Views/Modern/Dashboard/_DashboardAtAGlanceStats.cshtml", Model)
+    </section>
+  </aside>
+</div>
 
 </div>

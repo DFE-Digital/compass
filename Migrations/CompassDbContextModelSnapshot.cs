@@ -350,8 +350,8 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Notes")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("ObjectiveId")
                         .HasColumnType("int");
@@ -429,8 +429,8 @@ namespace Compass.Migrations
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -990,6 +990,10 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AccessTier")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -1002,10 +1006,17 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("Environment")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<DateTime?>("ExpiresAt")
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSelfService")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("LastUsedAt")
@@ -1013,6 +1024,14 @@ namespace Compass.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("OwnerEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ProjectSlug")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
@@ -1029,10 +1048,47 @@ namespace Compass.Migrations
 
                     b.HasIndex("IsActive");
 
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerEmail");
+
                     b.HasIndex("Token")
                         .IsUnique();
 
                     b.ToTable("ApiTokens");
+                });
+
+            modelBuilder.Entity("Compass.Models.ApiTokenMember", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AddedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("ApiTokenId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApiTokenId", "UserEmail")
+                        .IsUnique();
+
+                    b.ToTable("ApiTokenMembers");
                 });
 
             modelBuilder.Entity("Compass.Models.ApiTokenPermission", b =>
@@ -1069,6 +1125,72 @@ namespace Compass.Migrations
                         .IsUnique();
 
                     b.ToTable("ApiTokenPermissions");
+                });
+
+            modelBuilder.Entity("Compass.Models.ApiTokenRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsReadOnlyAllData")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("IssuedApiTokenId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Justification")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("PermissionsJson")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ProjectSlug")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RequestorEmail")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ReviewNotes")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IssuedApiTokenId");
+
+                    b.HasIndex("RequestorEmail");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("ApiTokenRequests");
                 });
 
             modelBuilder.Entity("Compass.Models.AssessmentCriteriaResponse", b =>
@@ -1977,8 +2099,8 @@ namespace Compass.Migrations
 
                     b.Property<string>("CommentText")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -6397,7 +6519,17 @@ namespace Compass.Migrations
                     b.Property<bool>("IsEnterpriseService")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsMultiDepartmentProduct")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("IsSubjectToSpendControl")
+                        .HasColumnType("bit");
+
                     b.Property<string>("LastCmdbSnapshotJson")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OtherDepartments")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(max)");
 
@@ -6407,6 +6539,9 @@ namespace Compass.Migrations
                     b.Property<string>("ProductURL")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("RiskAppetiteLookupId")
+                        .HasColumnType("int");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -6436,6 +6571,8 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("PhaseId");
+
+                    b.HasIndex("RiskAppetiteLookupId");
 
                     b.HasIndex("Status");
 
@@ -6525,6 +6662,29 @@ namespace Compass.Migrations
                     b.ToTable("CMDBProductContacts");
                 });
 
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductDirectorate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("CMDBProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("FipsDirectorateId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CMDBProductId");
+
+                    b.HasIndex("FipsDirectorateId");
+
+                    b.ToTable("CMDBProductDirectorates");
+                });
+
             modelBuilder.Entity("Compass.Models.Fips.CMDBProductFipsCategorisationItem", b =>
                 {
                     b.Property<int>("Id")
@@ -6546,6 +6706,60 @@ namespace Compass.Migrations
                     b.HasIndex("FipsCategorisationItemId");
 
                     b.ToTable("CMDBProductFipsCategorisationItems");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductMission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("CMDBProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MissionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MissionId");
+
+                    b.HasIndex("CMDBProductId", "MissionId")
+                        .IsUnique();
+
+                    b.ToTable("CMDBProductMissions");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductObjective", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("CMDBProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ObjectiveId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObjectiveId");
+
+                    b.HasIndex("CMDBProductId", "ObjectiveId")
+                        .IsUnique();
+
+                    b.ToTable("CMDBProductObjectives");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.CMDBProductType", b =>
@@ -6592,6 +6806,21 @@ namespace Compass.Migrations
                     b.HasIndex("FipsUserGroupId");
 
                     b.ToTable("CMDBProductUserGroups");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductWorkItemTag", b =>
+                {
+                    b.Property<Guid>("CMDBProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("WorkItemTagLookupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("CMDBProductId", "WorkItemTagLookupId");
+
+                    b.HasIndex("WorkItemTagLookupId");
+
+                    b.ToTable("CMDBProductWorkItemTags");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.FipsBusinessArea", b =>
@@ -6801,6 +7030,41 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("FipsContactRoles");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.FipsDirectorate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("DirectorateLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DirectorateLookupId")
+                        .IsUnique()
+                        .HasFilter("[DirectorateLookupId] IS NOT NULL");
+
+                    b.ToTable("FipsDirectorates");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.FipsType", b =>
@@ -7478,6 +7742,30 @@ namespace Compass.Migrations
                     b.ToTable("HOPS");
                 });
 
+            modelBuilder.Entity("Compass.Models.HttpErrorEmailSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("HttpErrorEmailSettings");
+                });
+
             modelBuilder.Entity("Compass.Models.Issue", b =>
                 {
                     b.Property<int>("Id")
@@ -7487,8 +7775,8 @@ namespace Compass.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("AssuranceArrangements")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<bool>("BlockedFlag")
                         .HasColumnType("bit");
@@ -7517,12 +7805,12 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("DetailedCause")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime>("DetectedDate")
                         .HasColumnType("datetime2");
@@ -7550,8 +7838,8 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Priority")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<int?>("PriorityId")
                         .HasColumnType("int");
@@ -7568,8 +7856,8 @@ namespace Compass.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ResolutionSummary")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime?>("ResolvedDate")
                         .HasColumnType("datetime2");
@@ -7578,13 +7866,13 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("ServiceImpactSummary")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("Severity")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<int?>("SeverityId")
                         .HasColumnType("int");
@@ -7617,8 +7905,8 @@ namespace Compass.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int?>("StatusId")
                         .HasColumnType("int");
@@ -7628,8 +7916,8 @@ namespace Compass.Migrations
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -7638,12 +7926,12 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("UserImpactSummary")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("Workaround")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.HasKey("Id");
 
@@ -7714,8 +8002,8 @@ namespace Compass.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("DecisionSummary")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime?>("EventDate")
                         .HasColumnType("datetime2");
@@ -8878,8 +9166,8 @@ namespace Compass.Migrations
 
                     b.Property<string>("Narrative")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int>("ProjectMonthlyUpdateId")
                         .HasColumnType("int");
@@ -10261,8 +10549,8 @@ namespace Compass.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("PathToGreen")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("PhaseId")
                         .HasColumnType("int");
@@ -10306,8 +10594,8 @@ namespace Compass.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("RagJustification")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("RagStatus")
                         .HasMaxLength(450)
@@ -10805,12 +11093,12 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("DraftPathToGreen")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("DraftRagJustification")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("DraftRagStatusLookupId")
                         .HasColumnType("int");
@@ -10826,8 +11114,12 @@ namespace Compass.Migrations
 
                     b.Property<string>("Narrative")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("PeopleNarrative")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
@@ -11181,12 +11473,12 @@ namespace Compass.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Justification")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("PathToGreen")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
@@ -11776,6 +12068,333 @@ namespace Compass.Migrations
                     b.ToTable("RaidEvidenceTypes");
                 });
 
+            modelBuilder.Entity("Compass.Models.RaidRegister", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BusinessAreaLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("DirectorateLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessAreaLookupId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("DirectorateLookupId");
+
+                    b.ToTable("RaidRegisters");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterAssumption", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AssumptionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AddedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "AssumptionId");
+
+                    b.HasIndex("AddedByUserId");
+
+                    b.HasIndex("AssumptionId");
+
+                    b.ToTable("RaidRegisterAssumptions");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterBusinessArea", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BusinessAreaLookupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "BusinessAreaLookupId");
+
+                    b.HasIndex("BusinessAreaLookupId");
+
+                    b.ToTable("RaidRegisterBusinessAreas");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterDependency", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DependencyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AddedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "DependencyId");
+
+                    b.HasIndex("AddedByUserId");
+
+                    b.HasIndex("DependencyId");
+
+                    b.ToTable("RaidRegisterDependencies");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterDirectorate", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DirectorateLookupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "DirectorateLookupId");
+
+                    b.HasIndex("DirectorateLookupId");
+
+                    b.ToTable("RaidRegisterDirectorates");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterIssue", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IssueId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AddedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "IssueId");
+
+                    b.HasIndex("AddedByUserId");
+
+                    b.HasIndex("IssueId");
+
+                    b.ToTable("RaidRegisterIssues");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterNearMiss", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("NearMissId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AddedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "NearMissId");
+
+                    b.HasIndex("AddedByUserId");
+
+                    b.HasIndex("NearMissId");
+
+                    b.ToTable("RaidRegisterNearMisses");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterRisk", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RiskId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AddedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "RiskId");
+
+                    b.HasIndex("AddedByUserId");
+
+                    b.HasIndex("RiskId");
+
+                    b.ToTable("RaidRegisterRisks");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterService", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FipsServiceId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "FipsServiceId");
+
+                    b.HasIndex("FipsServiceId");
+
+                    b.ToTable("RaidRegisterServices");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterSpreadsheetLayout", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ColumnOrderJson")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("RaidRegisterSpreadsheetLayouts");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterUser", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RaidRegisterUsers");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterWorkItem", b =>
+                {
+                    b.Property<int>("RaidRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.HasKey("RaidRegisterId", "ProjectId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("RaidRegisterWorkItems");
+                });
+
+            modelBuilder.Entity("Compass.Models.ResourceBandLookup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CssClass")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("MaxFte")
+                        .HasColumnType("decimal(9,2)");
+
+                    b.Property<decimal>("MinFte")
+                        .HasColumnType("decimal(9,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("SortOrder");
+
+                    b.ToTable("ResourceBandLookups");
+                });
+
             modelBuilder.Entity("Compass.Models.ResponseAnswer", b =>
                 {
                     b.Property<Guid>("ResponseAnswerId")
@@ -11880,6 +12499,10 @@ namespace Compass.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Assurance")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
                     b.Property<string>("BusinessArea")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
@@ -11889,8 +12512,8 @@ namespace Compass.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Cause")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("ClosedByUserId")
                         .HasColumnType("int");
@@ -11898,15 +12521,32 @@ namespace Compass.Migrations
                     b.Property<DateTime?>("ClosedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Contingency")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int?>("CreatedByUserId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("CurrentImpactLevelId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CurrentLikelihoodId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("CurrentScore")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Description")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("FinancialImpact")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("FipsId")
                         .HasMaxLength(450)
@@ -11916,15 +12556,15 @@ namespace Compass.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("HowIdentified")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime?>("IdentifiedDate")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("ImpactIfRealised")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int>("ImpactRating")
                         .HasColumnType("int");
@@ -11945,8 +12585,8 @@ namespace Compass.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Notes")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("ObjectiveId")
                         .HasColumnType("int");
@@ -11978,19 +12618,25 @@ namespace Compass.Migrations
                     b.Property<int?>("ResidualImpact")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ResidualImpactLevelId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("ResidualLikelihood")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ResidualLikelihoodId")
                         .HasColumnType("int");
 
                     b.Property<decimal?>("ResidualScore")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Response")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("ResponseStrategy")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("RiskCategoryId")
                         .HasColumnType("int");
@@ -12029,16 +12675,25 @@ namespace Compass.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<DateTime?>("TargetDate")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("ToleranceImpactLevelId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ToleranceLikelihoodId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("ToleranceScore")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -12051,6 +12706,10 @@ namespace Compass.Migrations
                     b.HasIndex("ClosedByUserId");
 
                     b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("CurrentImpactLevelId");
+
+                    b.HasIndex("CurrentLikelihoodId");
 
                     b.HasIndex("FipsId");
 
@@ -12067,6 +12726,10 @@ namespace Compass.Migrations
                     b.HasIndex("ProjectId");
 
                     b.HasIndex("ProximityDate");
+
+                    b.HasIndex("ResidualImpactLevelId");
+
+                    b.HasIndex("ResidualLikelihoodId");
 
                     b.HasIndex("RiskCategoryId");
 
@@ -12088,6 +12751,10 @@ namespace Compass.Migrations
                     b.HasIndex("SroUserId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("ToleranceImpactLevelId");
+
+                    b.HasIndex("ToleranceLikelihoodId");
 
                     b.HasIndex("UpdatedByUserId");
 
@@ -12286,18 +12953,22 @@ namespace Compass.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("Metric")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int>("RiskId")
                         .HasColumnType("int");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
+
+                    b.Property<string>("Threshold")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -12434,6 +13105,58 @@ namespace Compass.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("RiskProximities");
+                });
+
+            modelBuilder.Entity("Compass.Models.RiskRatingHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ChangedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ImpactLevelId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LikelihoodId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RatingType")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("RiskId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("Score")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedAt");
+
+                    b.HasIndex("ChangedByUserId");
+
+                    b.HasIndex("ImpactLevelId");
+
+                    b.HasIndex("LikelihoodId");
+
+                    b.HasIndex("RiskId");
+
+                    b.HasIndex("RiskId", "RatingType");
+
+                    b.ToTable("RiskRatingHistory");
                 });
 
             modelBuilder.Entity("Compass.Models.RiskRiskCategory", b =>
@@ -14667,6 +15390,17 @@ namespace Compass.Migrations
                     b.Navigation("ApiToken");
                 });
 
+            modelBuilder.Entity("Compass.Models.ApiTokenMember", b =>
+                {
+                    b.HasOne("Compass.Models.ApiToken", "ApiToken")
+                        .WithMany("Members")
+                        .HasForeignKey("ApiTokenId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ApiToken");
+                });
+
             modelBuilder.Entity("Compass.Models.ApiTokenPermission", b =>
                 {
                     b.HasOne("Compass.Models.ApiToken", "ApiToken")
@@ -14676,6 +15410,16 @@ namespace Compass.Migrations
                         .IsRequired();
 
                     b.Navigation("ApiToken");
+                });
+
+            modelBuilder.Entity("Compass.Models.ApiTokenRequest", b =>
+                {
+                    b.HasOne("Compass.Models.ApiToken", "IssuedApiToken")
+                        .WithMany()
+                        .HasForeignKey("IssuedApiTokenId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("IssuedApiToken");
                 });
 
             modelBuilder.Entity("Compass.Models.AssessmentCriteriaResponse", b =>
@@ -15877,7 +16621,14 @@ namespace Compass.Migrations
                         .HasForeignKey("PhaseId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("Compass.Models.RiskAppetiteLookup", "RiskAppetiteLookup")
+                        .WithMany()
+                        .HasForeignKey("RiskAppetiteLookupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Phase");
+
+                    b.Navigation("RiskAppetiteLookup");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.CMDBProductBusinessArea", b =>
@@ -15937,6 +16688,25 @@ namespace Compass.Migrations
                     b.Navigation("FipsContactRole");
                 });
 
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductDirectorate", b =>
+                {
+                    b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
+                        .WithMany("Directorates")
+                        .HasForeignKey("CMDBProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Fips.FipsDirectorate", "FipsDirectorate")
+                        .WithMany()
+                        .HasForeignKey("FipsDirectorateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CMDBProduct");
+
+                    b.Navigation("FipsDirectorate");
+                });
+
             modelBuilder.Entity("Compass.Models.Fips.CMDBProductFipsCategorisationItem", b =>
                 {
                     b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
@@ -15954,6 +16724,44 @@ namespace Compass.Migrations
                     b.Navigation("CMDBProduct");
 
                     b.Navigation("FipsCategorisationItem");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductMission", b =>
+                {
+                    b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
+                        .WithMany("Missions")
+                        .HasForeignKey("CMDBProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Mission", "Mission")
+                        .WithMany()
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CMDBProduct");
+
+                    b.Navigation("Mission");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductObjective", b =>
+                {
+                    b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
+                        .WithMany("Objectives")
+                        .HasForeignKey("CMDBProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Objective", "Objective")
+                        .WithMany()
+                        .HasForeignKey("ObjectiveId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CMDBProduct");
+
+                    b.Navigation("Objective");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.CMDBProductType", b =>
@@ -15994,6 +16802,25 @@ namespace Compass.Migrations
                     b.Navigation("FipsUserGroup");
                 });
 
+            modelBuilder.Entity("Compass.Models.Fips.CMDBProductWorkItemTag", b =>
+                {
+                    b.HasOne("Compass.Models.Fips.CMDBProduct", "CMDBProduct")
+                        .WithMany("WorkItemTags")
+                        .HasForeignKey("CMDBProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.WorkItemTagLookup", "WorkItemTagLookup")
+                        .WithMany()
+                        .HasForeignKey("WorkItemTagLookupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CMDBProduct");
+
+                    b.Navigation("WorkItemTagLookup");
+                });
+
             modelBuilder.Entity("Compass.Models.Fips.FipsBusinessArea", b =>
                 {
                     b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
@@ -16013,6 +16840,16 @@ namespace Compass.Migrations
                         .IsRequired();
 
                     b.Navigation("Group");
+                });
+
+            modelBuilder.Entity("Compass.Models.Fips.FipsDirectorate", b =>
+                {
+                    b.HasOne("Compass.Models.DirectorateLookup", "DirectorateLookup")
+                        .WithMany()
+                        .HasForeignKey("DirectorateLookupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("DirectorateLookup");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.FipsUserGroup", b =>
@@ -17356,6 +18193,266 @@ namespace Compass.Migrations
                     b.Navigation("ToRiskTier");
                 });
 
+            modelBuilder.Entity("Compass.Models.RaidRegister", b =>
+                {
+                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
+                        .WithMany()
+                        .HasForeignKey("BusinessAreaLookupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.DirectorateLookup", "DirectorateLookup")
+                        .WithMany()
+                        .HasForeignKey("DirectorateLookupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("BusinessAreaLookup");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("DirectorateLookup");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterAssumption", b =>
+                {
+                    b.HasOne("Compass.Models.User", "AddedByUser")
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.Assumption", "Assumption")
+                        .WithMany()
+                        .HasForeignKey("AssumptionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("Assumptions")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AddedByUser");
+
+                    b.Navigation("Assumption");
+
+                    b.Navigation("RaidRegister");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterBusinessArea", b =>
+                {
+                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
+                        .WithMany()
+                        .HasForeignKey("BusinessAreaLookupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("BusinessAreas")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BusinessAreaLookup");
+
+                    b.Navigation("RaidRegister");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterDependency", b =>
+                {
+                    b.HasOne("Compass.Models.User", "AddedByUser")
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.Dependency", "Dependency")
+                        .WithMany()
+                        .HasForeignKey("DependencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("Dependencies")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AddedByUser");
+
+                    b.Navigation("Dependency");
+
+                    b.Navigation("RaidRegister");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterDirectorate", b =>
+                {
+                    b.HasOne("Compass.Models.DirectorateLookup", "DirectorateLookup")
+                        .WithMany()
+                        .HasForeignKey("DirectorateLookupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("Directorates")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DirectorateLookup");
+
+                    b.Navigation("RaidRegister");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterIssue", b =>
+                {
+                    b.HasOne("Compass.Models.User", "AddedByUser")
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.Issue", "Issue")
+                        .WithMany()
+                        .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("Issues")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AddedByUser");
+
+                    b.Navigation("Issue");
+
+                    b.Navigation("RaidRegister");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterNearMiss", b =>
+                {
+                    b.HasOne("Compass.Models.User", "AddedByUser")
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.NearMiss", "NearMiss")
+                        .WithMany()
+                        .HasForeignKey("NearMissId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("NearMisses")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AddedByUser");
+
+                    b.Navigation("NearMiss");
+
+                    b.Navigation("RaidRegister");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterRisk", b =>
+                {
+                    b.HasOne("Compass.Models.User", "AddedByUser")
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("Risks")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.Risk", "Risk")
+                        .WithMany()
+                        .HasForeignKey("RiskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AddedByUser");
+
+                    b.Navigation("RaidRegister");
+
+                    b.Navigation("Risk");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterService", b =>
+                {
+                    b.HasOne("Compass.Models.FipsService", "FipsService")
+                        .WithMany()
+                        .HasForeignKey("FipsServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("Services")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FipsService");
+
+                    b.Navigation("RaidRegister");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterSpreadsheetLayout", b =>
+                {
+                    b.HasOne("Compass.Models.User", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("UpdatedByUser");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterUser", b =>
+                {
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("Users")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RaidRegister");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Compass.Models.RaidRegisterWorkItem", b =>
+                {
+                    b.HasOne("Compass.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.RaidRegister", "RaidRegister")
+                        .WithMany("WorkItems")
+                        .HasForeignKey("RaidRegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("RaidRegister");
+                });
+
             modelBuilder.Entity("Compass.Models.ResponseAnswer", b =>
                 {
                     b.HasOne("Compass.Models.SurveyQuestion", "SurveyQuestion")
@@ -17396,6 +18493,16 @@ namespace Compass.Migrations
                         .WithMany()
                         .HasForeignKey("CreatedByUserId");
 
+                    b.HasOne("Compass.Models.RiskImpactLevel", "CurrentImpactLevel")
+                        .WithMany()
+                        .HasForeignKey("CurrentImpactLevelId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.RiskLikelihood", "CurrentLikelihood")
+                        .WithMany()
+                        .HasForeignKey("CurrentLikelihoodId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Compass.Models.GovernanceBoard", "GovernanceBoard")
                         .WithMany()
                         .HasForeignKey("GovernanceBoardId");
@@ -17417,6 +18524,16 @@ namespace Compass.Migrations
                         .WithMany("Risks")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Compass.Models.RiskImpactLevel", "ResidualImpactLevel")
+                        .WithMany()
+                        .HasForeignKey("ResidualImpactLevelId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.RiskLikelihood", "ResidualLikelihoodLevel")
+                        .WithMany()
+                        .HasForeignKey("ResidualLikelihoodId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("Compass.Models.RiskCategory", "RiskCategory")
                         .WithMany()
@@ -17451,6 +18568,16 @@ namespace Compass.Migrations
                         .WithMany()
                         .HasForeignKey("SroUserId");
 
+                    b.HasOne("Compass.Models.RiskImpactLevel", "ToleranceImpactLevel")
+                        .WithMany()
+                        .HasForeignKey("ToleranceImpactLevelId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.RiskLikelihood", "ToleranceLikelihood")
+                        .WithMany()
+                        .HasForeignKey("ToleranceLikelihoodId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Compass.Models.User", "UpdatedByUser")
                         .WithMany()
                         .HasForeignKey("UpdatedByUserId");
@@ -17458,6 +18585,10 @@ namespace Compass.Migrations
                     b.Navigation("ClosedByUser");
 
                     b.Navigation("CreatedByUser");
+
+                    b.Navigation("CurrentImpactLevel");
+
+                    b.Navigation("CurrentLikelihood");
 
                     b.Navigation("GovernanceBoard");
 
@@ -17475,6 +18606,10 @@ namespace Compass.Migrations
 
                     b.Navigation("Proximity");
 
+                    b.Navigation("ResidualImpactLevel");
+
+                    b.Navigation("ResidualLikelihoodLevel");
+
                     b.Navigation("RiskCategory");
 
                     b.Navigation("RiskPriority");
@@ -17484,6 +18619,10 @@ namespace Compass.Migrations
                     b.Navigation("RiskTier");
 
                     b.Navigation("SroUser");
+
+                    b.Navigation("ToleranceImpactLevel");
+
+                    b.Navigation("ToleranceLikelihood");
 
                     b.Navigation("UpdatedByUser");
                 });
@@ -17571,6 +18710,38 @@ namespace Compass.Migrations
                         .HasForeignKey("RiskId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Risk");
+                });
+
+            modelBuilder.Entity("Compass.Models.RiskRatingHistory", b =>
+                {
+                    b.HasOne("Compass.Models.User", "ChangedByUser")
+                        .WithMany()
+                        .HasForeignKey("ChangedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.RiskImpactLevel", "ImpactLevel")
+                        .WithMany()
+                        .HasForeignKey("ImpactLevelId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.RiskLikelihood", "Likelihood")
+                        .WithMany()
+                        .HasForeignKey("LikelihoodId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Compass.Models.Risk", "Risk")
+                        .WithMany("RatingHistory")
+                        .HasForeignKey("RiskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChangedByUser");
+
+                    b.Navigation("ImpactLevel");
+
+                    b.Navigation("Likelihood");
 
                     b.Navigation("Risk");
                 });
@@ -18174,6 +19345,8 @@ namespace Compass.Migrations
 
             modelBuilder.Entity("Compass.Models.ApiToken", b =>
                 {
+                    b.Navigation("Members");
+
                     b.Navigation("Permissions");
 
                     b.Navigation("RequestLogs");
@@ -18374,9 +19547,17 @@ namespace Compass.Migrations
 
                     b.Navigation("Contacts");
 
+                    b.Navigation("Directorates");
+
+                    b.Navigation("Missions");
+
+                    b.Navigation("Objectives");
+
                     b.Navigation("Types");
 
                     b.Navigation("UserGroups");
+
+                    b.Navigation("WorkItemTags");
                 });
 
             modelBuilder.Entity("Compass.Models.Fips.FipsCategorisationGroup", b =>
@@ -18615,6 +19796,29 @@ namespace Compass.Migrations
                     b.Navigation("History");
                 });
 
+            modelBuilder.Entity("Compass.Models.RaidRegister", b =>
+                {
+                    b.Navigation("Assumptions");
+
+                    b.Navigation("BusinessAreas");
+
+                    b.Navigation("Dependencies");
+
+                    b.Navigation("Directorates");
+
+                    b.Navigation("Issues");
+
+                    b.Navigation("NearMisses");
+
+                    b.Navigation("Risks");
+
+                    b.Navigation("Services");
+
+                    b.Navigation("Users");
+
+                    b.Navigation("WorkItems");
+                });
+
             modelBuilder.Entity("Compass.Models.ResponseScale", b =>
                 {
                     b.Navigation("Options");
@@ -18627,6 +19831,8 @@ namespace Compass.Migrations
                     b.Navigation("KeyRiskIndicators");
 
                     b.Navigation("MilestoneRisks");
+
+                    b.Navigation("RatingHistory");
 
                     b.Navigation("RiskActions");
 

@@ -2,6 +2,8 @@
 @using Compass.Models.Fips
 @{
   var p = Model.Product;
+  var aiss = Model.AissAccessibility;
+  var accessibilityTabUrl = Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "accessibility" }) ?? "#";
 
   string StatusBadgeClass(CMDBProductStatus status) => status switch
   {
@@ -14,14 +16,9 @@
 }
 <div class="work-item-masthead fips-product-masthead govuk-!-margin-bottom-6">
   <div class="govuk-grid-row">
-    <div class="govuk-grid-column-two-thirds-from-desktop">
-      <a href="@Url.Action("Fips", "ModernManage", new { tab = "active" })" class="govuk-link govuk-back-link govuk-!-margin-bottom-2 govuk-link--no-visited-state">Back to products</a>
+    <div class="govuk-grid-column-full">
+      <a href="@Url.Action("FipsDashboard", "ModernManage")" class="govuk-link govuk-back-link govuk-!-margin-bottom-2 govuk-link--no-visited-state">Back to service register</a>
       <h1 class="govuk-heading-l govuk-!-margin-bottom-4">@p.Title</h1>
-    </div>
-    <div class="govuk-grid-column-one-third-from-desktop work-item-masthead__actions">
-      <div class="work-item-masthead__actions-inner">
-        @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductHeaderActions.cshtml", Model)
-      </div>
     </div>
   </div>
   <div class="govuk-grid-row">
@@ -34,6 +31,7 @@
               <th scope="col" class="govuk-table__header">Status</th>
               <th scope="col" class="govuk-table__header">Business area</th>
               <th scope="col" class="govuk-table__header">Phase</th>
+              <th scope="col" class="govuk-table__header">Accessibility</th>
               <th scope="col" class="govuk-table__header">View product</th>
             </tr>
           </thead>
@@ -44,6 +42,40 @@
               </td>
               <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(Model.BusinessAreasDisplay) ? "—" : Model.BusinessAreasDisplay)</td>
               <td class="govuk-table__cell">@(p.Phase?.Name ?? "—")</td>
+              <td class="govuk-table__cell">
+                @if (aiss != null)
+                {
+                  string accessibilityHref;
+                  string accessibilityLinkHint;
+                  if (aiss.IsOnboarded && !string.IsNullOrEmpty(aiss.ServicePageUrl))
+                  {
+                    accessibilityHref = aiss.ServicePageUrl;
+                    accessibilityLinkHint = " — view in AISS (opens in new tab)";
+                  }
+                  else if (aiss.NotFound)
+                  {
+                    var onboardUrl = aiss.OnboardPageUrl(p.Id, p.UniqueID);
+                    accessibilityHref = !string.IsNullOrEmpty(onboardUrl) ? onboardUrl : accessibilityTabUrl;
+                    accessibilityLinkHint = !string.IsNullOrEmpty(onboardUrl)
+                      ? " — onboard in AISS (opens in new tab)"
+                      : " — view accessibility details";
+                  }
+                  else
+                  {
+                    accessibilityHref = accessibilityTabUrl;
+                    accessibilityLinkHint = " — view accessibility details";
+                  }
+                  var accessibilityExternal = accessibilityHref.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+                  <a href="@accessibilityHref" class="govuk-link govuk-link--no-visited-state"@if (accessibilityExternal) { <text> target="_blank" rel="noopener noreferrer"</text> }>
+                    <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--@aiss.AccessibilityBadgeColor">@aiss.AccessibilityBadgeLabel</span>
+                    <span class="govuk-visually-hidden">@accessibilityLinkHint</span>
+                  </a>
+                }
+                else
+                {
+                  <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">No data</span>
+                }
+              </td>
               <td class="govuk-table__cell">
                 @if (!string.IsNullOrWhiteSpace(p.ProductURL))
                 {

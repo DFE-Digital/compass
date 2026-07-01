@@ -44,10 +44,10 @@ public class Project
     [Obsolete("Use RagStatusLookupId instead. This property is kept for backward compatibility.")]
     public string? RagStatus { get; set; } // Deprecated: Use RagStatusLookupId
 
-    [MaxLength(1000)]
+    [MaxLength(4000)]
     public string? RagJustification { get; set; }
 
-    [MaxLength(1000)]
+    [MaxLength(4000)]
     public string? PathToGreen { get; set; }
 
     // Phase - using foreign key to PhaseLookup

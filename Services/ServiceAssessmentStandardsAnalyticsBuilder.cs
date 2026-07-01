@@ -152,17 +152,19 @@ public static class ServiceAssessmentStandardsAnalyticsBuilder
                 .Take(8)
                 .ToList();
 
-            var samples = actions
-                .Where(a => !string.IsNullOrWhiteSpace(a.Action.Comments))
-                .OrderByDescending(a => a.Action.Comments!.Length)
-                .Take(5)
-                .Select(a => new SasActionSampleVm
+            var actionDetails = actions
+                .OrderBy(a => a.AssessmentName, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(a => a.Action.Created ?? DateTime.MinValue)
+                .Select(a => new SasStandardActionDetailVm
                 {
                     AssessmentId = a.AssessmentId,
                     AssessmentName = a.AssessmentName ?? $"Assessment {a.AssessmentId}",
                     Outcome = a.Outcome,
                     Status = a.Action.Status,
-                    CommentSnippet = Truncate(a.Action.Comments!.Trim(), 200)
+                    ActionId = a.Action.ActionID,
+                    Standard = std,
+                    Created = a.Action.Created,
+                    Comment = a.Action.Comments?.Trim() ?? ""
                 })
                 .ToList();
 
@@ -185,7 +187,7 @@ public static class ServiceAssessmentStandardsAnalyticsBuilder
                 ActionsByStatus = byStatus,
                 ActionsByOutcome = OrderOutcomeKeys(byOutcome),
                 RepeatedThemes = repeated,
-                SampleActions = samples,
+                Actions = actionDetails,
                 PctOnAmberOrRed = row?.PctOnAmberOrRed,
                 ActionsFromRed = row?.ActionsFromRedOutcome ?? byOutcome.GetValueOrDefault("Red", 0),
                 ActionsFromAmber = row?.ActionsFromAmberOutcome ?? byOutcome.GetValueOrDefault("Amber", 0),

@@ -1,0 +1,70 @@
+@model FipsProductDetailViewModel
+@using Compass.Services.Fips
+@{
+  var p = Model.Product;
+  var nc = ViewBag.FipsNavContext as string;
+  var embed = ViewBag.FipsInformationEditEmbed as bool? == true;
+  var cancelUrl = IsOperationsNav()
+    ? Url.Action("ServiceRegisterProduct", "ModernOperations", new { id = p.Id, tab = "information" })
+    : Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "information" });
+  ViewData["Title"] = embed ? "Edit product information — " + p.Title : "Edit product information — " + p.Title;
+  bool IsOperationsNav() => string.Equals(nc, "operations", StringComparison.OrdinalIgnoreCase);
+}
+
+@if (!embed)
+{
+  @section Breadcrumbs {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    @if (IsOperationsNav())
+    {
+      <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+      <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceRegister", "ModernOperations")">Service register</a></li>
+    }
+    else
+    {
+      <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Service register</a></li>
+      <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Fips", "ModernManage", new { tab = "active" })">Active products</a></li>
+    }
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@cancelUrl">@p.Title</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">Edit product information</li>
+  }
+
+  @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductMasthead.cshtml", Model)
+}
+
+<div class="@(embed ? "" : "fips-product-detail")" id="sc-fips-edit-information">
+  @if (!embed)
+  {
+    <div class="govuk-grid-row fips-product-detail-layout govuk-!-margin-top-2">
+      <div class="govuk-grid-column-one-quarter-from-desktop fips-product-detail-layout__nav">
+        <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 fips-product-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+          @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductSideNav.cshtml", Model)
+        </div>
+      </div>
+      <div class="govuk-grid-column-three-quarters-from-desktop">
+        @{
+          var lede = await Html.PartialAsync("_GovukBodyParagraph", "Update one section at a time. Each field has its own save action, or use Change on the product page to edit in a dialog.");
+        }
+        @await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+          Caption = "Service register",
+          Title = "Edit product information",
+          HeadingTag = "h2",
+          HeadingClass = "govuk-heading-l",
+          Lede = lede
+        })
+
+        <div class="dfe-c-card dfe-c-card--plain fips-product-detail__main-form govuk-!-margin-bottom-4">
+          @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductInformationEditFields.cshtml", Model)
+        </div>
+
+        <p class="govuk-body govuk-!-margin-bottom-0">
+          <a class="govuk-link govuk-link--no-visited-state" href="@cancelUrl">Cancel and return to product</a>
+        </p>
+      </div>
+    </div>
+  }
+  else
+  {
+    @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductInformationEditFields.cshtml", Model)
+  }
+</div>

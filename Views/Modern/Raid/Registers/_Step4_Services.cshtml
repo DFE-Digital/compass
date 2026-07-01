@@ -1,0 +1,139 @@
+@model Compass.ViewModels.Modern.RaidRegisterOnboardingViewModel
+
+<h2 class="govuk-heading-m">Service register entries</h2>
+<p class="govuk-body">Search and add the service register entries this register covers. You can change this later.</p>
+
+<div class="govuk-form-group">
+  <label class="govuk-label govuk-label--s" for="svc-search">Search services</label>
+  <div id="svc-search-hint" class="govuk-hint">Start typing to find a service, then select it to add.</div>
+  <div style="position: relative;">
+    <input class="govuk-input" id="svc-search" type="text" autocomplete="off" aria-describedby="svc-search-hint" />
+    <ul id="svc-suggestions" role="listbox" style="display:none; position:absolute; z-index:10; background:#fff; border:1px solid #b1b4b6; border-top:none; max-height:240px; overflow-y:auto; width:100%; margin:0; padding:0; list-style:none;"></ul>
+  </div>
+</div>
+
+<div id="svc-selected-container">
+  <table class="govuk-table govuk-table--small-text-until-tablet" id="svc-table" style="@(Model.SelectedServiceIds.Any() ? "" : "display:none;")">
+    <caption class="govuk-table__caption govuk-table__caption--s">Selected services</caption>
+    <thead class="govuk-table__head">
+      <tr class="govuk-table__row">
+        <th scope="col" class="govuk-table__header">Service</th>
+        <th scope="col" class="govuk-table__header" style="width:100px; text-align:right;">Action</th>
+      </tr>
+    </thead>
+    <tbody class="govuk-table__body" id="svc-tbody">
+      @foreach (var id in Model.SelectedServiceIds)
+      {
+        var opt = Model.ServiceOptions.FirstOrDefault(o => o.Id == id);
+        if (opt != null)
+        {
+          <tr class="govuk-table__row" data-id="@opt.Id">
+            <td class="govuk-table__cell">@opt.Name</td>
+            <td class="govuk-table__cell" style="text-align:right;">
+              <a href="#" class="govuk-link govuk-link--no-visited-state svc-remove" data-id="@opt.Id">Remove</a>
+            </td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+  <p class="govuk-body-s" id="svc-empty" style="@(Model.SelectedServiceIds.Any() ? "display:none;" : "")">No services added yet.</p>
+</div>
+
+<div id="svc-hidden-inputs">
+  @foreach (var id in Model.SelectedServiceIds)
+  {
+    <input type="hidden" name="SelectedServiceIds" value="@id" />
+  }
+</div>
+
+<script nonce="@Context.Items["Nonce"]">
+(function() {
+  var registerId = @(Model.RegisterId.HasValue ? Model.RegisterId.Value : 0);
+  var allOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ServiceOptions.Select(o => new { o.Id, o.Name })));
+  var search = document.getElementById('svc-search');
+  var suggestions = document.getElementById('svc-suggestions');
+  var tbody = document.getElementById('svc-tbody');
+  var table = document.getElementById('svc-table');
+  var empty = document.getElementById('svc-empty');
+  var hiddenContainer = document.getElementById('svc-hidden-inputs');
+
+  function getSelectedIds() {
+    return Array.from(hiddenContainer.querySelectorAll('input')).map(function(i) { return parseInt(i.value); });
+  }
+
+  function showSuggestions(query) {
+    var selected = getSelectedIds();
+    var q = query.toLowerCase();
+    var matches = allOptions.filter(function(o) {
+      return o.Name.toLowerCase().indexOf(q) !== -1 && selected.indexOf(o.Id) === -1;
+    }).slice(0, 15);
+
+    suggestions.innerHTML = '';
+    if (matches.length === 0 || q.length < 1) { suggestions.style.display = 'none'; return; }
+
+    matches.forEach(function(opt) {
+      var li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      li.style.cssText = 'padding:8px 10px; cursor:pointer; font-size:16px;';
+      li.textContent = opt.Name;
+      li.addEventListener('mousedown', function(e) { e.preventDefault(); addItem(opt); });
+      li.addEventListener('mouseover', function() { li.style.background = '#f3f2f1'; });
+      li.addEventListener('mouseout', function() { li.style.background = '#fff'; });
+      suggestions.appendChild(li);
+    });
+    suggestions.style.display = 'block';
+  }
+
+  function addItem(opt) {
+    var input = document.createElement('input');
+    input.type = 'hidden'; input.name = 'SelectedServiceIds'; input.value = opt.Id;
+    hiddenContainer.appendChild(input);
+
+    var tr = document.createElement('tr');
+    tr.className = 'govuk-table__row'; tr.setAttribute('data-id', opt.Id);
+    tr.innerHTML = '<td class="govuk-table__cell">' + escHtml(opt.Name) + '</td>'
+      + '<td class="govuk-table__cell" style="text-align:right;"><a href="#" class="govuk-link govuk-link--no-visited-state svc-remove" data-id="' + opt.Id + '">Remove</a></td>';
+    tbody.appendChild(tr);
+
+    table.style.display = ''; empty.style.display = 'none';
+    search.value = ''; suggestions.style.display = 'none';
+    search.focus();
+    if (window.RaidRegisterScope && registerId) {
+      window.RaidRegisterScope.checkService(registerId, opt.Id, opt.Name);
+    }
+  }
+
+  function removeItem(id) {
+    var inp = hiddenContainer.querySelector('input[value="' + id + '"]');
+    if (inp) inp.remove();
+    var row = tbody.querySelector('tr[data-id="' + id + '"]');
+    if (row) row.remove();
+    if (tbody.children.length === 0) { table.style.display = 'none'; empty.style.display = ''; }
+  }
+
+  function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  search.addEventListener('input', function() { showSuggestions(this.value); });
+  search.addEventListener('focus', function() { if (this.value.length >= 1) showSuggestions(this.value); });
+  search.addEventListener('blur', function() { setTimeout(function() { suggestions.style.display = 'none'; }, 150); });
+
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('svc-remove')) { e.preventDefault(); removeItem(parseInt(e.target.getAttribute('data-id'))); }
+  });
+
+  function checkExistingServices() {
+    if (!window.RaidRegisterScope || !registerId) return;
+    getSelectedIds().forEach(function(id) {
+      var opt = allOptions.find(function(o) { return o.Id === id; });
+      if (opt) window.RaidRegisterScope.checkService(registerId, opt.Id, opt.Name);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkExistingServices);
+  } else {
+    checkExistingServices();
+  }
+})();
+</script>

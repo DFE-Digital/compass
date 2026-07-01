@@ -59,21 +59,46 @@ public class PerformanceReportingEligibilityService : IPerformanceReportingEligi
         }
         
         // Step 3: Check if product is specifically excluded (final override)
-        var productExcluded = cache.ProductExclusions.Any(e => 
-            e.FipsId == fipsId &&
-            // Check if the period falls within the exclusion range
-            (e.ExclusionFromYear < year || 
-             (e.ExclusionFromYear == year && e.ExclusionFromMonth <= month)) &&
-            (!e.ExclusionUntilYear.HasValue || 
-             e.ExclusionUntilYear.Value > year || 
-             (e.ExclusionUntilYear.Value == year && e.ExclusionUntilMonth >= month)));
-        
-        if (productExcluded)
-        {
+        if (IsProductExcluded(null, fipsId, year, month, cache))
             return false;
-        }
         
         // If we get here, reporting is required
+        return true;
+    }
+
+    public bool IsReportingRequired(
+        string? productDocumentId,
+        string? fipsId,
+        string? businessArea,
+        int year,
+        int month,
+        PerformanceReportingEligibilityCache cache)
+    {
+        if (!string.IsNullOrWhiteSpace(fipsId))
+            return IsReportingRequired(fipsId, businessArea, year, month, cache);
+
+        if (IsProductExcluded(productDocumentId, null, year, month, cache))
+            return false;
+
+        var periodExcluded = cache.PeriodExclusions.Any(e => e.Year == year && e.Month == month);
+        if (periodExcluded)
+        {
+            var businessAreaReporting = false;
+            if (!string.IsNullOrEmpty(businessArea))
+            {
+                businessAreaReporting = cache.BusinessAreaConfigs.Any(c =>
+                    c.BusinessAreaName == businessArea &&
+                    (c.ApplicableFromYear < year ||
+                     (c.ApplicableFromYear == year && c.ApplicableFromMonth <= month)) &&
+                    (!c.ApplicableUntilYear.HasValue ||
+                     c.ApplicableUntilYear.Value > year ||
+                     (c.ApplicableUntilYear.Value == year && c.ApplicableUntilMonth >= month)));
+            }
+
+            if (!businessAreaReporting)
+                return false;
+        }
+
         return true;
     }
 
@@ -81,6 +106,35 @@ public class PerformanceReportingEligibilityService : IPerformanceReportingEligi
     {
         var cache = await LoadEligibilityCacheAsync();
         return IsReportingRequired(fipsId, businessArea, year, month, cache);
+    }
+
+    public bool IsProductExcluded(
+        string? productDocumentId,
+        string? fipsId,
+        int year,
+        int month,
+        PerformanceReportingEligibilityCache cache) =>
+        cache.ProductExclusions.Any(e =>
+            ProductExclusionMatches(e, productDocumentId, fipsId) &&
+            IsWithinExclusionRange(year, month, e));
+
+    public bool IsProductExcludedForCommission(
+        ProductDto product,
+        Commission commission,
+        PerformanceReportingEligibilityCache cache)
+    {
+        var start = new DateTime(commission.StartDate.Year, commission.StartDate.Month, 1);
+        var end = new DateTime(commission.EndDate.Year, commission.EndDate.Month, 1);
+        if (end < start)
+            end = start;
+
+        for (var cursor = start; cursor <= end; cursor = cursor.AddMonths(1))
+        {
+            if (IsProductExcluded(product.DocumentId, product.FipsId, cursor.Year, cursor.Month, cache))
+                return true;
+        }
+
+        return false;
     }
 
     public async Task<bool> IsPeriodExcludedAsync(int year, int month)
@@ -108,18 +162,33 @@ public class PerformanceReportingEligibilityService : IPerformanceReportingEligi
 
     public async Task<bool> IsProductExcludedAsync(string fipsId, int year, int month)
     {
-        var exclusion = await _context.PerformanceReportingProductExclusions
-            .Where(e => e.FipsId == fipsId && e.IsActive)
-            .FirstOrDefaultAsync(e => 
-                // Check if the period falls within the exclusion range
-                (e.ExclusionFromYear < year || 
-                 (e.ExclusionFromYear == year && e.ExclusionFromMonth <= month)) &&
-                (!e.ExclusionUntilYear.HasValue || 
-                 e.ExclusionUntilYear.Value > year || 
-                 (e.ExclusionUntilYear.Value == year && e.ExclusionUntilMonth >= month)));
-        
-        return exclusion != null;
+        var cache = await LoadEligibilityCacheAsync();
+        return IsProductExcluded(null, fipsId, year, month, cache);
     }
+
+    private static bool ProductExclusionMatches(
+        PerformanceReportingProductExclusion exclusion,
+        string? productDocumentId,
+        string? fipsId)
+    {
+        if (!string.IsNullOrWhiteSpace(productDocumentId) &&
+            string.Equals(exclusion.ProductDocumentId, productDocumentId.Trim(), StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.IsNullOrWhiteSpace(fipsId) &&
+            !string.IsNullOrWhiteSpace(exclusion.FipsId) &&
+            string.Equals(exclusion.FipsId, fipsId.Trim(), StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+
+    private static bool IsWithinExclusionRange(int year, int month, PerformanceReportingProductExclusion exclusion) =>
+        (exclusion.ExclusionFromYear < year ||
+         (exclusion.ExclusionFromYear == year && exclusion.ExclusionFromMonth <= month)) &&
+        (!exclusion.ExclusionUntilYear.HasValue ||
+         exclusion.ExclusionUntilYear.Value > year ||
+         (exclusion.ExclusionUntilYear.Value == year && exclusion.ExclusionUntilMonth >= month));
 
     public async Task<(int Year, int Month)?> FindNextActiveReportingPeriodAsync(int fromYear, int fromMonth, string? businessArea = null, PerformanceReportingEligibilityCache? cache = null)
     {

@@ -8,4 +8,5 @@ public class ModernOperationsAccessibilityViewModel
     public AissCriterionTrends? Trends { get; init; }
     public string? ErrorMessage { get; init; }
     public string? TrendsError { get; init; }
+    public string AissWebBaseUrl { get; init; } = "";
 }

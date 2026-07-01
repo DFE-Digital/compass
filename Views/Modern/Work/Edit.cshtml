@@ -15,6 +15,10 @@
     var riskAppetiteOptions = (List<LookupOption>)ViewBag.RiskAppetiteOptions ?? new List<LookupOption>();
     var workTagOptions = (List<LookupOption>)ViewBag.WorkTagOptions ?? new List<LookupOption>();
     var selectedWorkTagIds = (int[])ViewBag.SelectedWorkTagIds ?? Array.Empty<int>();
+    var canEditPriority = ViewBag.CanEditPriority as bool? ?? false;
+    var statusAndClassificationCardText = canEditPriority
+        ? "Status, business area, directorates, priority, and phase determine how this work is tracked, filtered, and reported across the system."
+        : "Status, business area, directorates, and phase determine how this work is tracked, filtered, and reported across the system.";
 
     var sD0 = Model.StartDate;
     int? sDay = sD0?.Day, sMonth = sD0?.Month, sYear = sD0?.Year;
@@ -185,30 +189,33 @@
           </select>
         </div>
 
- <div id="edit-priority" class="govuk-form-group">
- <label class="govuk-label" for="PriorityId">Priority</label>
- <div class="govuk-hint" id="priority-hint">The agreed priority band for this work.</div>
- <select asp-for="PriorityId" class="govuk-select govuk-!-width-full" aria-describedby="priority-hint">
-            <option value="">— Select —</option>
-            @foreach (var opt in workPriorityOptions)
-            {
-              if (Model.PriorityId == opt.Id)
-              { <option value="@opt.Id" selected>@opt.Name</option> }
-              else
-              { <option value="@opt.Id">@opt.Name</option> }
-            }
-          </select>
-        </div>
+        @if (canEditPriority)
+        {
+<div id="edit-priority" class="govuk-form-group">
+<label class="govuk-label" for="PriorityId">Priority</label>
+<div class="govuk-hint" id="priority-hint">The agreed priority band for this work.</div>
+<select asp-for="PriorityId" class="govuk-select govuk-!-width-full" aria-describedby="priority-hint">
+              <option value="">— Select —</option>
+              @foreach (var opt in workPriorityOptions)
+              {
+                if (Model.PriorityId == opt.Id)
+                { <option value="@opt.Id" selected>@opt.Name</option> }
+                else
+                { <option value="@opt.Id">@opt.Name</option> }
+              }
+            </select>
+          </div>
 
- <div class="govuk-form-group @(HasError(nameof(Model.PriorityChangeReason)) ? "govuk-form-group--error" : "")">
- <label class="govuk-label" for="PriorityChangeReason">Reason for priority change</label>
- <div class="govuk-hint" id="pcr-hint">Required when you change the priority above.</div>
-            @if (HasError(nameof(Model.PriorityChangeReason)))
-            {
- <p id="PriorityChangeReason-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.PriorityChangeReason))</p>
-            }
- <textarea class="govuk-textarea @(HasError(nameof(Model.PriorityChangeReason)) ? "govuk-textarea--error" : "")" id="PriorityChangeReason" name="PriorityChangeReason" rows="3" maxlength="2000" aria-describedby="pcr-hint @(HasError(nameof(Model.PriorityChangeReason)) ? "PriorityChangeReason-error" : "")">@Model.PriorityChangeReason</textarea>
-        </div>
+<div class="govuk-form-group @(HasError(nameof(Model.PriorityChangeReason)) ? "govuk-form-group--error" : "")">
+<label class="govuk-label" for="PriorityChangeReason">Reason for priority change</label>
+<div class="govuk-hint" id="pcr-hint">Required when you change the priority above.</div>
+              @if (HasError(nameof(Model.PriorityChangeReason)))
+              {
+<p id="PriorityChangeReason-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.PriorityChangeReason))</p>
+              }
+<textarea class="govuk-textarea @(HasError(nameof(Model.PriorityChangeReason)) ? "govuk-textarea--error" : "")" id="PriorityChangeReason" name="PriorityChangeReason" rows="3" maxlength="2000" aria-describedby="pcr-hint @(HasError(nameof(Model.PriorityChangeReason)) ? "PriorityChangeReason-error" : "")">@Model.PriorityChangeReason</textarea>
+          </div>
+        }
 
  <div class="govuk-form-group">
  <label class="govuk-label" for="DeliveryPhaseId">Phase</label>
@@ -352,11 +359,11 @@
       </fieldset>
 
  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6" id="edit-tags">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Tags</legend>
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Thematic tags</legend>
  <div class="govuk-form-group">
  <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Custom tags</legend>
- <div class="govuk-hint" id="wt-hint">Select all that apply. Tags are configured in Admin → Work → Tagging.</div>
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Thematic tags</legend>
+ <div class="govuk-hint" id="wt-hint">Select all that apply.</div>
             @if (workTagOptions.Count == 0)
             {
  <p class="govuk-body-s govuk-!-margin-bottom-0">No tags configured.</p>
@@ -401,22 +408,6 @@
                 </div>
               </fieldset>
             </div>
-
- <div id="edit-flagship" class="govuk-form-group">
- <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Flagship project?</legend>
- <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
- <div class="govuk-radios__item">
- <input class="govuk-radios__input" type="radio" name="FlagshipProject" id="edit-fp-yes" value="true" @(Model.FlagshipProject ? "checked" : null) />
- <label class="govuk-label govuk-radios__label" for="edit-fp-yes">Yes</label>
-                  </div>
- <div class="govuk-radios__item">
- <input class="govuk-radios__input" type="radio" name="FlagshipProject" id="edit-fp-no" value="false" @(!Model.FlagshipProject ? "checked" : null) />
- <label class="govuk-label govuk-radios__label" for="edit-fp-no">No</label>
-                  </div>
-                </div>
-              </fieldset>
-            </div>
       </fieldset>
 
  <div class="govuk-button-group">
@@ -435,7 +426,7 @@
         </div>
  <div class="dfe-c-scard">
  <h3 class="dfe-c-scard__heading">Status &amp; classification</h3>
- <p class="dfe-c-scard__body">Status, business area, directorates, priority, and phase determine how this work is tracked, filtered, and reported across the system.</p>
+<p class="dfe-c-scard__body">@statusAndClassificationCardText</p>
         </div>
  <div class="dfe-c-scard">
  <h3 class="dfe-c-scard__heading">People</h3>
@@ -447,7 +438,7 @@
         </div>
  <div class="dfe-c-scard">
  <h3 class="dfe-c-scard__heading">Dates &amp; flags</h3>
- <p class="dfe-c-scard__body">Start and end dates drive timeline views. Spend control and flagship flags affect governance reporting.</p>
+ <p class="dfe-c-scard__body">Start and end dates drive timeline views. The spend control flag affects governance reporting.</p>
         </div>
       </div>
     </div>

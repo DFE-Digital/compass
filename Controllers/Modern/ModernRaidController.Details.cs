@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Compass.Models;
+using Compass.Models.Raid;
 using Compass.Models.Fips;
 using Compass.Models.Modern.Work;
 using Compass.Services;
@@ -27,7 +28,8 @@ public partial class ModernRaidController
     private async Task<bool> CurrentUserMayEditIssueAsync(Issue issue, CancellationToken cancellationToken)
     {
         var email = GetCurrentUserEmailRaw();
-        if (!string.IsNullOrWhiteSpace(email)
+        if (!_viewAsUser.IsActive(HttpContext)
+            && !string.IsNullOrWhiteSpace(email)
             && await _permissions.IsCentralOperationsAdminOrSuperAdminAsync(email.Trim()))
             return true;
 
@@ -134,6 +136,66 @@ public partial class ModernRaidController
         var riskScore = Math.Clamp(impactRating * likelihoodRating, 1, 25);
         var inherentScore = (decimal)(impactRating * likelihoodRating);
         return (likelihoodRating, impactRating, riskScore, inherentScore);
+    }
+
+    private async Task<decimal?> ComputeRaidRiskScoreDecimalAsync(
+        int? likelihoodId,
+        int? impactLevelId,
+        CancellationToken cancellationToken)
+    {
+        if (!likelihoodId.HasValue || !impactLevelId.HasValue)
+            return null;
+
+        var lk = await _db.RiskLikelihoods.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == likelihoodId.Value, cancellationToken);
+        var im = await _db.RiskImpactLevels.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == impactLevelId.Value, cancellationToken);
+
+        if (lk == null || im == null)
+            return null;
+
+        return (decimal)(lk.MatrixScore * im.MatrixScore);
+    }
+
+    private async Task<IReadOnlyList<WorkRaidRegisterTrackingVm>> LoadRaidRegistersTrackingRiskAsync(
+        int riskId,
+        CancellationToken cancellationToken)
+    {
+        var registerIds = await _db.RaidRegisterRisks.AsNoTracking()
+            .Where(rr => rr.RiskId == riskId && !rr.RaidRegister.IsDeleted)
+            .Select(rr => rr.RaidRegisterId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (registerIds.Count == 0)
+            return Array.Empty<WorkRaidRegisterTrackingVm>();
+
+        var registers = await _db.RaidRegisters.AsNoTracking()
+            .Where(r => registerIds.Contains(r.Id))
+            .Include(r => r.Users).ThenInclude(u => u.User)
+            .Include(r => r.CreatedByUser)
+            .OrderBy(r => r.Name)
+            .ToListAsync(cancellationToken);
+
+        return registers.Select(r => new WorkRaidRegisterTrackingVm
+        {
+            RegisterId = r.Id,
+            Name = r.Name,
+            OwnerName = ResolveRaidRegisterOwnerName(r),
+            DetailUrl = Url.Action("RegisterDetail", "ModernRaid", new { id = r.Id }) ?? "#"
+        }).ToList();
+    }
+
+    private static string ResolveRaidRegisterOwnerName(RaidRegister register)
+    {
+        var ownerUser = register.Users
+            .FirstOrDefault(u => u.Role == RaidRegisterRole.Owner)?.User;
+        if (ownerUser != null)
+            return ownerUser.Name ?? ownerUser.Email ?? "Unknown";
+
+        return register.CreatedByUser?.Name
+            ?? register.CreatedByUser?.Email
+            ?? "Unknown";
     }
 
     private async Task<int?> GetDefaultRaidRiskStatusIdAsync(CancellationToken cancellationToken)
@@ -613,9 +675,11 @@ public partial class ModernRaidController
         RaidDateFormHelper.SplitDateParts(DateTime.UtcNow.Date, out var idd, out var idm, out var idy);
         var form = new ModernRaidRiskEditorForm
         {
+            AssociationKind = "organisation",
             IdentifiedDay = idd,
             IdentifiedMonth = idm,
-            IdentifiedYear = idy
+            IdentifiedYear = idy,
+            KriItems = new List<RiskKriItemForm> { new() }
         };
         var ak = (associationKind ?? "").Trim().ToLowerInvariant();
         if (ak == "product" && primaryProductId is > 0)
@@ -640,19 +704,30 @@ public partial class ModernRaidController
 
     [HttpPost("risks/create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RiskCreatePost([FromForm] ModernRaidRiskEditorForm form, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> RiskCreate([FromForm] ModernRaidRiskEditorForm form, CancellationToken cancellationToken = default)
     {
         SetRaidChrome("raid-risks");
         await PrepareRiskEditorLookupsAsync(cancellationToken, form.OwnerUserId, form.SroUserId);
         ViewBag.RiskTierOptions = (await _raidRiskEditorForm.BuildRiskCreateTierOptionsAsync(cancellationToken)).ToList();
         ViewBag.EditorTitle = "Add risk";
 
-        var risk = await _raidRiskEditorForm.TryCreateRiskFromEditorFormAsync(ModelState, User, form, forceWorkProjectId: null, cancellationToken);
-        if (risk == null)
-            return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
+        try
+        {
+            var risk = await _raidRiskEditorForm.TryCreateRiskFromEditorFormAsync(
+                ModelState, User, form, forceWorkProjectId: null, cancellationToken);
+            if (risk == null)
+                return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
 
-        TempData["Message"] = "Risk created.";
-        return RedirectToAction(nameof(RiskDetail), new { id = risk.Id });
+            TempData["Message"] = "Risk created.";
+            return RedirectToAction(nameof(RiskDetail), new { id = risk.Id });
+        }
+        catch (Exception)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "Unable to save the risk. Try again or contact support if the problem continues.");
+            return View("~/Views/Modern/Raid/RiskEditor.cshtml", form);
+        }
     }
 
     [HttpGet("risks/{id:int}")]
@@ -674,6 +749,12 @@ public partial class ModernRaidController
             .Include(r => r.CreatedByUser)
             .Include(r => r.Likelihood)
             .Include(r => r.ImpactLevel)
+            .Include(r => r.CurrentLikelihood)
+            .Include(r => r.CurrentImpactLevel)
+            .Include(r => r.ResidualLikelihoodLevel)
+            .Include(r => r.ResidualImpactLevel)
+            .Include(r => r.ToleranceLikelihood)
+            .Include(r => r.ToleranceImpactLevel)
             .Include(r => r.Proximity)
             .Include(r => r.RiskCategory)
             .Include(r => r.RiskRiskCategories).ThenInclude(x => x.RiskCategory)
@@ -821,6 +902,7 @@ public partial class ModernRaidController
             .FirstOrDefaultAsync(cancellationToken);
         ViewBag.RiskMaterialisedIssueId = materialisedIssueId;
         ViewBag.RiskCanMakeIssue = !risk.ClosedDate.HasValue && !materialisedIssueId.HasValue;
+        ViewBag.RiskTrackingRegisters = await LoadRaidRegistersTrackingRiskAsync(id, cancellationToken);
 
         return View("~/Views/Modern/Raid/RiskDetail.cshtml", risk);
     }
@@ -983,12 +1065,22 @@ public partial class ModernRaidController
             Description = risk.Description,
             Cause = risk.Cause,
             ImpactIfRealised = risk.ImpactIfRealised,
+            Contingency = risk.Contingency,
+            Assurance = risk.Assurance,
+            FinancialImpact = risk.FinancialImpact,
+            KriItems = await LoadRiskKriItemFormsAsync(risk.Id, cancellationToken),
             RiskTierId = risk.RiskTierId,
             RiskStatusId = risk.RiskStatusId,
             RiskPriorityId = risk.RiskPriorityId,
             RiskLikelihoodId = risk.RiskLikelihoodId,
             RiskImpactLevelId = risk.RiskImpactLevelId,
+            CurrentLikelihoodId = risk.CurrentLikelihoodId,
+            CurrentImpactLevelId = risk.CurrentImpactLevelId,
             RiskProximityId = risk.RiskProximityId,
+            ResidualLikelihoodId = risk.ResidualLikelihoodId,
+            ResidualImpactLevelId = risk.ResidualImpactLevelId,
+            ToleranceLikelihoodId = risk.ToleranceLikelihoodId,
+            ToleranceImpactLevelId = risk.ToleranceImpactLevelId,
             RiskTreatmentId = null,
             RiskCategoryIds = catIds,
             PrimaryRiskCategoryId = primaryCat,
@@ -1071,6 +1163,14 @@ public partial class ModernRaidController
 
         var (likelihoodRating, impactRating, riskScore, inherentScore) =
             await ComputeRaidRiskScoresAsync(form.RiskLikelihoodId, form.RiskImpactLevelId, cancellationToken);
+        var residualScore = await ComputeRaidRiskScoreDecimalAsync(
+            form.ResidualLikelihoodId, form.ResidualImpactLevelId, cancellationToken);
+        var toleranceScore = await ComputeRaidRiskScoreDecimalAsync(
+            form.ToleranceLikelihoodId, form.ToleranceImpactLevelId, cancellationToken);
+        var currentLikelihoodId = form.CurrentLikelihoodId ?? form.RiskLikelihoodId;
+        var currentImpactLevelId = form.CurrentImpactLevelId ?? form.RiskImpactLevelId;
+        var currentScore = await ComputeRaidRiskScoreDecimalAsync(
+            currentLikelihoodId, currentImpactLevelId, cancellationToken);
 
         var riskStatusId = form.RiskStatusId ?? await GetDefaultRaidRiskStatusIdAsync(cancellationToken);
         var riskStatusRow = riskStatusId.HasValue
@@ -1083,15 +1183,27 @@ public partial class ModernRaidController
         risk.ProjectId = a.ProjectId;
         risk.PrimaryProductId = a.PrimaryProductId;
         risk.RaidAssociationKind = a.StoredKind;
-        risk.Description = form.Description;
-        risk.Cause = string.IsNullOrWhiteSpace(form.Cause) ? null : form.Cause.Trim();
-        risk.ImpactIfRealised = string.IsNullOrWhiteSpace(form.ImpactIfRealised) ? null : form.ImpactIfRealised.Trim();
+        risk.Description = RaidFieldLimits.NormalizeNarrative(form.Description);
+        risk.Cause = RaidFieldLimits.NormalizeNarrative(form.Cause);
+        risk.ImpactIfRealised = RaidFieldLimits.NormalizeNarrative(form.ImpactIfRealised);
+        risk.Contingency = RaidFieldLimits.NormalizeNarrative(form.Contingency);
+        risk.Assurance = RaidFieldLimits.NormalizeNarrative(form.Assurance);
+        risk.FinancialImpact = RaidFieldLimits.NormalizeNarrative(form.FinancialImpact);
         risk.RiskTierId = form.RiskTierId;
         risk.RiskStatusId = riskStatusId;
         risk.RiskPriorityId = form.RiskPriorityId;
         risk.RiskLikelihoodId = form.RiskLikelihoodId;
         risk.RiskImpactLevelId = form.RiskImpactLevelId;
+        risk.CurrentLikelihoodId = currentLikelihoodId;
+        risk.CurrentImpactLevelId = currentImpactLevelId;
+        risk.CurrentScore = currentScore;
         risk.RiskProximityId = form.RiskProximityId;
+        risk.ResidualLikelihoodId = form.ResidualLikelihoodId;
+        risk.ResidualImpactLevelId = form.ResidualImpactLevelId;
+        risk.ResidualScore = residualScore;
+        risk.ToleranceLikelihoodId = form.ToleranceLikelihoodId;
+        risk.ToleranceImpactLevelId = form.ToleranceImpactLevelId;
+        risk.ToleranceScore = toleranceScore;
         risk.OwnerUserId = form.OwnerUserId > 0 ? form.OwnerUserId : null;
         risk.SroUserId = form.SroUserId > 0 ? form.SroUserId : null;
         risk.ImpactRating = impactRating;
@@ -1100,8 +1212,7 @@ public partial class ModernRaidController
         risk.InherentScore = inherentScore;
         risk.Status = TruncateLowerRaid(riskStatusRow?.Label ?? risk.Status, 20);
         risk.Response = riskTreatment != null ? TruncateRaid(riskTreatment.Label, 20) : null;
-        risk.ResponseStrategy = form.ResponseStrategy;
-        risk.Notes = form.ResponseStrategy;
+        risk.ResponseStrategy = RaidFieldLimits.NormalizeNarrative(form.ResponseStrategy);
         risk.IdentifiedDate = identifiedVal;
         risk.NextReviewDate = nextReviewDt;
         risk.UpdatedAt = DateTime.UtcNow;
@@ -1109,9 +1220,23 @@ public partial class ModernRaidController
         await PersistRiskCategoryLinksAsync(risk, riskEditCategoryIdList, cancellationToken);
         await PersistRiskDivisionLinksAsync(risk, form.DivisionIds, cancellationToken);
         await PersistRiskBusinessAreaLinksAsync(risk, form.BusinessAreaLookupIds, cancellationToken);
+        await _raidRiskEditorForm.PersistRiskKeyRiskIndicatorsAsync(risk.Id, form.KriItems, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         TempData["Message"] = "Risk updated.";
         return RedirectToAction(nameof(RiskDetail), new { id });
+    }
+
+    private async Task<List<RiskKriItemForm>> LoadRiskKriItemFormsAsync(int riskId, CancellationToken cancellationToken)
+    {
+        var rows = await _db.RiskKeyRiskIndicators.AsNoTracking()
+            .Where(x => x.RiskId == riskId)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Id)
+            .Select(x => new RiskKriItemForm { Metric = x.Metric, Threshold = x.Threshold })
+            .ToListAsync(cancellationToken);
+        if (rows.Count == 0)
+            rows.Add(new RiskKriItemForm());
+        return rows;
     }
 
     [HttpPost("risks/{riskId:int}/key-risk-indicators/add")]
@@ -1121,12 +1246,13 @@ public partial class ModernRaidController
         [FromForm] string? title,
         [FromForm] string? description,
         [FromForm] string? metric,
+        [FromForm] string? threshold,
         CancellationToken cancellationToken = default)
     {
         SetRaidChrome("raid-risks");
-        if (string.IsNullOrWhiteSpace(title))
+        if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(metric) && string.IsNullOrWhiteSpace(threshold))
         {
-            TempData["ErrorMessage"] = "Enter a title for the key risk indicator.";
+            TempData["ErrorMessage"] = "Enter a title or metric for the key risk indicator.";
             return RedirectToAction(nameof(RiskDetail), new { id = riskId, tab = "kris" });
         }
 
@@ -1135,14 +1261,18 @@ public partial class ModernRaidController
         if (!riskExists)
             return NotFound();
 
-        var t = TruncateRaid(title.Trim(), 300);
+        var metricNorm = RaidFieldLimits.NormalizeNarrative(metric);
+        var thresholdNorm = RaidFieldLimits.NormalizeNarrative(threshold);
+        var titleSource = !string.IsNullOrWhiteSpace(title)
+            ? title.Trim()
+            : metricNorm ?? thresholdNorm ?? "KRI";
+        var t = TruncateRaid(titleSource, 300);
         var maxOrder = await _db.RiskKeyRiskIndicators
             .Where(x => x.RiskId == riskId)
             .Select(x => (int?)x.SortOrder)
             .MaxAsync(cancellationToken) ?? 0;
         var now = DateTime.UtcNow;
-        var descNorm = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
-        var metricNorm = string.IsNullOrWhiteSpace(metric) ? null : TruncateRaid(metric.Trim(), 2000);
+        var descNorm = RaidFieldLimits.NormalizeNarrative(description);
 
         _db.RiskKeyRiskIndicators.Add(new RiskKeyRiskIndicator
         {
@@ -1150,6 +1280,7 @@ public partial class ModernRaidController
             Title = t,
             Description = descNorm,
             Metric = metricNorm,
+            Threshold = thresholdNorm,
             SortOrder = maxOrder + 1,
             CreatedAt = now,
             UpdatedAt = now
@@ -1265,7 +1396,7 @@ public partial class ModernRaidController
     {
         SetRaidChrome("raid-issues");
         await PrepareIssueEditorLookupsAsync(cancellationToken);
-        var form = new ModernRaidIssueEditorForm();
+        var form = new ModernRaidIssueEditorForm { AssociationKind = "organisation" };
         var ak = (associationKind ?? "").Trim().ToLowerInvariant();
         if (ak == "product" && primaryProductId is > 0)
         {
@@ -1537,7 +1668,7 @@ public partial class ModernRaidController
         issue.ProjectId = a.ProjectId;
         issue.PrimaryProductId = a.PrimaryProductId;
         issue.RaidAssociationKind = a.StoredKind;
-        issue.Description = form.Description ?? "";
+        issue.Description = RaidFieldLimits.NormalizeNarrative(form.Description) ?? "";
         issue.StatusId = issueStatusId;
         issue.SeverityId = form.SeverityId;
         issue.PriorityId = form.PriorityId;
@@ -1547,9 +1678,9 @@ public partial class ModernRaidController
         issue.Priority = priRow != null ? TruncateRaid(priRow.Label, 10) : issue.Priority;
         issue.Status = TruncateLowerRaid(stRow?.Label ?? issue.Status, 20);
         issue.TargetResolutionDate = targetResolutionDt;
-        issue.Workaround = form.Workaround;
-        issue.DetailedCause = form.DetailedCause;
-        issue.AssuranceArrangements = form.AssuranceArrangements;
+        issue.Workaround = RaidFieldLimits.NormalizeNarrative(form.Workaround);
+        issue.DetailedCause = RaidFieldLimits.NormalizeNarrative(form.DetailedCause);
+        issue.AssuranceArrangements = RaidFieldLimits.NormalizeNarrative(form.AssuranceArrangements);
         issue.UpdatedAt = DateTime.UtcNow;
 
         await PersistIssueCategoryLinksAsync(issue, form.IssueCategoryIds, cancellationToken);
@@ -2393,7 +2524,7 @@ public partial class ModernRaidController
             return NotFound();
 
         var mitigationAction = linked.Action!;
-        title = (title ?? "").Trim();
+        title = RaidFieldLimits.NormalizeNarrative(title) ?? "";
         var normalizedStatus = NormalizeMitigationInputStatus(status);
         RaidDateFormHelper.TryRequiredDate(targetDateDay, targetDateMonth, targetDateYear, "targetDate", ModelState, out var parsedTargetDate);
 
@@ -2412,9 +2543,6 @@ public partial class ModernRaidController
             if (ownerUser == null)
                 ModelState.AddModelError("AssignedToUserId", "Select a valid owner.");
         }
-
-        if (title.Length > 450)
-            title = title[..450];
 
         if (!ModelState.IsValid)
         {
@@ -2451,10 +2579,9 @@ public partial class ModernRaidController
         if (normalizedStatus != MitigationStatuses.Complete)
             mitigationAction.CompletedDate = null;
 
-        var note = (updateNote ?? "").Trim();
+        var note = RaidFieldLimits.NormalizeNarrative(updateNote);
         if (!string.IsNullOrEmpty(note))
         {
-            note = note.Length > 280 ? note[..280] : note;
             mitigationAction.Notes = AppendMitigationAuditLine(mitigationAction.Notes, note);
         }
 
@@ -2474,15 +2601,12 @@ public partial class ModernRaidController
         if (risk == null)
             return NotFound();
 
-        title = (title ?? "").Trim();
+        title = RaidFieldLimits.NormalizeNarrative(title) ?? "";
         if (string.IsNullOrWhiteSpace(title) || targetDate == null || assignedToUserId is null or <= 0)
         {
             TempData["Message"] = "Enter the mitigation action, select an owner, and target date.";
             return RedirectToAction(nameof(RiskDetail), new { id = riskId, tab = "mitigations" });
         }
-
-        if (title.Length > 450)
-            title = title[..450];
 
         var ownerUser = await _db.Users.AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == assignedToUserId.Value, cancellationToken);
@@ -2526,9 +2650,9 @@ public partial class ModernRaidController
     {
         var line = $"{DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC — {appendLine}";
         var combined = string.IsNullOrWhiteSpace(existing) ? line : $"{existing.Trim()}\n{line}";
-        if (combined.Length <= 450)
+        if (combined.Length <= RaidFieldLimits.NarrativeMaxLength)
             return combined;
-        return combined[^450..];
+        return combined[^RaidFieldLimits.NarrativeMaxLength..];
     }
 
     private static string NormalizeMitigationInputStatus(string? raw)

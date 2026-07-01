@@ -53,6 +53,25 @@ public class ModernMonthlySubmissionProgressViewModel
     public int? PreviousNavMonth { get; set; }
     public int? NextNavYear { get; set; }
     public int? NextNavMonth { get; set; }
+
+    /// <summary>All reporting periods up to and including <see cref="ReportYear"/>/<see cref="ReportMonth"/> (for export).</summary>
+    public List<SubmissionTrendMonthColumn> ExportPeriodColumns { get; set; } = new();
+
+    public List<SubmissionProgressExportRow> ExportRows { get; set; } = new();
+}
+
+/// <summary>One work item row for the monthly submission progress Excel export.</summary>
+public class SubmissionProgressExportRow
+{
+    public int ProjectId { get; set; }
+    public string Title { get; set; } = "";
+    public string BusinessAreaName { get; set; } = "";
+    public string DirectorateName { get; set; } = "";
+    public string CurrentPeriodStatus { get; set; } = "";
+    public DateTime? CurrentPeriodSubmittedAt { get; set; }
+
+    /// <summary>Parallel to <see cref="ModernMonthlySubmissionProgressViewModel.ExportPeriodColumns"/>.</summary>
+    public List<string> PeriodStatuses { get; set; } = new();
 }
 
 public class SubmissionProgressDayPoint
@@ -85,6 +104,18 @@ public class MonthlySubmissionLeagueRow
 
     public decimal ProgressGapPercent =>
         Math.Round(ActualProgressPercent - ExpectedProgressPercent, 1, MidpointRounding.AwayFromZero);
+
+    /// <summary>Work items in this group for the selected reporting period.</summary>
+    public List<SubmissionProgressWorkItemRow> WorkItems { get; set; } = new();
+}
+
+/// <summary>One work item's monthly return submission state for the submission progress report.</summary>
+public class SubmissionProgressWorkItemRow
+{
+    public int ProjectId { get; set; }
+    public string Title { get; set; } = "";
+    public string SubmissionStatus { get; set; } = "";
+    public DateTime? SubmittedAt { get; set; }
 }
 
 public class SubmissionTrendMonthColumn

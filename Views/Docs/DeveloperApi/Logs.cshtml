@@ -1,0 +1,82 @@
+@using Compass.Models
+@{
+    var logs = ViewBag.Logs as List<ApiRequestLog> ?? new List<ApiRequestLog>();
+    var tokens = ViewBag.Tokens as List<ApiToken> ?? new List<ApiToken>();
+    var selectedId = ViewBag.SelectedTokenId as int?;
+    var selectedLogId = ViewBag.SelectedLogId as int?;
+    var logsJson = ViewBag.LogsJson as string ?? "[]";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/docs-api-logs.css" asp-append-version="true" />
+}
+
+<div class="developers-docs__intro govuk-!-margin-bottom-4">
+    <span class="govuk-caption-xl">Your keys</span>
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">API request logs</h1>
+    <p class="govuk-body-l govuk-!-margin-bottom-0">
+        Select a call on the left to inspect the request and response on the right (last 500 entries).
+    </p>
+</div>
+
+<form method="get" action="@Url.Action("Logs", "DocsDeveloperApi")" class="api-logs-toolbar">
+    <div class="govuk-form-group">
+        <label class="govuk-label" for="tokenId">Filter by token</label>
+        <select class="govuk-select" id="tokenId" name="tokenId">
+            <option value="">All your tokens</option>
+            @foreach (var t in tokens)
+            {
+                <option value="@t.Id" selected="@(selectedId == t.Id)">@t.Name</option>
+            }
+        </select>
+    </div>
+    <button type="submit" class="govuk-button govuk-button--secondary">Apply filter</button>
+</form>
+
+@if (logs.Count == 0)
+{
+    <p class="govuk-body">No API requests logged yet.</p>
+}
+else
+{
+    <div class="api-logs-split" data-api-logs-split data-selected-log-id="@(selectedLogId?.ToString() ?? "")">
+        <aside class="api-logs-split__list" aria-label="Log entries">
+            <p class="api-logs-split__list-header">@logs.Count entries</p>
+            <ul class="api-logs-split__entries" data-api-logs-entries>
+                @foreach (var log in logs)
+                {
+                    var pathDisplay = log.RequestPath + (log.QueryString ?? "");
+                    <li class="api-logs-split__entry">
+                        <button type="button"
+                                class="api-logs-split__entry-btn"
+                                data-log-id="@log.Id"
+                                aria-current="false">
+                            <span class="api-logs-split__entry-meta">@log.RequestTimestamp.ToString("yyyy-MM-dd HH:mm:ss") · @(log.ApiToken?.Name ?? "—")</span>
+                            <span class="api-logs-split__entry-line">
+                                <span class="api-logs-split__entry-method">@log.HttpMethod</span>
+                                <span class="api-logs-split__entry-path">@pathDisplay</span>
+                                <span class="api-logs-split__status @(log.IsSuccess ? "api-logs-split__status--ok" : "api-logs-split__status--err")">@log.ResponseStatusCode</span>
+                                <span>@log.ResponseTimeMs ms</span>
+                            </span>
+                        </button>
+                    </li>
+                }
+            </ul>
+        </aside>
+        <div class="api-logs-split__detail" data-api-logs-detail>
+            <div class="api-logs-split__detail-empty">
+                <p class="govuk-body">Select a log entry to view the request and response.</p>
+            </div>
+        </div>
+    </div>
+}
+
+<p class="govuk-body govuk-!-margin-top-4">
+    <a class="govuk-link" href="@Url.Action("Index", "DocsDeveloperApi")">Back to your API keys</a>
+</p>
+
+<script id="api-logs-data" type="application/json" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">@Html.Raw(logsJson)</script>
+
+@section Scripts {
+    <script src="~/js/docs-api-logs.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+}

@@ -22,46 +22,144 @@ public static class WorkBadgeCss
         return Regex.IsMatch(t, @"^[a-zA-Z0-9_-]+$") ? t : null;
     }
 
-    /// <summary>Full <c>class</c> attribute value for current RAG (matches <c>Admin → Rag definitions</c> preview).</summary>
+    private const string RagDfeBadgeBase = "dfe-f-badge dfe-f-badge--small";
+
+    /// <summary>RAG colour variant for <c>dfe-f-badge</c> (gov palette in <c>modern.css</c>).</summary>
+    public static string RagDfeBadgeVariantClass(string? ragDisplayName)
+    {
+        if (string.IsNullOrWhiteSpace(ragDisplayName) || ragDisplayName == "—")
+            return "dfe-f-badge--rag-none";
+
+        var t = ragDisplayName.Trim();
+        if (t.Equals("Red", StringComparison.OrdinalIgnoreCase))
+            return "dfe-f-badge--rag-red";
+        if (t.Equals("Amber-Red", StringComparison.OrdinalIgnoreCase) || t.Equals("Amber Red", StringComparison.OrdinalIgnoreCase))
+            return "dfe-f-badge--rag-amber-red";
+        if (t.Equals("Amber-Green", StringComparison.OrdinalIgnoreCase) || t.Equals("Amber Green", StringComparison.OrdinalIgnoreCase))
+            return "dfe-f-badge--rag-amber-green";
+        if (t.Equals("Green", StringComparison.OrdinalIgnoreCase))
+            return "dfe-f-badge--rag-green";
+
+        var n = t.ToLowerInvariant();
+        if (n.Contains("amber") && n.Contains("red"))
+            return "dfe-f-badge--rag-amber-red";
+        if (n.Contains("red"))
+            return "dfe-f-badge--rag-red";
+        if (n.Contains("amber"))
+            return "dfe-f-badge--rag-amber-green";
+        if (n.Contains("green"))
+            return "dfe-f-badge--rag-green";
+        return "dfe-f-badge--rag-none";
+    }
+
+    /// <summary>Full RAG <c>dfe-f-badge</c> class list (base + gov colour variant).</summary>
+    public static string RagBadgeClass(string? ragDisplayName)
+        => RagDfeBadgeBase + " " + RagDfeBadgeVariantClass(ragDisplayName);
+
+    /// <summary>Full <c>class</c> attribute value for current RAG (chrome header tags).</summary>
     public static string RagDfeTagClass(string? cssClassFromLookup, string? ragDisplayName)
-    {
-        var safe = SafeTagModifier(cssClassFromLookup);
-        if (!string.IsNullOrEmpty(safe))
-            return "dfe-c-tag dfe-c-tag--" + safe;
-        return RagDfeTagClassFallback(ragDisplayName);
-    }
+        => RagBadgeClass(ragDisplayName);
 
-    private static string RagDfeTagClassFallback(string? ragName)
-    {
-        if (string.IsNullOrEmpty(ragName) || ragName == "—")
-            return "dfe-c-tag dfe-c-tag--grey";
-        var n = ragName.ToLowerInvariant();
-        if (n.Contains("amber") && n.Contains("red")) return "dfe-c-tag dfe-c-tag--orange";
-        if (n.Contains("red")) return "dfe-c-tag dfe-c-tag--red";
-        if (n.Contains("amber")) return "dfe-c-tag dfe-c-tag--amber";
-        if (n.Contains("green")) return "dfe-c-tag dfe-c-tag--green";
-        return "dfe-c-tag dfe-c-tag--grey";
-    }
-
-    /// <summary>RAG as DfE Frontend <c>dfe-f-badge</c> (outlined badge).</summary>
+    /// <summary>RAG <c>dfe-f-badge</c> with gov colour variant.</summary>
     public static string RagDfeFrontendBadgeClass(string? cssClassFromLookup, string? ragDisplayName)
+        => RagBadgeClass(ragDisplayName);
+
+    /// <summary>Compact RAG <c>dfe-f-badge</c> for dense reporting tables.</summary>
+    public static string RagCompactBadgeClass(string? ragDisplayName)
+        => RagBadgeClass(ragDisplayName);
+
+    /// <summary>Colour-coded completion % badge for service register reporting tables.</summary>
+    public static string ServiceRegisterCompletionBadgeClass(int completionPercent)
     {
-        var safe = SafeTagModifier(cssClassFromLookup);
-        if (!string.IsNullOrEmpty(safe) && DfeFrontendBadgeModifiers.Contains(safe))
-            return "dfe-f-badge dfe-f-badge--" + safe.ToLowerInvariant();
-        return RagDfeFrontendBadgeClassFallback(ragDisplayName);
+        var baseClass = "dfe-f-badge dfe-f-badge--small";
+        return completionPercent switch
+        {
+            >= 100 => baseClass + " dfe-f-badge--green",
+            >= 67 => baseClass + " dfe-f-badge--blue",
+            >= 34 => baseClass + " dfe-f-badge--orange",
+            _ => baseClass + " dfe-f-badge--red"
+        };
     }
 
-    private static string RagDfeFrontendBadgeClassFallback(string? ragName)
+    /// <summary>Count badge on monthly report toggle headers.</summary>
+    public static string ToggleCountBadgeClass(int count, bool highlightWhenPositive = false, bool warnWhenPositive = false)
     {
-        if (string.IsNullOrEmpty(ragName) || ragName == "—")
-            return "dfe-f-badge dfe-f-badge--grey";
-        var n = ragName.ToLowerInvariant();
-        if (n.Contains("amber") && n.Contains("red")) return "dfe-f-badge dfe-f-badge--orange";
-        if (n.Contains("red")) return "dfe-f-badge dfe-f-badge--red";
-        if (n.Contains("amber")) return "dfe-f-badge dfe-f-badge--orange";
-        if (n.Contains("green")) return "dfe-f-badge dfe-f-badge--green";
-        return "dfe-f-badge dfe-f-badge--grey";
+        var baseClass = "dfe-f-badge dfe-f-badge--small";
+        if (warnWhenPositive && count > 0)
+            return baseClass + " dfe-f-badge--red";
+        if (highlightWhenPositive && count > 0)
+            return baseClass + " dfe-f-badge--blue";
+        return baseClass + " dfe-f-badge--grey";
+    }
+
+    /// <summary>RAG change bucket toggle header (Improving / Same / Worsening).</summary>
+    public static string RagChangeBucketToggleBadgeClass(string bucketTitle, int count)
+    {
+        var baseClass = "dfe-f-badge dfe-f-badge--small";
+        if (count == 0)
+            return baseClass + " dfe-f-badge--grey";
+        return bucketTitle switch
+        {
+            "Worsening" => baseClass + " dfe-f-badge--rag-red",
+            "Improving" => baseClass + " dfe-f-badge--rag-green",
+            _ => baseClass + " dfe-f-badge--grey"
+        };
+    }
+
+    /// <summary>Priority change bucket toggle header (Improving / Same / Worsening).</summary>
+    public static string PriorityChangeBucketToggleBadgeClass(string bucketTitle, int count)
+    {
+        var baseClass = "dfe-f-badge dfe-f-badge--small";
+        if (count == 0)
+            return baseClass + " dfe-f-badge--grey";
+        return bucketTitle switch
+        {
+            "Worsening" => baseClass + " dfe-f-badge--red",
+            "Improving" => baseClass + " dfe-f-badge--green",
+            _ => baseClass + " dfe-f-badge--grey"
+        };
+    }
+
+    /// <summary>Six-month RAG trend toggle header (Stable / Improving / Worsening / Stale).</summary>
+    public static string RagTrendToggleBadgeClass(string trendCategory)
+    {
+        var baseClass = "dfe-f-badge dfe-f-badge--small";
+        return trendCategory switch
+        {
+            "Stable" => baseClass + " dfe-f-badge--blue",
+            "Improving" => baseClass + " dfe-f-badge--rag-green",
+            "Worsening" => baseClass + " dfe-f-badge--rag-red",
+            "Stale" => baseClass + " dfe-f-badge--grey",
+            _ => baseClass + " dfe-f-badge--grey"
+        };
+    }
+
+    /// <summary>Bucket label for reporting (Critical, High, Medium, Low, Not Set).</summary>
+    public static string PriorityBucket(string? priorityName)
+    {
+        if (string.IsNullOrWhiteSpace(priorityName) || priorityName == "—")
+            return "Not Set";
+        var priorityNameLower = priorityName.Trim().ToLowerInvariant();
+        if (priorityNameLower.Contains("critical"))
+            return "Critical";
+        if (priorityNameLower.Contains("high"))
+            return "High";
+        if (priorityNameLower.Contains("medium"))
+            return "Medium";
+        if (priorityNameLower.Contains("low"))
+            return "Low";
+        return "Not Set";
+    }
+
+    /// <summary>Compact priority text for dense table badges (maps long lookup names e.g. Critical / Essential).</summary>
+    public static string PriorityShortLabel(string? priorityName)
+    {
+        var bucket = PriorityBucket(priorityName);
+        return bucket switch
+        {
+            "Not Set" => "Not set",
+            _ => bucket
+        };
     }
 
     /// <summary>Priority label as <c>dfe-f-badge</c> (work dashboard register).</summary>
@@ -110,6 +208,7 @@ public static class WorkBadgeCss
             "Draft" => "dfe-f-badge dfe-f-badge--orange",
             "Not due" => "dfe-f-badge dfe-f-badge--grey",
             "Not started" => "dfe-f-badge dfe-f-badge--red",
+            "Late" => "dfe-f-badge dfe-f-badge--red",
             _ => "dfe-f-badge dfe-f-badge--grey",
         };
     }
@@ -181,9 +280,51 @@ public static class WorkBadgeCss
         return "dfe-f-badge dfe-f-badge--blue";
     }
 
+    /// <summary>Resourcing band as <c>dfe-f-badge</c> using an admin-configured colour modifier.</summary>
+    public static string ResourceBandDfeFrontendBadgeClass(string? cssClassOrModifier)
+    {
+        const string baseClass = "dfe-f-badge dfe-f-badge--small";
+        if (string.IsNullOrWhiteSpace(cssClassOrModifier))
+            return baseClass + " dfe-f-badge--grey";
+
+        var token = cssClassOrModifier.Trim();
+        if (token.StartsWith("dfe-f-badge--", StringComparison.OrdinalIgnoreCase))
+            token = token["dfe-f-badge--".Length..];
+
+        token = token.ToLowerInvariant();
+        if (!DfeFrontendBadgeModifiers.Contains(token))
+            return baseClass + " dfe-f-badge--grey";
+
+        return $"{baseClass} dfe-f-badge--{token}";
+    }
+
     /// <summary>Raid risk/issue status (open = blue, closed = green).</summary>
     public static string RaidOpenClosedDfeFrontendBadgeClass(bool closed)
         => closed ? "dfe-f-badge dfe-f-badge--green" : "dfe-f-badge dfe-f-badge--blue";
+
+    /// <summary>Risk status on RAID registers (escalated, closed, proposed, open).</summary>
+    public static string RaidRiskStatusDfeFrontendBadgeClass(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+        var s = status.ToLowerInvariant();
+        if (s.Contains("escalat"))
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--red";
+        if (s.Contains("closed"))
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--green";
+        if (s.Contains("proposed"))
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+        return "dfe-f-badge dfe-f-badge--small dfe-f-badge--blue";
+    }
+
+    /// <summary>Issue status on RAID registers.</summary>
+    public static string RaidIssueStatusDfeFrontendBadgeClass(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+        var closed = status.Contains("closed", StringComparison.OrdinalIgnoreCase);
+        return RaidOpenClosedDfeFrontendBadgeClass(closed) + " dfe-f-badge--small";
+    }
 
     /// <summary>Raid priority text (critical/high/medium/low).</summary>
     public static string RaidPriorityLabelDfeFrontendBadgeClass(string? pri)
@@ -234,6 +375,14 @@ public static class WorkBadgeCss
         if (string.IsNullOrWhiteSpace(tier))
             return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
         var t = tier.Trim().ToLowerInvariant();
+        if (t.Contains("proposed"))
+        {
+            if (t.Contains("1") || t.Contains("tier one") || t == "t1")
+                return "dfe-f-badge dfe-f-badge--small dfe-f-badge--blue";
+            if (t.Contains("2") || t.Contains("tier two") || t == "t2")
+                return "dfe-f-badge dfe-f-badge--small dfe-f-badge--orange";
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+        }
         if (t.Contains("3") || t.Contains("tier three") || t == "t3")
             return "dfe-f-badge dfe-f-badge--small dfe-f-badge--red";
         if (t.Contains("2") || t.Contains("tier two") || t == "t2")

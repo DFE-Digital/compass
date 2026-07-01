@@ -1,0 +1,153 @@
+@using Compass.ViewModels.Modern
+@model WorkServiceRegisterLinksPanelViewModel
+@{
+  var links = Model.Links ?? Array.Empty<WorkServiceRegisterLinkRow>();
+  var pickId = "wd-sr-pick-" + Model.WorkItemId;
+}
+
+<div id="wd-service-register" class="tab-pane">
+  <div class="govuk-summary-card govuk-!-margin-top-0">
+    <div class="govuk-summary-card__title-wrapper">
+      <h2 class="govuk-summary-card__title">Service register</h2>
+    </div>
+    <div class="govuk-summary-card__content">
+      <p class="govuk-body">
+        Link service register entries that this work delivers or affects. Colleagues can open linked entries from here and from the service register product page.
+      </p>
+
+      @if (links.Count == 0)
+      {
+        <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No service register entries are linked yet.</p>
+      }
+      else
+      {
+        <div class="dfe-f-table-wrapper govuk-!-margin-bottom-4" data-module="dfe-f-table">
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Linked service register entries</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Service</th>
+                <th scope="col" class="govuk-table__header">Service ID</th>
+                <th scope="col" class="govuk-table__header">Service owner</th>
+                <th scope="col" class="govuk-table__header">Phase</th>
+                <th scope="col" class="govuk-table__header">Linked</th>
+                @if (Model.CanLink)
+                {
+                  <th scope="col" class="govuk-table__header govuk-!-width-one-quarter govuk-!-text-align-right">Action</th>
+                }
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var link in links)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    @if (!string.IsNullOrEmpty(link.DetailUrl) && link.ServiceRegisterProductId != Guid.Empty)
+                    {
+                      <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@link.DetailUrl">@link.Title</a>
+                    }
+                    else
+                    {
+                      @link.Title
+                    }
+                  </td>
+                  <td class="govuk-table__cell">@(link.RegisterUniqueId.HasValue ? link.RegisterUniqueId.Value.ToString() : "—")</td>
+                  <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(link.ServiceOwner) ? "—" : link.ServiceOwner)</td>
+                  <td class="govuk-table__cell">@(link.PhaseName ?? "—")</td>
+                  <td class="govuk-table__cell">@link.LinkedAt.ToString("d MMM yyyy")</td>
+                  @if (Model.CanLink)
+                  {
+                    <td class="govuk-table__cell govuk-!-text-align-right">
+                      <form method="post"
+                            class="govuk-!-margin-bottom-0"
+                            action="@Url.Action("UnlinkServiceRegisterProduct", "ModernWork", new { id = Model.WorkItemId, projectProductId = link.ProjectProductId })"
+                            data-confirm-title="Remove link?"
+                            data-confirm-message="This work item will no longer be linked to @link.Title.">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" data-module="govuk-button">Remove</button>
+                      </form>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (Model.CanLink)
+      {
+        <h3 class="govuk-heading-s">Link a service register entry</h3>
+        <p class="govuk-hint govuk-!-margin-bottom-2">Search by title, service ID, or CMDB ID. Choose a result, then link it to this work item.</p>
+        <div class="js-service-line-pick service-line-pick govuk-!-margin-bottom-0"
+             data-sl-search-url="@Model.PickProductsUrl"
+             data-sl-field-name="cmdbProductId"
+             data-sl-id-kind="guid"
+             data-sl-single-submit="true"
+             data-sl-link-url="@Model.LinkUrl"
+             data-sl-pick-root-id="@pickId">
+          <div class="govuk-form-group govuk-!-margin-bottom-2">
+            <label class="govuk-label" for="@(pickId)-search">Search service register</label>
+            <div class="service-line-pick__combo">
+              <input class="govuk-input js-sl-search" id="@(pickId)-search" type="search" autocomplete="off" aria-autocomplete="list" aria-controls="@(pickId)-results" />
+              <div class="js-sl-results service-line-pick__results" id="@(pickId)-results" hidden></div>
+            </div>
+          </div>
+          <div class="js-sl-selected-preview govuk-inset-text govuk-!-margin-bottom-3" hidden role="status" aria-live="polite">
+            <p class="govuk-body govuk-!-margin-bottom-1">
+              <strong>Selected entry</strong>
+            </p>
+            <p class="govuk-body govuk-!-margin-bottom-1 js-sl-selected-title"></p>
+            <p class="govuk-body-s govuk-!-margin-bottom-0 dfe-c-text-muted js-sl-selected-meta"></p>
+          </div>
+          <form method="post" class="js-sl-link-form" action="@Model.LinkUrl" hidden>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="cmdbProductId" class="js-sl-link-id" value="" />
+            <button type="submit" class="govuk-button govuk-!-margin-bottom-0" data-module="govuk-button">Link entry</button>
+          </form>
+        </div>
+      }
+    </div>
+  </div>
+
+  @if (Model.CanCreateServiceOffering)
+  {
+    <div class="govuk-summary-card govuk-!-margin-top-6">
+      <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">Create service offering</h2>
+      </div>
+      <div class="govuk-summary-card__content">
+        <p class="govuk-body">
+          Register a new service offering in CMDB for work delivered or supported by this work item.
+          When available here, this will create the CMDB entry and link it to the service register automatically.
+        </p>
+        <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-4">
+          Until then, use MyDFE and the create service offering process.
+        </p>
+        <button type="button"
+                class="govuk-button"
+                id="work-item-create-service-offering-open"
+                data-module="govuk-button"
+                aria-haspopup="dialog"
+                aria-controls="work-item-create-service-offering-modal">
+          Create service offering
+        </button>
+      </div>
+    </div>
+
+    @await Html.PartialAsync("~/Views/Modern/Work/_WorkItemCreateServiceOfferingModal.cshtml")
+    <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+      (function () {
+        var btn = document.getElementById('work-item-create-service-offering-open');
+        var dialog = document.getElementById('work-item-create-service-offering-modal');
+        if (!btn || !dialog) return;
+        btn.addEventListener('click', function () {
+          if (typeof dialog.showModal === 'function') dialog.showModal();
+        });
+        dialog.querySelectorAll('[data-dfe-modal-close]').forEach(function (el) {
+          el.addEventListener('click', function () { dialog.close(); });
+        });
+      })();
+    </script>
+  }
+</div>

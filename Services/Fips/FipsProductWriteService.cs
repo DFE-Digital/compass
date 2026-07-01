@@ -26,6 +26,7 @@ public sealed class FipsProductWriteService : IFipsProductWriteService
         int[]? channelIds,
         int[]? userGroupIds,
         int[]? typeIds,
+        int[]? directorateIds = null,
         int[]? categorisationItemIds = null,
         int? reportingContactUserId = null,
         bool? isEnterpriseService = null,
@@ -33,6 +34,7 @@ public sealed class FipsProductWriteService : IFipsProductWriteService
     {
         var product = await _db.CMDBProducts
             .Include(p => p.BusinessAreas)
+            .Include(p => p.Directorates)
             .Include(p => p.Channels)
             .Include(p => p.UserGroups)
             .Include(p => p.Types)
@@ -83,6 +85,14 @@ public sealed class FipsProductWriteService : IFipsProductWriteService
             product.Id, changes, "Business areas", actorEmail, changedBy,
             (pid, fkId) => new CMDBProductBusinessArea { CMDBProductId = pid, FipsBusinessAreaId = fkId },
             x => x.FipsBusinessAreaId);
+
+        if (directorateIds != null)
+        {
+            SyncJoinTable(product.Directorates, directorateIds,
+                product.Id, changes, "Directorates", actorEmail, changedBy,
+                (pid, fkId) => new CMDBProductDirectorate { CMDBProductId = pid, FipsDirectorateId = fkId },
+                x => x.FipsDirectorateId);
+        }
 
         SyncJoinTable(product.Channels, channelIds ?? Array.Empty<int>(),
             product.Id, changes, "Channels", actorEmail, changedBy,

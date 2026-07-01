@@ -2,6 +2,7 @@ using Compass.Data;
 using Compass.Models;
 using Compass.Models.Fips;
 using Compass.Models.Modern.Work;
+using Compass.ViewModels.Dashboard;
 using Microsoft.EntityFrameworkCore;
 
 namespace Compass.Services.Fips;
@@ -168,6 +169,13 @@ public static class FipsProductListingHelper
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
+        var directorateLookups = await context.DirectorateLookups
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+
         var businessAreaLookups = await context.BusinessAreaLookups
             .AsNoTracking()
             .Where(x => x.IsActive)
@@ -255,6 +263,7 @@ public static class FipsProductListingHelper
             TypeOptions = await context.FipsTypes.Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(cancellationToken),
             PhaseOptions = await context.PhaseLookups.Where(x => x.IsActive).OrderBy(x => x.SortOrder).ToListAsync(cancellationToken),
             BusinessAreaLookups = businessAreaLookups,
+            DirectorateLookups = directorateLookups,
         };
     }
 
@@ -307,6 +316,63 @@ public static class FipsProductListingHelper
                 };
             })
             .OrderBy(p => p.Title)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Service register products assigned to the user (CMDB contact) with completion below 100%.
+    /// </summary>
+    public static async Task<List<DashboardServiceRegisterTaskItem>> BuildIncompleteMyProductsForDashboardAsync(
+        CompassDbContext context,
+        string currentUserEmail,
+        CancellationToken cancellationToken = default)
+    {
+        var vm = await BuildProductsViewModelAsync(
+            context,
+            "my",
+            currentUserEmail,
+            search: null,
+            businessAreaId: null,
+            channelId: null,
+            userGroupId: null,
+            typeId: null,
+            phaseId: null,
+            categorisationItemId: null,
+            categorisationGroupId: null,
+            cancellationToken);
+
+        if (vm.Products.Count == 0)
+            return [];
+
+        var ids = vm.Products.Select(p => p.Id).ToList();
+        var products = await context.CMDBProducts.AsNoTracking()
+            .Include(p => p.Phase)
+            .Include(p => p.BusinessAreas)
+            .Include(p => p.Channels)
+            .Include(p => p.UserGroups)
+            .Include(p => p.Types)
+            .Include(p => p.Contacts)
+            .ThenInclude(c => c.FipsContactRole)
+            .Where(p => ids.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+
+        return products
+            .Select(p =>
+            {
+                var completion = GetDataCompletionSummary(p);
+                return new { Product = p, Completion = completion };
+            })
+            .Where(x => x.Completion.PercentRounded < 100)
+            .OrderBy(x => x.Product.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new DashboardServiceRegisterTaskItem
+            {
+                ProductId = x.Product.Id,
+                Title = x.Product.Title,
+                CompletionPercent = x.Completion.PercentRounded,
+                MissingFieldsHint = x.Completion.OutstandingLabels.Count == 0
+                    ? "Update missing product information"
+                    : $"Missing: {string.Join(", ", x.Completion.OutstandingLabels)}"
+            })
             .ToList();
     }
 
@@ -509,9 +575,9 @@ public static class FipsProductListingHelper
         return map;
     }
 
-    /// <summary>Active tab: all products with status Active (includes enterprise; enterprise tab is the subset).</summary>
+    /// <summary>Active tab: status Active, not flagged as enterprise (enterprise tab holds those).</summary>
     private static IQueryable<CMDBProduct> ActiveProducts(IQueryable<CMDBProduct> query) =>
-        query.Where(p => p.Status == CMDBProductStatus.Active);
+        query.Where(p => p.Status == CMDBProductStatus.Active && !p.IsEnterpriseService);
 
     /// <summary>Enterprise tab: status Active and enterprise flag.</summary>
     private static IQueryable<CMDBProduct> EnterpriseActive(IQueryable<CMDBProduct> query) =>

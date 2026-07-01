@@ -108,6 +108,7 @@ public class DdtStandardEditViewModel
     public bool CanEdit { get; set; }
     public bool CanSubmit { get; set; }
     public bool CanDelete { get; set; }
+    public bool CanUnpublish { get; set; }
     public int WorkflowStepIndex { get; set; }
 }
 
@@ -122,6 +123,7 @@ public class DdtStandardWorkflowContextViewModel
     public bool CanApprove { get; set; }
     public bool CanReject { get; set; }
     public bool CanPublish { get; set; }
+    public bool CanUnpublish { get; set; }
     public List<DdtStandardForumCommentRow> ForumComments { get; set; } = new();
 }
 
@@ -142,6 +144,7 @@ public class DdtStandardDetailToolbarViewModel
     public int? DraftEditId { get; set; }
     /// <summary>Published standard: user can edit but must create a draft first (POST ensure).</summary>
     public bool NeedsDraftFromPublished { get; set; }
+    public bool CanUnpublish { get; set; }
     public string OwnerContactDisplay { get; set; } = "the standard owner";
     public bool HasVersionHistory { get; set; }
 }

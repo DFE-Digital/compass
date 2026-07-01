@@ -1,0 +1,168 @@
+@model Compass.ViewModels.Modern.EnvironmentSyncPanelViewModel?
+@using Compass.Services.EnvironmentSync
+@{
+  var connection = Model?.Connection;
+  var enabled = connection?.IsEnabled == true;
+  var serviceRegisterPhrase = connection?.PeerCatalog != null
+    ? $"SYNC SERVICE REGISTER TO {connection.PeerCatalog.ToUpperInvariant()}"
+    : "";
+  var workRaidPhrase = connection?.CurrentCatalog != null
+    ? $"SYNC WORK RAID FROM PRODUCTION TO {connection.CurrentCatalog.ToUpperInvariant()}"
+    : "";
+}
+
+<div id="panel-environment-sync" class="admin-panel">
+  <h2 class="govuk-heading-m">Environment sync</h2>
+  <p class="govuk-body dfe-c-text-muted" style="max-width: 42rem;">
+    Copy data between the development and production databases. Only service register data may be pushed to production.
+    Work, risks, and issues can be pulled from production into development.
+  </p>
+
+  @if (connection == null)
+  {
+    <div class="govuk-warning-text govuk-!-margin-top-4">
+      <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+      <strong class="govuk-warning-text__text">Could not load connection details.</strong>
+    </div>
+  }
+  else
+  {
+    <dl class="govuk-summary-list govuk-!-margin-top-4">
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Current database</dt>
+        <dd class="govuk-summary-list__value"><code>@connection.CurrentCatalog</code></dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Peer database</dt>
+        <dd class="govuk-summary-list__value"><code>@connection.PeerCatalog</code></dd>
+      </div>
+    </dl>
+
+    @if (!enabled)
+    {
+      <div class="govuk-inset-text govuk-!-margin-top-4">
+        @(connection.DisabledReason ?? "Environment sync is not available on this instance.")
+      </div>
+    }
+    else
+    {
+      @if (ViewBag.AdminMessage is string msg)
+      {
+        <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-top-4" role="region" aria-label="Success">
+          <div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div>
+          <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@msg</p></div>
+        </div>
+      }
+      @if (ViewBag.AdminError is string err)
+      {
+        <div class="govuk-error-summary govuk-!-margin-top-4" role="alert">
+          <h2 class="govuk-error-summary__title">There is a problem</h2>
+          <div class="govuk-error-summary__body"><p>@err</p></div>
+        </div>
+      }
+
+      <section class="govuk-!-margin-top-6">
+        <h3 class="govuk-heading-s">Push service register to production</h3>
+        <p class="govuk-body-s dfe-c-text-muted">
+          Copies FIPS lookups, service register products, contacts, and service lines from
+          <code>@connection.CurrentCatalog</code> to <code>@connection.PeerCatalog</code>.
+        </p>
+
+        <form method="post" action="@Url.Action("EnvironmentSyncPreview", "ModernAdmin")" class="govuk-!-margin-bottom-2">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="direction" value="@((int)EnvironmentSyncDirection.DevToProdServiceRegister)" />
+          <button type="submit" class="govuk-button govuk-button--secondary">Preview counts</button>
+        </form>
+
+        @if (Model?.ServiceRegisterPreview != null)
+        {
+          @await Html.PartialAsync("~/Views/Modern/Admin/_EnvironmentSyncPreviewTable.cshtml", Model.ServiceRegisterPreview)
+        }
+
+        <form method="post" action="@Url.Action("EnvironmentSyncExecute", "ModernAdmin")" class="govuk-!-margin-top-4">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="direction" value="@((int)EnvironmentSyncDirection.DevToProdServiceRegister)" />
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="sr-confirm">Confirmation phrase</label>
+            <div id="sr-confirm-hint" class="govuk-hint">Type exactly: <strong>@serviceRegisterPhrase</strong></div>
+            <input class="govuk-input govuk-input--width-30" id="sr-confirm" name="confirmationPhrase" type="text" autocomplete="off" spellcheck="false" aria-describedby="sr-confirm-hint" required />
+          </div>
+          <div class="govuk-checkboxes govuk-!-margin-top-2" data-module="govuk-checkboxes">
+            <div class="govuk-checkboxes__item">
+              <input class="govuk-checkboxes__input" id="sr-dry-run" name="dryRun" type="checkbox" value="true" checked="checked" />
+              <label class="govuk-label govuk-checkboxes__label" for="sr-dry-run">Dry run (preview changes without saving)</label>
+            </div>
+          </div>
+          <button type="submit" class="govuk-button govuk-!-margin-top-4" data-confirm="Push service register data to production?">Run sync</button>
+        </form>
+      </section>
+
+      <hr class="govuk-section-break govuk-section-break--visible govuk-!-margin-top-6 govuk-!-margin-bottom-6" />
+
+      <section>
+        <h3 class="govuk-heading-s">Pull work, risks, and issues from production</h3>
+        <p class="govuk-body-s dfe-c-text-muted">
+          Copies projects, risks, and issues from <code>@connection.PeerCatalog</code> into
+          <code>@connection.CurrentCatalog</code>. Lookups and users are matched by name or email where needed.
+        </p>
+
+        <form method="post" action="@Url.Action("EnvironmentSyncPreview", "ModernAdmin")" class="govuk-!-margin-bottom-2">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="direction" value="@((int)EnvironmentSyncDirection.ProdToDevWorkRaid)" />
+          <button type="submit" class="govuk-button govuk-button--secondary">Preview counts</button>
+        </form>
+
+        @if (Model?.WorkRaidPreview != null)
+        {
+          @await Html.PartialAsync("~/Views/Modern/Admin/_EnvironmentSyncPreviewTable.cshtml", Model.WorkRaidPreview)
+        }
+
+        <form method="post" action="@Url.Action("EnvironmentSyncExecute", "ModernAdmin")" class="govuk-!-margin-top-4">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="direction" value="@((int)EnvironmentSyncDirection.ProdToDevWorkRaid)" />
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="wr-confirm">Confirmation phrase</label>
+            <div id="wr-confirm-hint" class="govuk-hint">Type exactly: <strong>@workRaidPhrase</strong></div>
+            <input class="govuk-input govuk-input--width-30" id="wr-confirm" name="confirmationPhrase" type="text" autocomplete="off" spellcheck="false" aria-describedby="wr-confirm-hint" required />
+          </div>
+          <div class="govuk-checkboxes govuk-!-margin-top-2" data-module="govuk-checkboxes">
+            <div class="govuk-checkboxes__item">
+              <input class="govuk-checkboxes__input" id="wr-dry-run" name="dryRun" type="checkbox" value="true" checked="checked" />
+              <label class="govuk-label govuk-checkboxes__label" for="wr-dry-run">Dry run (preview changes without saving)</label>
+            </div>
+          </div>
+          <button type="submit" class="govuk-button govuk-!-margin-top-4" data-confirm="Pull work and RAID data from production into development?">Run sync</button>
+        </form>
+      </section>
+
+      @if (Model?.LastResult != null)
+      {
+        <section class="govuk-!-margin-top-6">
+          <h3 class="govuk-heading-s">Last run summary</h3>
+          <p class="govuk-body-s">
+            @Model.LastResult.SourceCatalog → @Model.LastResult.TargetCatalog
+            (@(Model.LastResult.DryRun ? "dry run" : "applied"))
+          </p>
+          @if (Model.LastResult.Messages.Count > 0)
+          {
+            <ul class="govuk-list govuk-list--bullet govuk-body-s">
+              @foreach (var message in Model.LastResult.Messages)
+              {
+                <li>@message</li>
+              }
+            </ul>
+          }
+          @if (Model.LastResult.Errors.Count > 0)
+          {
+            <ul class="govuk-list govuk-list--bullet govuk-body-s">
+              @foreach (var error in Model.LastResult.Errors)
+              {
+                <li class="dfe-c-text-error">@error</li>
+              }
+            </ul>
+          }
+        </section>
+      }
+    }
+  }
+</div>

@@ -1,0 +1,77 @@
+@{
+    Layout = "~/Views/Docs/_DocsLayout.cshtml";
+}
+@* Forward Scripts and Styles defined by the inner page up to _DocsLayout.
+   Without this, pages that declare @@section Styles { ... } (e.g. /docs/api
+   loading docs-api.css, /docs/api-explorer loading docs-api-explorer.css)
+   throw "section has been defined but has not been rendered" at runtime. *@
+@section Scripts {
+    @if (IsSectionDefined("Scripts"))
+    {
+        @await RenderSectionAsync("Scripts", required: false)
+    }
+}
+@section Styles {
+    @if (IsSectionDefined("Styles"))
+    {
+        @await RenderSectionAsync("Styles", required: false)
+    }
+}
+<div class="developers-doc-app developers-doc-app--theme-light" id="developers-doc-root" data-developers-doc-theme="light">
+    <div id="developers-doc-live" class="govuk-visually-hidden" aria-live="polite"></div>
+    <a href="#developers-doc-main" class="developers-doc-skip">Skip to documentation</a>
+    <div class="developers-doc-layout" id="developers-doc-layout">
+        <aside class="developers-doc-sidenav" id="developers-doc-sidenav" aria-label="Documentation">
+            <div class="developers-doc-sidenav__inner">
+                <p class="developers-doc-sidenav__product">
+                    <span class="developers-doc-sidenav__product-name">COMPASS</span>
+                    <span class="developers-doc-sidenav__product-meta">Documentation</span>
+                </p>
+                @await Html.PartialAsync("~/Views/Docs/_DocsNav.cshtml")
+            </div>
+        </aside>
+        <div class="developers-doc-sidenav-scrim" data-developers-nav-close aria-hidden="true"></div>
+        <div class="developers-doc-stage">
+            <header class="developers-doc-toolbar">
+                <div class="developers-doc-toolbar__left">
+                    <button type="button"
+                            class="developers-doc-icon-button developers-doc-toolbar__menu js-only"
+                            data-developers-nav-toggle
+                            aria-expanded="false"
+                            aria-controls="developers-doc-sidenav">
+                        <span class="developers-doc-toolbar__menu-label">Menu</span>
+                    </button>
+                    <span class="developers-doc-toolbar__crumb" aria-hidden="true">/</span>
+                    <span class="developers-doc-toolbar__title">@ViewData["Title"]</span>
+                </div>
+                <div class="developers-doc-toolbar__right">
+                    <a class="developers-doc-toolbar__link" href="/modern/dashboard">Application</a>
+                </div>
+            </header>
+            @{
+                // Pages can opt into a full-width layout by setting
+                // ViewData["DocsFullWidth"] = true (e.g. /docs/api-explorer needs
+                // the whole stage for its Postman-style request workspace).
+                var docsFullWidth = ViewData["DocsFullWidth"] as bool? == true;
+            }
+            <div id="developers-doc-main"
+                 class="developers-doc-main @(docsFullWidth ? "developers-doc-main--full" : null)"
+                 role="region" aria-label="Documentation" tabindex="-1">
+                <div class="docs-page-grid @(docsFullWidth ? "docs-page-grid--full" : null)">
+                    <div class="docs-page-grid__main">
+                        @RenderBody()
+                    </div>
+                    @if (!docsFullWidth)
+                    {
+                        <aside class="docs-page-grid__aside" aria-label="Supplementary information">
+                            @if (IsSectionDefined("Aside"))
+                            {
+                                @RenderSection("Aside", required: false)
+                            }
+                        </aside>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

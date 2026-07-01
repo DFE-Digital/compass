@@ -1,0 +1,165 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Compass.Models.Modern.Work
+@using Compass.Services
+@using Compass.ViewModels
+@model Compass.ViewModels.ModernMonthlyReportDashboardViewModel
+@{
+  var m = Model;
+  var ragTrendRows = m.RagSixMonthTrendRows;
+  var trendCategories = MonthlyReportRagTrendAnalyzer.TrendCategories;
+  var scopeByProjectId = ViewData["ScopeByProjectId"] as Dictionary<int, BusinessAreaProjectItem>
+    ?? m.ScopeProjectItems.ToDictionary(x => x.Id);
+  string TrendBadgeClass(string cat) => WorkBadgeCss.RagTrendToggleBadgeClass(cat);
+  string TrendCountBtnClass(string cat, int count)
+  {
+    if (count == 0)
+      return "mr-ba-num mr-ba-num--muted";
+    return cat switch
+    {
+      "Stable" => "mr-ba-num mr-ba-num--trend-stable mr-rag-ba-drill",
+      "Improving" => "mr-ba-num mr-ba-num--rag mr-ba-num--rag-green mr-rag-ba-drill",
+      "Worsening" => "mr-ba-num mr-ba-num--rag mr-ba-num--rag-red mr-rag-ba-drill",
+      "Stale" => "mr-ba-num mr-ba-num--trend-stale mr-rag-ba-drill",
+      _ => "mr-ba-num mr-rag-ba-drill"
+    };
+  }
+  var baSummaries = ragTrendRows
+    .GroupBy(r => r.BusinessArea ?? "Not set")
+    .OrderBy(g => g.Key == "Not set" ? "zzzzzz" : g.Key, StringComparer.OrdinalIgnoreCase)
+    .Select(g => new
+    {
+      Name = g.Key,
+      Counts = trendCategories.ToDictionary(
+        c => c,
+        c => g.Count(x => string.Equals(x.TrendCategory, c, StringComparison.Ordinal)))
+    })
+    .ToList();
+  var trendTotals = trendCategories.ToDictionary(
+    c => c,
+    c => baSummaries.Sum(b => b.Counts[c]));
+  var jsonOpts = new JsonSerializerOptions
+  {
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+  };
+  var ragSixMonthJson = JsonSerializer.Serialize(new
+  {
+    rows = ragTrendRows,
+    scope = scopeByProjectId.Values.Select(s => new
+    {
+      id = s.Id,
+      summary = s.Summary,
+      ragJustification = s.RagJustification,
+      narrative = s.LatestMonthlyUpdateNarrative,
+      pathToGreen = s.PathToGreen,
+      milestones = s.MilestonesSummary,
+      rag = s.Rag,
+      priority = s.Priority,
+      businessArea = s.BusinessArea
+    })
+  }, jsonOpts);
+  var mwDetailPrefix = ViewData["MwDetailPrefix"] as string ?? "/modern/work/detail/";
+}
+
+<section class="mr-section govuk-!-margin-top-8" id="mr-s-rag-six-month" aria-labelledby="mr-h-rag-six-month" data-mr-drill-host="mr-rag-six-month-drilldown-host">
+  <h3 id="mr-h-rag-six-month" class="mr-section__heading">Work item RAG over the last six months</h3>
+  <p class="dfe-c-body-s dfe-c-text-muted govuk-!-margin-bottom-4">
+    RAG at the end of each month (R, A-R, A-G, G). Trend is based on month-to-month movement toward Green (improving) or Red (worsening). Gaps or unset RAG are treated as stale.
+  </p>
+
+  <h4 class="govuk-heading-s govuk-!-margin-bottom-2">By business area</h4>
+  <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">Select a business area to list all work items for that area below, or select a count to filter by trend. Work items are sorted worsening, stale, improving, then stable.</p>
+  @if (baSummaries.Count == 0)
+  {
+    <p class="govuk-body dfe-c-text-muted">No work items in scope.</p>
+  }
+  else
+  {
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+        <table class="govuk-table mr-ba-table mr-rag-ba-summary-table" id="mr-rag-ba-summary-table">
+          <caption class="govuk-table__caption govuk-visually-hidden">RAG trend counts by business area</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="mr-ba-table__fixed mr-ba-table__area-col">Business area</th>
+              @foreach (var cat in trendCategories)
+              {
+                <th scope="col" class="mr-ba-table__num-hdr mr-ba-table__cell--trend">
+                  <span class="@TrendBadgeClass(cat)">@cat</span>
+                </th>
+              }
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var ba in baSummaries)
+            {
+              var baTotal = ba.Counts.Values.Sum();
+              <tr class="govuk-table__row">
+                <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">
+                  @if (baTotal > 0)
+                  {
+                    <button type="button" class="govuk-link govuk-link--no-visited-state mr-rag-ba-link" data-mr-ba="@ba.Name" aria-label="View all @ba.Name work items and RAG history">@ba.Name</button>
+                  }
+                  else
+                  {
+                    @ba.Name
+                  }
+                </th>
+                @foreach (var cat in trendCategories)
+                {
+                  var count = ba.Counts[cat];
+                  <td class="mr-ba-table__cell--trend mr-ba-table__num">
+                    @if (count > 0)
+                    {
+                      <button type="button" class="@TrendCountBtnClass(cat, count)" data-mr-ba="@ba.Name" data-mr-trend="@cat" aria-label="@ba.Name, @cat, @count work items">@count</button>
+                    }
+                    else
+                    {
+                      <span class="mr-ba-num mr-ba-num--muted">—</span>
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr class="mr-ba-table__total-row">
+              <th scope="row" class="mr-ba-table__fixed mr-ba-table__area-col">
+                @{
+                  var allTotal = trendTotals.Values.Sum();
+                }
+                @if (allTotal > 0)
+                {
+                  <button type="button" class="govuk-link govuk-link--no-visited-state mr-rag-ba-link" data-mr-ba="__total__" aria-label="View all work items and RAG history">Total</button>
+                }
+                else
+                {
+                  @:Total
+                }
+              </th>
+              @foreach (var cat in trendCategories)
+              {
+                var total = trendTotals[cat];
+                <td class="mr-ba-table__cell--trend mr-ba-table__num">
+                  @if (total > 0)
+                  {
+                    <button type="button" class="@(TrendCountBtnClass(cat, total) + " mr-ba-num--strong")" data-mr-ba="__total__" data-mr-trend="@cat" aria-label="Total, @cat, @total work items">@total</button>
+                  }
+                  else
+                  {
+                    <span class="mr-ba-num mr-ba-num--muted">—</span>
+                  }
+                </td>
+              }
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+    <div id="mr-rag-six-month-drilldown-host" class="mr-drilldown-host"></div>
+  }
+
+  <script type="application/json" id="mr-rag-six-month-config" nonce="@Context.Items["Nonce"]">@Html.Raw(ragSixMonthJson)</script>
+  <script type="application/json" id="mr-rag-six-month-detail-prefix" nonce="@Context.Items["Nonce"]">@Html.Raw(JsonSerializer.Serialize(mwDetailPrefix))</script>
+</section>

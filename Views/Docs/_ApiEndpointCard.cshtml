@@ -1,0 +1,309 @@
+@using Compass.Models.Docs
+@model ApiEndpointDoc
+@{
+    var ep = Model;
+    var cardId = $"api-{ep.Id}";
+    var hasRoute = ep.RouteParams is { Count: > 0 };
+    var hasQuery = ep.QueryParams is { Count: > 0 };
+    var hasBody = !string.IsNullOrEmpty(ep.BodyExample);
+    var hasParams = hasRoute || hasQuery;
+    var methodLower = ep.Method.ToLowerInvariant();
+
+    // Per-endpoint snippets are generated server-side so the page works
+    // without JavaScript. The API Explorer further down the page builds
+    // identical requests dynamically.
+    var baseUrl = "https://compass.education.gov.uk";
+    var sampleToken = "cps_YOUR_TOKEN_HERE";
+    var url = baseUrl + ep.Path;
+
+    var curl = new System.Text.StringBuilder();
+    curl.Append("curl");
+    if (ep.Method != "GET")
+    {
+        curl.Append(" -X ").Append(ep.Method);
+    }
+    curl.Append(" \\\n  -H \"Authorization: Bearer ").Append(sampleToken).Append('"');
+    curl.Append(" \\\n  -H \"Accept: application/json\"");
+    if (hasBody)
+    {
+        curl.Append(" \\\n  -H \"Content-Type: application/json\"");
+        curl.Append(" \\\n  -d '").Append(ep.BodyExample).Append('\'');
+    }
+    curl.Append(" \\\n  \"").Append(url).Append('"');
+
+    var js = new System.Text.StringBuilder();
+    js.AppendLine("const res = await fetch(");
+    js.Append("  '").Append(url).AppendLine("',");
+    js.AppendLine("  {");
+    js.Append("    method: '").Append(ep.Method).AppendLine("',");
+    js.AppendLine("    headers: {");
+    js.Append("      'Authorization': 'Bearer ").Append(sampleToken).AppendLine("',");
+    js.AppendLine("      'Accept': 'application/json'" + (hasBody ? "," : ""));
+    if (hasBody)
+    {
+        js.AppendLine("      'Content-Type': 'application/json'");
+    }
+    js.AppendLine("    }" + (hasBody ? "," : ""));
+    if (hasBody)
+    {
+        js.Append("    body: JSON.stringify(").Append(ep.BodyExample).AppendLine(")");
+    }
+    js.AppendLine("  }");
+    js.AppendLine(");");
+    js.AppendLine("const data = await res.json();");
+
+    var csharp = new System.Text.StringBuilder();
+    csharp.AppendLine("using System.Net.Http;");
+    csharp.AppendLine("using System.Net.Http.Headers;");
+    csharp.AppendLine("using System.Net.Http.Json;");
+    csharp.AppendLine();
+    csharp.AppendLine("using var http = new HttpClient();");
+    csharp.Append("http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(\"Bearer\", \"").Append(sampleToken).AppendLine("\");");
+    csharp.AppendLine("http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(\"application/json\"));");
+    csharp.AppendLine();
+    if (ep.Method == "GET")
+    {
+        csharp.Append("var response = await http.GetAsync(\"").Append(url).AppendLine("\");");
+    }
+    else if (ep.Method == "DELETE")
+    {
+        csharp.Append("var response = await http.DeleteAsync(\"").Append(url).AppendLine("\");");
+    }
+    else if (hasBody)
+    {
+        csharp.AppendLine("var body = new").AppendLine("{").AppendLine("    // see Request body tab for the full shape").AppendLine("};");
+        if (ep.Method == "POST")
+        {
+            csharp.Append("var response = await http.PostAsJsonAsync(\"").Append(url).AppendLine("\", body);");
+        }
+        else if (ep.Method == "PUT")
+        {
+            csharp.Append("var response = await http.PutAsJsonAsync(\"").Append(url).AppendLine("\", body);");
+        }
+        else
+        {
+            csharp.Append("var response = await http.PatchAsJsonAsync(\"").Append(url).AppendLine("\", body);");
+        }
+    }
+    else
+    {
+        csharp.Append("using var req = new HttpRequestMessage(HttpMethod.").Append(ep.Method.Substring(0, 1)).Append(ep.Method.Substring(1).ToLowerInvariant()).Append(", \"").Append(url).AppendLine("\");");
+        csharp.AppendLine("var response = await http.SendAsync(req);");
+    }
+    csharp.AppendLine("response.EnsureSuccessStatusCode();");
+    csharp.AppendLine("var json = await response.Content.ReadAsStringAsync();");
+
+    var py = new System.Text.StringBuilder();
+    py.AppendLine("import requests");
+    py.AppendLine();
+    py.AppendLine("headers = {");
+    py.Append("    'Authorization': 'Bearer ").Append(sampleToken).AppendLine("',");
+    py.AppendLine("    'Accept': 'application/json'" + (hasBody ? "," : ""));
+    if (hasBody)
+    {
+        py.AppendLine("    'Content-Type': 'application/json'");
+    }
+    py.AppendLine("}");
+    py.AppendLine();
+    if (hasBody)
+    {
+        py.AppendLine("payload = " + (ep.BodyExample ?? "{}"));
+        py.AppendLine();
+        py.Append("response = requests.").Append(ep.Method.ToLowerInvariant()).Append("(\"").Append(url).AppendLine("\", json=payload, headers=headers)");
+    }
+    else
+    {
+        py.Append("response = requests.").Append(ep.Method.ToLowerInvariant()).Append("(\"").Append(url).AppendLine("\", headers=headers)");
+    }
+    py.AppendLine("response.raise_for_status()");
+    py.AppendLine("data = response.json()");
+
+    // Postman collection item (drag into a collection).
+    var postman = new System.Text.StringBuilder();
+    postman.AppendLine("{");
+    postman.AppendLine($"  \"name\": \"{ep.Method} {ep.Path}\",");
+    postman.AppendLine("  \"request\": {");
+    postman.AppendLine($"    \"method\": \"{ep.Method}\",");
+    postman.AppendLine("    \"header\": [");
+    postman.AppendLine($"      {{ \"key\": \"Authorization\", \"value\": \"Bearer {{{{compassToken}}}}\" }},");
+    postman.AppendLine("      { \"key\": \"Accept\", \"value\": \"application/json\" }" + (hasBody ? "," : ""));
+    if (hasBody)
+    {
+        postman.AppendLine("      { \"key\": \"Content-Type\", \"value\": \"application/json\" }");
+    }
+    postman.AppendLine("    ],");
+    if (hasBody)
+    {
+        postman.AppendLine("    \"body\": {");
+        postman.AppendLine("      \"mode\": \"raw\",");
+        var encoded = (ep.BodyExample ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n");
+        postman.AppendLine($"      \"raw\": \"{encoded}\"");
+        postman.AppendLine("    },");
+    }
+    postman.AppendLine("    \"url\": {");
+    postman.AppendLine($"      \"raw\": \"{{{{baseUrl}}}}{ep.Path}\",");
+    postman.AppendLine("      \"host\": [\"{{baseUrl}}\"],");
+    var pathSegments = ep.Path.TrimStart('/').Split('/');
+    var quoted = string.Join(", ", pathSegments.Select(s => $"\"{s}\""));
+    postman.AppendLine($"      \"path\": [{quoted}]");
+    postman.AppendLine("    }");
+    postman.AppendLine("  }");
+    postman.Append("}");
+}
+
+<section class="api-endpoint" id="@cardId">
+    <button type="button"
+            class="api-endpoint-header"
+            aria-expanded="false"
+            aria-controls="@cardId-body">
+        <span class="api-method api-method-@methodLower">@ep.Method</span>
+        <span class="api-path">@ep.Path</span>
+        <span class="api-endpoint-scope" aria-label="Required scope">@ep.Scope</span>
+        <span class="api-endpoint-toggle-label" aria-hidden="true"></span>
+        <span class="api-endpoint-chevron" aria-hidden="true"></span>
+    </button>
+    <div class="api-endpoint-body" id="@cardId-body" hidden>
+        <p class="govuk-body">@ep.Description</p>
+
+        <div class="api-endpoint-tabs" data-developers-tabs>
+            <div class="api-endpoint-tablist" role="tablist" aria-label="Endpoint details">
+                @if (hasParams)
+                {
+                    <button type="button" role="tab" class="api-endpoint-tab" id="@cardId-tab-params" aria-controls="@cardId-pane-params" aria-selected="true">Parameters</button>
+                }
+                @if (hasBody)
+                {
+                    <button type="button" role="tab" class="api-endpoint-tab" id="@cardId-tab-body" aria-controls="@cardId-pane-body" aria-selected="@(hasParams ? "false" : "true")">Request body</button>
+                }
+                <button type="button" role="tab" class="api-endpoint-tab" id="@cardId-tab-response" aria-controls="@cardId-pane-response" aria-selected="@((hasParams || hasBody) ? "false" : "true")">Response</button>
+                <button type="button" role="tab" class="api-endpoint-tab" id="@cardId-tab-snippets" aria-controls="@cardId-pane-snippets" aria-selected="false">Code snippets</button>
+            </div>
+
+            @if (hasParams)
+            {
+                <div class="api-endpoint-pane" role="tabpanel" id="@cardId-pane-params" aria-labelledby="@cardId-tab-params">
+                    @if (hasRoute)
+                    {
+                        <h4 class="govuk-heading-s govuk-!-margin-bottom-2">Route parameters</h4>
+                        <table class="govuk-table">
+                            <caption class="govuk-table__caption govuk-visually-hidden">Route parameters for @ep.Method @ep.Path</caption>
+                            <thead class="govuk-table__head">
+                                <tr class="govuk-table__row">
+                                    <th scope="col" class="govuk-table__header">Name</th>
+                                    <th scope="col" class="govuk-table__header">Type</th>
+                                    <th scope="col" class="govuk-table__header">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="govuk-table__body">
+                                @foreach (var p in ep.RouteParams!)
+                                {
+                                    <tr class="govuk-table__row">
+                                        <th scope="row" class="govuk-table__header"><code>@p.Name</code></th>
+                                        <td class="govuk-table__cell"><code>@p.Type</code></td>
+                                        <td class="govuk-table__cell">@p.Description</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    @if (hasQuery)
+                    {
+                        <h4 class="govuk-heading-s govuk-!-margin-bottom-2 @(hasRoute ? "govuk-!-margin-top-4" : null)">Query parameters</h4>
+                        <table class="govuk-table">
+                            <caption class="govuk-table__caption govuk-visually-hidden">Query parameters for @ep.Method @ep.Path</caption>
+                            <thead class="govuk-table__head">
+                                <tr class="govuk-table__row">
+                                    <th scope="col" class="govuk-table__header">Name</th>
+                                    <th scope="col" class="govuk-table__header">Type</th>
+                                    <th scope="col" class="govuk-table__header">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="govuk-table__body">
+                                @foreach (var p in ep.QueryParams!)
+                                {
+                                    <tr class="govuk-table__row">
+                                        <th scope="row" class="govuk-table__header"><code>@p.Name</code></th>
+                                        <td class="govuk-table__cell"><code>@p.Type</code></td>
+                                        <td class="govuk-table__cell">@p.Description</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+
+            @if (hasBody)
+            {
+                <div class="api-endpoint-pane" role="tabpanel" id="@cardId-pane-body" aria-labelledby="@cardId-tab-body" hidden="@(hasParams ? "hidden" : null)">
+                    <h4 class="govuk-heading-s govuk-!-margin-bottom-2">Example JSON payload</h4>
+                    <div class="api-code-block">
+                        <button type="button" class="api-code-copy" data-developers-copy-target>Copy</button>
+                        <pre><code>@ep.BodyExample</code></pre>
+                    </div>
+                </div>
+            }
+
+            <div class="api-endpoint-pane" role="tabpanel" id="@cardId-pane-response" aria-labelledby="@cardId-tab-response" hidden="@((hasParams || hasBody) ? "hidden" : null)">
+                <h4 class="govuk-heading-s govuk-!-margin-bottom-2"><span class="api-response-code api-response-200">200 OK</span></h4>
+                @if (!string.IsNullOrEmpty(ep.ResponseShape))
+                {
+                    <p class="govuk-body govuk-!-margin-bottom-2">@ep.ResponseShape</p>
+                }
+                <div class="api-code-block">
+                    <button type="button" class="api-code-copy" data-developers-copy-target>Copy</button>
+                    <pre><code>@(ep.ResponseExample ?? "(no example available)")</code></pre>
+                </div>
+            </div>
+
+            <div class="api-endpoint-pane" role="tabpanel" id="@cardId-pane-snippets" aria-labelledby="@cardId-tab-snippets" hidden>
+                <div class="api-snippet-tabs" data-developers-tabs>
+                    <div class="api-snippet-tablist" role="tablist" aria-label="Code samples">
+                        <button type="button" role="tab" class="api-snippet-tab" id="@cardId-snip-curl" aria-controls="@cardId-sn-curl" aria-selected="true">cURL</button>
+                        <button type="button" role="tab" class="api-snippet-tab" id="@cardId-snip-js" aria-controls="@cardId-sn-js" aria-selected="false">JavaScript</button>
+                        <button type="button" role="tab" class="api-snippet-tab" id="@cardId-snip-cs" aria-controls="@cardId-sn-cs" aria-selected="false">C#</button>
+                        <button type="button" role="tab" class="api-snippet-tab" id="@cardId-snip-py" aria-controls="@cardId-sn-py" aria-selected="false">Python</button>
+                        <button type="button" role="tab" class="api-snippet-tab" id="@cardId-snip-pm" aria-controls="@cardId-sn-pm" aria-selected="false">Postman</button>
+                    </div>
+                    <div class="api-snippet-pane" role="tabpanel" id="@cardId-sn-curl" aria-labelledby="@cardId-snip-curl">
+                        <div class="api-code-block">
+                            <button type="button" class="api-code-copy" data-developers-copy-target>Copy</button>
+                            <pre><code>@curl.ToString()</code></pre>
+                        </div>
+                    </div>
+                    <div class="api-snippet-pane" role="tabpanel" id="@cardId-sn-js" aria-labelledby="@cardId-snip-js" hidden>
+                        <div class="api-code-block">
+                            <button type="button" class="api-code-copy" data-developers-copy-target>Copy</button>
+                            <pre><code>@js.ToString()</code></pre>
+                        </div>
+                    </div>
+                    <div class="api-snippet-pane" role="tabpanel" id="@cardId-sn-cs" aria-labelledby="@cardId-snip-cs" hidden>
+                        <div class="api-code-block">
+                            <button type="button" class="api-code-copy" data-developers-copy-target>Copy</button>
+                            <pre><code>@csharp.ToString()</code></pre>
+                        </div>
+                    </div>
+                    <div class="api-snippet-pane" role="tabpanel" id="@cardId-sn-py" aria-labelledby="@cardId-snip-py" hidden>
+                        <div class="api-code-block">
+                            <button type="button" class="api-code-copy" data-developers-copy-target>Copy</button>
+                            <pre><code>@py.ToString()</code></pre>
+                        </div>
+                    </div>
+                    <div class="api-snippet-pane" role="tabpanel" id="@cardId-sn-pm" aria-labelledby="@cardId-snip-pm" hidden>
+                        <p class="govuk-body govuk-!-margin-bottom-2">
+                            Add a collection-level variable <code>baseUrl</code>
+                            = <code>https://compass.education.gov.uk</code> and
+                            <code>compassToken</code> = your token, then paste
+                            this object as a new request inside a Postman
+                            collection.
+                        </p>
+                        <div class="api-code-block">
+                            <button type="button" class="api-code-copy" data-developers-copy-target>Copy</button>
+                            <pre><code>@postman.ToString()</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

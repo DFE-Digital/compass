@@ -62,8 +62,16 @@ public sealed class AissByServiceRow
     public int ServiceId { get; set; }
     public string? Name { get; set; }
     public string? DocumentId { get; set; }
+    public AissByServiceRegisterInfo? Register { get; set; }
     public int IssuesOpen { get; set; }
     public AissOpenByCriterion? OpenByCriterion { get; set; }
+}
+
+public sealed class AissByServiceRegisterInfo
+{
+    public Guid Id { get; set; }
+    public string? UniqueId { get; set; }
+    public string? ProductName { get; set; }
 }
 
 /// <summary>Aggregated accessibility issues for one FIPS business area label (from service register), from AISS summary.</summary>

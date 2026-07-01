@@ -1,0 +1,335 @@
+/* =================================================================
+   /docs/api — endpoint cards, tabbed details and API Explorer.
+   Lives alongside docs-theme.css (themed via --dd-* custom properties)
+   and is loaded only by Views/Docs/Api.cshtml.
+   ================================================================= */
+
+/* ---------- Base URL banner ---------- */
+.api-base-urls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.api-base-urls > div {
+    background: var(--dd-bg-elevated, #ffffff);
+    border: 1px solid var(--dd-border, #e1e4e8);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.api-base-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--dd-text-muted, #586069);
+    flex: 0 0 auto;
+}
+
+.api-base-value {
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    color: var(--dd-text, inherit);
+    background: transparent;
+    word-break: break-all;
+}
+
+@media (max-width: 720px) {
+    .api-base-urls { grid-template-columns: 1fr; }
+}
+
+/* ---------- Endpoint card (uses semantic <button> header + [hidden] body) ---------- */
+.api-endpoint {
+    border: 1px solid var(--dd-border, #e1e4e8);
+    background: var(--dd-bg-elevated, #ffffff);
+    color: var(--dd-text, inherit);
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.api-endpoint-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    background: var(--dd-bg-toolbar, #f6f8fa);
+    color: var(--dd-text, inherit);
+    border: none;
+    border-bottom: 1px solid transparent;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: background 0.15s;
+}
+
+.api-endpoint-header:hover {
+    background: var(--dd-accent-soft, #e1e4e8);
+}
+
+.api-endpoint-header:focus-visible {
+    outline: 3px solid var(--dd-focus, #ffdd00);
+    outline-offset: -3px;
+}
+
+.api-endpoint-header[aria-expanded="true"] {
+    border-bottom-color: var(--dd-border, #e1e4e8);
+}
+
+.api-method {
+    font-weight: 700;
+    font-size: 0.8125rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-family: 'Courier New', monospace;
+    color: #ffffff;
+    flex: 0 0 auto;
+    min-width: 4rem;
+    text-align: center;
+}
+
+/* WCAG 2.2 AA: white text on these backgrounds needs ≥ 4.5:1 contrast.
+   The previous palette (#1f6feb / #2ea043 / #d29922 / #8b5cf6 / #da3633)
+   failed for POST (3.37:1), PUT (2.52:1), PATCH (~3.6:1) and was borderline
+   for DELETE. The values below give the following contrast ratios with
+   white: GET 5.1:1, POST 5.0:1, PUT 5.4:1, PATCH 6.5:1, DELETE 5.9:1. */
+.api-method-get { background: #1d4ed8; }
+.api-method-post { background: #1a7f37; }
+.api-method-put { background: #8a5a00; }
+.api-method-patch { background: #6b21a8; }
+.api-method-delete { background: #b91c1c; }
+
+.api-path {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--dd-text, inherit);
+    flex: 1 1 auto;
+    word-break: break-all;
+}
+
+.api-endpoint-scope {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--dd-border, #e1e4e8);
+    border-radius: 999px;
+    color: var(--dd-text-muted, #586069);
+    background: var(--dd-bg-elevated, #ffffff);
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.api-endpoint-toggle-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--dd-text-muted, #586069);
+    flex: 0 0 auto;
+}
+
+.api-endpoint-header[aria-expanded="true"] .api-endpoint-toggle-label::before {
+    content: "Hide ";
+}
+
+.api-endpoint-header[aria-expanded="false"] .api-endpoint-toggle-label::before {
+    content: "Show ";
+}
+
+.api-endpoint-toggle-label::after {
+    content: "details";
+}
+
+.api-endpoint-chevron {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    color: var(--dd-text-muted, #586069);
+    transform: rotate(45deg);
+    transform-origin: 60% 60%;
+    transition: transform 0.18s ease, color 0.18s ease;
+    flex: 0 0 auto;
+}
+
+.api-endpoint-header[aria-expanded="true"] .api-endpoint-chevron {
+    transform: rotate(-135deg);
+    color: var(--dd-accent, #0366d6);
+}
+
+.api-endpoint-body {
+    padding: 1.25rem 1.25rem 1.5rem;
+}
+
+/* Drive show/hide off the header's aria-expanded state so the toggle still
+   works even if the browser's UA stylesheet for [hidden] is overridden by
+   another rule. The JS just flips aria-expanded; CSS reveals the body. */
+.api-endpoint-header[aria-expanded="false"] + .api-endpoint-body {
+    display: none;
+}
+
+.api-endpoint-header[aria-expanded="true"] + .api-endpoint-body {
+    display: block;
+}
+
+/* ---------- Inner tablist (Parameters / Body / Response / Snippets) ---------- */
+.api-endpoint-tablist,
+.api-snippet-tablist {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--dd-border, #e1e4e8);
+    margin: 0 0 1rem;
+    flex-wrap: wrap;
+}
+
+.api-endpoint-tab,
+.api-snippet-tab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--dd-text-muted, #586069);
+    padding: 0.5rem 0.875rem;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: -1px;
+}
+
+.api-endpoint-tab:hover,
+.api-snippet-tab:hover {
+    color: var(--dd-text, inherit);
+    background: var(--dd-accent-soft, rgba(29, 112, 184, 0.08));
+}
+
+.api-endpoint-tab:focus-visible,
+.api-snippet-tab:focus-visible {
+    outline: 3px solid var(--dd-focus, #ffdd00);
+    outline-offset: -3px;
+}
+
+.api-endpoint-tab[aria-selected="true"],
+.api-snippet-tab[aria-selected="true"] {
+    color: var(--dd-accent, #0366d6);
+    border-bottom-color: var(--dd-accent, #0366d6);
+}
+
+.api-snippet-tablist {
+    margin-top: 0.5rem;
+}
+
+/* Parameter tables now use the standard <table class="govuk-table"> markup
+   (see Views/Docs/_ApiEndpointCard.cshtml) so they pick up the shared
+   developers-data-models card chrome defined in docs-theme.css. No extra
+   selectors are needed here. */
+
+/* ---------- Code blocks with copy button ---------- */
+.api-code-block {
+    position: relative;
+    background: var(--dd-code-bg, #0f1721);
+    border: 1px solid var(--dd-code-border, #1f2a36);
+    color: var(--dd-text, inherit);
+    border-radius: 6px;
+    padding: 0.875rem 1rem;
+    margin: 0.5rem 0 0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    overflow: auto;
+}
+
+.api-code-block pre {
+    margin: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    white-space: pre;
+}
+
+.developers-doc-app--theme-light .api-code-block {
+    background: #f6f8fa;
+    border-color: #d0d7de;
+}
+
+.api-code-copy {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    background: var(--dd-bg-elevated, #1c2532);
+    color: var(--dd-text, inherit);
+    border: 1px solid var(--dd-border, #2f3b4d);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.api-code-copy:hover {
+    background: var(--dd-accent-soft, rgba(56, 139, 253, 0.15));
+}
+
+.api-code-copy:focus-visible {
+    outline: 2px solid var(--dd-focus, #ffdd00);
+    outline-offset: -2px;
+}
+
+.api-code-copy--copied {
+    background: rgba(46, 160, 67, 0.2);
+    color: #6fdd8b;
+    border-color: rgba(46, 160, 67, 0.4);
+}
+
+/* ---------- Response code chip ---------- */
+.api-response-code {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border: 1px solid transparent;
+}
+
+.api-response-200,
+.api-response-201 {
+    background: rgba(46, 160, 67, 0.15);
+    color: #6fdd8b;
+    border-color: rgba(46, 160, 67, 0.35);
+}
+
+.developers-doc-app--theme-light .api-response-200,
+.developers-doc-app--theme-light .api-response-201 {
+    background: #d4edda;
+    color: #155724;
+    border-color: rgba(21, 87, 36, 0.2);
+}
+
+/* The legacy in-page API explorer that used to live on /docs/api has been
+   replaced by the standalone /docs/api-explorer page. Its styles live in
+   wwwroot/css/docs-api-explorer.css and are loaded only on that page. */
+
+/* ---------- Lookup key chip list ---------- */
+.api-lookup-keys {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 0.25rem 1rem;
+    padding: 0;
+    margin-top: 0.5rem;
+}
+
+.api-lookup-keys li {
+    padding: 0;
+    font-size: 0.875rem;
+}
+
+.api-lookup-keys code {
+    font-family: 'Courier New', monospace;
+}

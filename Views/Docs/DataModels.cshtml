@@ -1,0 +1,403 @@
+@*
+    /docs/data-models — entity-level reference for the COMPASS database,
+    grouped by Modern feature area. Documents both:
+      - the EF Core entities in /Models that back the database, and
+      - the Modern view models in /Models/Modern that the Modern UI uses.
+    Field-level detail for individual Modern features lives on /docs/features.
+*@
+
+<div class="developers-docs__intro govuk-!-margin-bottom-6">
+    <span class="govuk-caption-xl">Reference</span>
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">Data models</h1>
+    <p class="govuk-body-l govuk-!-margin-bottom-0">
+        Entities and view models behind the Modern COMPASS UI at <code>/modern</code>.
+        Tables below are grouped by Modern feature area. Names shown are the EF
+        entity / DbSet name &mdash; SQL table names usually match (pluralised)
+        unless noted.
+    </p>
+</div>
+
+<div class="govuk-inset-text">
+    Two layers to know about. EF Core entities under <code>Compass.Models</code>
+    (for example <code>Project</code>, <code>Risk</code>) map directly to SQL
+    tables. The Modern UI wraps these in view models under
+    <code>Compass.Models.Modern</code> (for example <code>WorkItem</code>,
+    <code>MonthlyUpdate</code>) which expose Modern field names and join
+    additional context already loaded. Reports and integrations should target
+    the EF entities; UI customisations should target the Modern view models.
+</div>
+
+<h2 class="govuk-heading-l" id="overview">Overview</h2>
+<p class="govuk-body">
+    The Modern schema is centred on a small number of top-level entities:
+</p>
+<ul class="govuk-list govuk-list--bullet">
+    <li><code>Project</code> &mdash; the unit of work. Surfaced in the Modern UI as a <code>WorkItem</code> at <code>/modern/work/{id}</code>.</li>
+    <li><code>FipsService</code> &mdash; a managed product or service, synced from CMDB / FIPS. Listed at <code>/modern/operations/service-register</code>.</li>
+    <li><code>Risk</code>, <code>Issue</code>, <code>Models.Action</code>, <code>Decision</code>, <code>Milestone</code> &mdash; the RAID register at <code>/modern/raid/*</code>. Each can attach to a work item, a product, or both.</li>
+    <li><code>User</code> &mdash; authenticated user, joined to Azure AD by <code>AzureObjectId</code>. Profile at <code>/modern/profile</code>.</li>
+</ul>
+<p class="govuk-body">
+    Every other table either describes one of these (status / lookups / extensions),
+    captures activity against them (status updates, monthly returns, audit history),
+    or supports a cross-cutting concern (RBAC, notifications, API access).
+</p>
+
+<div class="govuk-warning-text">
+    <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+    <strong class="govuk-warning-text__text">
+        <span class="govuk-visually-hidden">Warning</span>
+        Most domain tables expose an <code>IsDeleted</code> flag. Always include
+        <code>WHERE IsDeleted = 0</code> in PowerBI queries against the database,
+        or rely on the JSON API (which already filters it).
+    </strong>
+</div>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<div class="developers-data-models">
+
+<h2 class="govuk-heading-l" id="modern-viewmodels">Modern view models</h2>
+<p class="govuk-body">
+    Used by Modern Razor views under <code>Views/Modern/*</code>. These are
+    not EF-mapped; they are built from one or more EF entities by services
+    such as <code>WorkItemBuilder</code> and the controllers under
+    <code>Controllers/Modern</code>.
+</p>
+<table class="govuk-table">
+    <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Modern view models</caption>
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Wraps</th>
+            <th scope="col" class="govuk-table__header">Used by</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkItem</code></th><td class="govuk-table__cell"><code>Project</code> + joined RAG, phase, priority, contacts.</td><td class="govuk-table__cell"><code>/modern/work/{id}</code> detail, register, edit, milestones, RAID review.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkItemContact</code></th><td class="govuk-table__cell"><code>ProjectContact</code> (with role type 1..5, where 5 = custom <code>RoleName</code>).</td><td class="govuk-table__cell"><code>/modern/work/{id}/people</code>, governance role edits.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkItemTeamMember</code></th><td class="govuk-table__cell">Delivery team members.</td><td class="govuk-table__cell"><code>/modern/work/{id}/people</code>.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkItemDirectorate</code></th><td class="govuk-table__cell"><code>ProjectDirectorate</code> + <code>Division</code>.</td><td class="govuk-table__cell">Directorate column on register, RAID directorate slice.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkItemGovernmentDepartment</code></th><td class="govuk-table__cell">Cross-government department links.</td><td class="govuk-table__cell"><code>/modern/work/{id}/edit/multi-dept</code>.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkItemRagHistory</code></th><td class="govuk-table__cell"><code>ProjectRagHistory</code> + display badge state (<code>ChromeRagSnapshot</code>).</td><td class="govuk-table__cell">RAG badge, RAG history sparkline, monthly update review.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkItemDependency</code></th><td class="govuk-table__cell">Internal / external dependency record.</td><td class="govuk-table__cell">Dependencies tab.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkItemAssumptionRef</code></th><td class="govuk-table__cell">RAID assumptions scoped to a work item.</td><td class="govuk-table__cell">RAID assumptions tab.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkItemRiskOrIssue</code></th><td class="govuk-table__cell">Joins risks / issues to a work item with display chrome.</td><td class="govuk-table__cell">Detail RAID summary, RAID review.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>MonthlyUpdate</code> (Modern)</th><td class="govuk-table__cell"><code>ProjectMonthlyUpdate</code> + resolved RAG display + per-period chrome.</td><td class="govuk-table__cell"><code>/modern/work/{id}/monthly</code>, <code>/modern/reporting/monthly-update</code>.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ReportingCyclePeriod</code></th><td class="govuk-table__cell"><code>WorkReportingCyclePeriod</code> + computed status (Upcoming, Due, Late, Submitted).</td><td class="govuk-table__cell">Monthly toolbar / cycle picker.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkMilestoneRow</code></th><td class="govuk-table__cell"><code>Milestone</code> + computed badge / overdue flag.</td><td class="govuk-table__cell"><code>/modern/work/{id}/milestones</code>.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkRegisterViewModel</code></th><td class="govuk-table__cell">Filtered, paginated work-item list + sub-nav.</td><td class="govuk-table__cell"><code>/modern/work</code>, <code>/modern/work/all</code>, <code>/modern/work/by-theme</code>.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>LifecycleAuditEntry</code></th><td class="govuk-table__cell">Pre-formatted audit row from <code>AuditLog</code> + domain history.</td><td class="govuk-table__cell"><code>/modern/work/{id}/audit</code>.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="identity-access">Identity &amp; access</h2>
+<p class="govuk-body">
+    Users, groups, roles, and the RBAC system that gates Modern UI features and
+    API tokens. Managed at <code>/modern/admin/users</code> and
+    <code>/modern/admin/api-tokens</code>.
+</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Purpose</th>
+            <th scope="col" class="govuk-table__header">Key fields</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>User</code></th><td class="govuk-table__cell">Person record. Created on first sign-in.</td><td class="govuk-table__cell"><code>Id</code>, <code>AzureObjectId</code>, <code>Name</code>, <code>Email</code>, <code>Department</code>, <code>JobTitle</code>, <code>IsActive</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>UserPreference</code></th><td class="govuk-table__cell">Per-user settings (theme, default views).</td><td class="govuk-table__cell"><code>UserId</code>, <code>Key</code>, <code>Value</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Group</code></th><td class="govuk-table__cell">RBAC group.</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>Description</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>UserGroup</code></th><td class="govuk-table__cell">Join: user &harr; group.</td><td class="govuk-table__cell"><code>UserId</code>, <code>GroupId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Feature</code></th><td class="govuk-table__cell">Named application feature gate.</td><td class="govuk-table__cell"><code>Code</code>, <code>Name</code>, <code>AccessMode</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>FeatureUserAllow</code> / <code>FeatureGroupAllow</code></th><td class="govuk-table__cell">Explicit allow-list for a feature.</td><td class="govuk-table__cell"><code>FeatureId</code>, <code>UserId</code> / <code>GroupId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>GroupFeaturePermission</code></th><td class="govuk-table__cell">Group-scoped feature verbs (read / create / update / delete).</td><td class="govuk-table__cell"><code>GroupId</code>, <code>FeatureId</code>, <code>CanRead</code>, <code>CanWrite</code>, <code>CanDelete</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ApiToken</code></th><td class="govuk-table__cell">Bearer token for the JSON API. Issued at <code>/modern/admin/api-tokens</code>.</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>TokenHash</code>, <code>CreatedAt</code>, <code>ExpiresAt</code>, <code>IsActive</code>, <code>LastUsedAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ApiTokenPermission</code></th><td class="govuk-table__cell">Per-token scope grant.</td><td class="govuk-table__cell"><code>ApiTokenId</code>, <code>Scope</code>, <code>CanRead</code>, <code>CanCreate</code>, <code>CanUpdate</code>, <code>CanDelete</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ApiRequestLog</code></th><td class="govuk-table__cell">Per-call audit of token-authenticated requests.</td><td class="govuk-table__cell"><code>TokenId</code>, <code>Method</code>, <code>Path</code>, <code>StatusCode</code>, <code>DurationMs</code>, <code>CreatedAt</code></td></tr>
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-l" id="org-structure">Organisational structure</h2>
+<p class="govuk-body">Hierarchy used for ownership, budget areas, and reporting groups. Managed at <code>/modern/admin/organisation-structure</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Purpose</th>
+            <th scope="col" class="govuk-table__header">Key fields</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>OrganizationalGroup</code></th><td class="govuk-table__cell">Top-level group (for example DDaT, ESFA).</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>IsActive</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>OrganizationalRole</code></th><td class="govuk-table__cell">Named role within a group (for example CIO).</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>OrganizationalGroupId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>GovernmentDepartment</code></th><td class="govuk-table__cell">Reference list of departments for cross-government work items.</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>Code</code>, <code>GovukStatus</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Division</code></th><td class="govuk-table__cell">Directorate / division.</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>Description</code>, <code>IsActive</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DivisionBusinessArea</code></th><td class="govuk-table__cell">Join: division &harr; business area.</td><td class="govuk-table__cell"><code>DivisionId</code>, <code>BusinessAreaLookupId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DivisionUser</code> / <code>BusinessAreaUser</code></th><td class="govuk-table__cell">Membership.</td><td class="govuk-table__cell"><code>UserId</code>, <code>DivisionId</code> / <code>BusinessAreaLookupId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>BusinessAreaAdminMember</code> / <code>BusinessAreaLeadershipMember</code></th><td class="govuk-table__cell">Privileged role within a business area.</td><td class="govuk-table__cell"><code>UserId</code>, <code>BusinessAreaLookupId</code></td></tr>
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-l" id="projects">Work items (projects)</h2>
+<p class="govuk-body">
+    A <code>Project</code> is the canonical work item, surfaced in the Modern UI
+    at <code>/modern/work/{id}</code> via the <code>WorkItem</code> view model.
+    Supporting tables capture governance, contacts, monthly updates, and so on.
+</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Purpose</th>
+            <th scope="col" class="govuk-table__header">Key fields</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Project</code></th><td class="govuk-table__cell">Headline record (Modern <code>WorkItem</code> source).</td><td class="govuk-table__cell"><code>Id</code>, <code>ProjectCode</code>, <code>Title</code>, <code>Aim</code>, <code>StartDate</code>, <code>TargetDeliveryDate</code>, <code>ActualDeliveryDate</code>, <code>IsFlagship</code>, <code>IsAiInitiative</code>, <code>PhaseId</code>, <code>BusinessAreaId</code>, <code>RagStatusLookupId</code>, <code>Status</code>, <code>IsDeleted</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectContact</code></th><td class="govuk-table__cell">Contact on a work item. Role type 1..5 (5 = custom).</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>UserId</code>, <code>Role</code>, <code>Name</code>, <code>Email</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectSeniorResponsibleOfficer</code></th><td class="govuk-table__cell">SRO assignment (can be many).</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>UserId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectServiceOwner</code></th><td class="govuk-table__cell">Service owner assignment.</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>UserId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectPmoContact</code></th><td class="govuk-table__cell">PMO contact assignment.</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>UserId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectDirectorate</code></th><td class="govuk-table__cell">Join: work item &harr; division / directorate.</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>DivisionId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectBudgetOwner</code></th><td class="govuk-table__cell">Business area accountable for the budget.</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>BusinessAreaLookupId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectProduct</code></th><td class="govuk-table__cell">Join: work item &harr; product (<code>DocumentId</code>).</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>ProductDocumentId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectMission</code> / <code>ProjectObjective</code></th><td class="govuk-table__cell">Strategic alignment links.</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>MissionId</code> / <code>ObjectiveId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectFundingAllocation</code> / <code>ProjectResourceFunding</code></th><td class="govuk-table__cell">Funding sources and FTE allocations.</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>FundingSourceId</code>, <code>Amount</code>, <code>Period</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectRagHistory</code></th><td class="govuk-table__cell">Time series of RAG changes (Modern <code>WorkItemRagHistory</code> source).</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>RagStatusLookupId</code>, <code>ChangedAt</code>, <code>ChangedBy</code>, <code>Justification</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectStatusUpdate</code> / <code>ProjectMonthlyUpdate</code></th><td class="govuk-table__cell">Weekly / monthly narrative.</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>Year</code>, <code>Month</code>, <code>Narrative</code>, <code>SubmittedAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectWeeklySuccessUpdate</code> / <code>ProjectSuccess</code> / <code>ProjectOutcome</code> / <code>ProjectNeed</code></th><td class="govuk-table__cell">Discovery / value artefacts.</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>Description</code>, <code>CreatedAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectArtefact</code></th><td class="govuk-table__cell">File / URL attachments.</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>Title</code>, <code>Url</code>, <code>Kind</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectWatchlist</code></th><td class="govuk-table__cell">Per-user pinned work-item list.</td><td class="govuk-table__cell"><code>UserId</code>, <code>ProjectId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProjectDraft</code></th><td class="govuk-table__cell">Saved-but-not-submitted work-item creation flow (<code>/modern/work/create</code>).</td><td class="govuk-table__cell"><code>UserId</code>, <code>PayloadJson</code>, <code>UpdatedAt</code></td></tr>
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-l" id="raid">RAID</h2>
+<p class="govuk-body">
+    Risks, Actions, Issues, Decisions, Milestones and Near-misses share a
+    similar shape: every record can attach to a work item (<code>ProjectId</code>),
+    a product (<code>ProductDocumentId</code>), an <code>Objective</code>,
+    or carry only the legacy <code>FipsId</code> link. Modern UI at
+    <code>/modern/raid/*</code>.
+</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Purpose</th>
+            <th scope="col" class="govuk-table__header">Key fields</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Risk</code></th><td class="govuk-table__cell">Risk register row (<code>/modern/raid/risks</code>).</td><td class="govuk-table__cell"><code>Id</code>, <code>Title</code>, <code>Description</code>, <code>RiskTierId</code>, <code>ImpactRating</code>, <code>LikelihoodRating</code>, <code>RiskScore</code>, <code>ResidualImpact</code>, <code>ResidualLikelihood</code>, <code>Status</code>, <code>ProximityDate</code>, <code>TargetDate</code>, <code>OwnerEmail</code>, <code>ProjectId</code>, <code>ProductDocumentId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>RiskRiskType</code> / <code>RiskRiskCategory</code> / <code>RiskKeyRiskIndicator</code></th><td class="govuk-table__cell">Many-to-many tagging.</td><td class="govuk-table__cell"><code>RiskId</code>, &lt;lookup&gt;<code>Id</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>RiskDivision</code> / <code>RiskBusinessArea</code></th><td class="govuk-table__cell">Many-to-many scope.</td><td class="govuk-table__cell"><code>RiskId</code>, <code>DivisionId</code> / <code>BusinessAreaLookupId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>RiskAction</code> / <code>RiskDecision</code></th><td class="govuk-table__cell">Link from a risk to mitigations / decisions.</td><td class="govuk-table__cell"><code>RiskId</code>, <code>ActionId</code> / <code>DecisionId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Issue</code></th><td class="govuk-table__cell">Issue register row (<code>/modern/raid/issues</code>).</td><td class="govuk-table__cell"><code>Id</code>, <code>Title</code>, <code>Severity</code>, <code>Priority</code>, <code>Status</code>, <code>DetectedDate</code>, <code>TargetResolutionDate</code>, <code>OwnerUserId</code>, <code>ProjectId</code>, <code>ProductDocumentId</code>, <code>SourceType</code>, <code>SourceRiskId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>IssueRisk</code> / <code>IssueAction</code> / <code>IssueDecision</code></th><td class="govuk-table__cell">Cross-links.</td><td class="govuk-table__cell"><code>IssueId</code>, &lt;target&gt;<code>Id</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>IssueAssuranceEvent</code></th><td class="govuk-table__cell">Assurance trail entry for an issue.</td><td class="govuk-table__cell"><code>IssueId</code>, <code>EventDate</code>, <code>Type</code>, <code>Notes</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Models.Action</code></th><td class="govuk-table__cell">Action / mitigation (<code>/modern/raid/actions</code>).</td><td class="govuk-table__cell"><code>Id</code>, <code>Title</code>, <code>Description</code>, <code>Status</code>, <code>DueDate</code>, <code>OwnerUserId</code>, <code>ProjectId</code>, <code>ProductDocumentId</code>, <code>ActionSourceId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ActionDecision</code></th><td class="govuk-table__cell">Join: action &harr; decision.</td><td class="govuk-table__cell"><code>ActionId</code>, <code>DecisionId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Decision</code></th><td class="govuk-table__cell">Decision register row (<code>/modern/raid/decisions</code>).</td><td class="govuk-table__cell"><code>Id</code>, <code>Title</code>, <code>Description</code>, <code>DecisionDate</code>, <code>DecisionMakerUserId</code>, <code>ProjectId</code>, <code>ProductDocumentId</code>, <code>Status</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Milestone</code></th><td class="govuk-table__cell">Milestone target (<code>/modern/work/{id}/milestones</code>).</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>BaselineDueDate</code>, <code>DueDate</code>, <code>ActualDate</code>, <code>Status</code>, <code>ProgressPercent</code>, <code>ProjectId</code>, <code>ProductDocumentId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>MilestoneAction</code> / <code>MilestoneRisk</code> / <code>MilestoneIssue</code></th><td class="govuk-table__cell">Cross-links.</td><td class="govuk-table__cell"><code>MilestoneId</code>, &lt;target&gt;<code>Id</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>MilestoneUpdate</code></th><td class="govuk-table__cell">Status update for a milestone.</td><td class="govuk-table__cell"><code>MilestoneId</code>, <code>Date</code>, <code>Notes</code>, <code>RagStatus</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>RaidEscalationTierChangeRequest</code></th><td class="govuk-table__cell">Tier-change approval workflow.</td><td class="govuk-table__cell"><code>RiskId</code>, <code>FromTierId</code>, <code>ToTierId</code>, <code>RequestedBy</code>, <code>Status</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>RaidMonthlyReview</code></th><td class="govuk-table__cell">Monthly RAID review submission (<code>/modern/reporting/raid-review</code>).</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>Period</code>, <code>SubmittedAt</code>, <code>Notes</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>NearMiss</code> + <code>NearMissOwner</code> / <code>NearMissAction</code> / <code>NearMissMitigation</code></th><td class="govuk-table__cell">Near-miss capture and follow-up (<code>/modern/raid/near-misses</code>).</td><td class="govuk-table__cell"><code>Id</code>, <code>Title</code>, <code>Description</code>, <code>OccurredDate</code>, <code>ProjectId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Assumption</code> / <code>AssumptionDivision</code> / <code>AssumptionBusinessArea</code></th><td class="govuk-table__cell">Assumptions register.</td><td class="govuk-table__cell"><code>Id</code>, <code>Description</code>, <code>Criticality</code>, <code>Status</code>, <code>ProjectId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Dependency</code></th><td class="govuk-table__cell">Internal / external dependency.</td><td class="govuk-table__cell"><code>Id</code>, <code>SourceProjectId</code>, <code>TargetProjectId</code>, <code>Direction</code>, <code>IsInternal</code>, <code>ExternalDescription</code></td></tr>
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-l" id="demand">Demand pipeline &amp; triage</h2>
+<p class="govuk-body">Intake funnel at <code>/modern/demand</code> &mdash; requests, scoring, triage decisions, and resulting business cases.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Purpose</th>
+            <th scope="col" class="govuk-table__header">Key fields</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DemandTriageRequest</code></th><td class="govuk-table__cell">Inbound request awaiting triage.</td><td class="govuk-table__cell"><code>Id</code>, <code>Title</code>, <code>Summary</code>, <code>SubmittedBy</code>, <code>SubmittedAt</code>, <code>Status</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DemandExploratoryReview</code></th><td class="govuk-table__cell">Exploratory analysis notes.</td><td class="govuk-table__cell"><code>DemandTriageRequestId</code>, <code>Notes</code>, <code>UpdatedBy</code>, <code>UpdatedAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DemandScorecard</code> + <code>DemandAnswer</code></th><td class="govuk-table__cell">Scoring template instance + per-question answers.</td><td class="govuk-table__cell"><code>DemandTriageRequestId</code>, <code>FrameworkSectionId</code>, <code>QuestionId</code>, <code>AnswerScore</code>, <code>AnswerText</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DemandTriageOutcome</code></th><td class="govuk-table__cell">Final outcome &amp; routing decision.</td><td class="govuk-table__cell"><code>DemandTriageRequestId</code>, <code>OutcomeStage</code>, <code>DecisionDate</code>, <code>DecisionMakerUserId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DemandTriageAuditEvent</code></th><td class="govuk-table__cell">Timeline events on a triage request.</td><td class="govuk-table__cell"><code>DemandTriageRequestId</code>, <code>EventDate</code>, <code>EventType</code>, <code>UserId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>BusinessCase</code> + <code>BusinessCaseReviewer</code> / <code>BusinessCaseProject</code> / <code>BusinessCaseProduct</code> / <code>BusinessCaseDdtFeedback</code></th><td class="govuk-table__cell">Business case workflow.</td><td class="govuk-table__cell"><code>Id</code>, <code>Title</code>, <code>Status</code>, <code>StatusLookupId</code>, <code>SubmittedAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DemandPipelineRequest</code> + <code>DemandPipelineStage</code> / <code>DemandPipelineTriageMeeting</code></th><td class="govuk-table__cell">Downstream pipeline tracking.</td><td class="govuk-table__cell"><code>Id</code>, <code>StageId</code>, <code>EnteredStageAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DemandPipelineRequestUniversalBarrier</code></th><td class="govuk-table__cell">Join: pipeline request &harr; universal barrier lookup.</td><td class="govuk-table__cell"><code>DemandPipelineRequestId</code>, <code>UniversalBarrierLookupId</code></td></tr>
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-l" id="performance-reporting">Performance &amp; enterprise reporting</h2>
+<p class="govuk-body">Quantitative returns surfaced at <code>/modern/performance</code> and <code>/modern/reporting</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Purpose</th>
+            <th scope="col" class="govuk-table__header">Key fields</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>PerformanceMetric</code></th><td class="govuk-table__cell">Metric definition (per product cycle).</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>Unit</code>, <code>Frequency</code>, <code>IsActive</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProductReturn</code> + <code>ProductMetricValue</code></th><td class="govuk-table__cell">Monthly product return and its metric values.</td><td class="govuk-table__cell"><code>ProductDocumentId</code>, <code>ReturnPeriod</code>, <code>SubmittedAt</code>, <code>SubmittedBy</code> / <code>MetricId</code>, <code>Value</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Commission</code> + <code>CommissionSubmission</code> + <code>CommissionMetricValue</code></th><td class="govuk-table__cell">One-off commissioned data captures.</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>OpenAt</code>, <code>CloseAt</code> / <code>SubmittedAt</code> / <code>MetricId</code>, <code>Value</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>EnterpriseMetric</code> + <code>EnterpriseReturn</code> + <code>EnterpriseMetricValue</code></th><td class="govuk-table__cell">Department-level metrics (vs product-level).</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>Unit</code>, <code>Frequency</code> / <code>BusinessAreaLookupId</code>, <code>Period</code> / <code>MetricId</code>, <code>Value</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>CustomReport</code> / <code>CustomReportShare</code></th><td class="govuk-table__cell">Saved query definitions.</td><td class="govuk-table__cell"><code>OwnerUserId</code>, <code>Name</code>, <code>DefinitionJson</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>PerformanceReportingDueDateOverride</code> / <code>PerformanceReportingProductExclusion</code> / <code>PerformanceReportingPeriodExclusion</code> / <code>PerformanceReportingBusinessAreaConfig</code></th><td class="govuk-table__cell">Per-product / per-period reporting tweaks.</td><td class="govuk-table__cell"><code>ProductDocumentId</code>, <code>Period</code>, <code>Reason</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Kpi</code> + <code>KpiDataPoint</code> + <code>KpiCategory</code></th><td class="govuk-table__cell">Standalone KPI definitions and timeseries values.</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>CategoryId</code> / <code>KpiId</code>, <code>Date</code>, <code>Value</code></td></tr>
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-l" id="standards">Functional standards &amp; assessments</h2>
+<p class="govuk-body">Assessments at <code>/modern/standards/*</code>; framework management at <code>/modern/admin/functional-standards</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Purpose</th>
+            <th scope="col" class="govuk-table__header">Key fields</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>FunctionalStandard</code></th><td class="govuk-table__cell">Top-level standard (for example &ldquo;GovS 005 Digital&rdquo;).</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>Code</code>, <code>IsActive</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>FunctionalStandardTheme</code></th><td class="govuk-table__cell">Theme within a standard.</td><td class="govuk-table__cell"><code>FunctionalStandardId</code>, <code>Name</code>, <code>Order</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>PracticeArea</code></th><td class="govuk-table__cell">Area within a theme.</td><td class="govuk-table__cell"><code>FunctionalStandardThemeId</code>, <code>Name</code>, <code>Order</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Criterion</code></th><td class="govuk-table__cell">Assessable criterion within a practice area.</td><td class="govuk-table__cell"><code>PracticeAreaId</code>, <code>Text</code>, <code>Order</code>, <code>IsActive</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>FunctionalStandardAssessment</code></th><td class="govuk-table__cell">Assessment instance for a work item / product.</td><td class="govuk-table__cell"><code>ProjectId</code>, <code>ProductDocumentId</code>, <code>FunctionalStandardId</code>, <code>Status</code>, <code>CompletedAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>AssessmentCriteriaResponse</code></th><td class="govuk-table__cell">One answer to one criterion within an assessment.</td><td class="govuk-table__cell"><code>AssessmentId</code>, <code>CriterionId</code>, <code>RagStatus</code>, <code>Evidence</code></td></tr>
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-l" id="accessibility">Accessibility</h2>
+<p class="govuk-body">Service- and product-level accessibility data. UI at <code>/accessibility</code> (legacy hub) and Modern admin under <code>/modern/admin</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Purpose</th>
+            <th scope="col" class="govuk-table__header">Key fields</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>FipsService</code></th><td class="govuk-table__cell">Service (mirrors product) &mdash; the host for accessibility data.</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>DocumentId</code>, <code>OwnerEmail</code>, <code>IsActive</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ProductAccessibility</code></th><td class="govuk-table__cell">Per-product accessibility state.</td><td class="govuk-table__cell"><code>ProductDocumentId</code>, <code>StatementStatus</code>, <code>LastReviewedAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>AccessibilityIssue</code></th><td class="govuk-table__cell">Issue raised against a product / page.</td><td class="govuk-table__cell"><code>Id</code>, <code>Title</code>, <code>Severity</code>, <code>Status</code>, <code>ProductDocumentId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>IssueComment</code> / <code>IssueHistory</code></th><td class="govuk-table__cell">Activity on an accessibility issue.</td><td class="govuk-table__cell"><code>AccessibilityIssueId</code>, <code>AuthorUserId</code>, <code>Body</code>, <code>CreatedAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WcagCriterion</code> + <code>IssueWcagCriterion</code></th><td class="govuk-table__cell">WCAG reference list and per-issue links.</td><td class="govuk-table__cell"><code>Id</code>, <code>Code</code>, <code>Level</code>, <code>Description</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>AccessibilityRetestRequest</code> / <code>StatementVerificationRequest</code></th><td class="govuk-table__cell">Workflow requests.</td><td class="govuk-table__cell"><code>ProductDocumentId</code>, <code>RequestedBy</code>, <code>Status</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>StatementTemplate</code></th><td class="govuk-table__cell">Reusable statement template.</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code>, <code>Body</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ContactMethod</code></th><td class="govuk-table__cell">Reportable contact channel for a service.</td><td class="govuk-table__cell"><code>FipsServiceId</code>, <code>Channel</code>, <code>Value</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>AccessibilityEmailConfiguration</code></th><td class="govuk-table__cell">Per-service notification settings.</td><td class="govuk-table__cell"><code>FipsServiceId</code>, <code>Recipients</code>, <code>IsEnabled</code></td></tr>
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-l" id="capability">Capability &amp; training</h2>
+<p class="govuk-body">Profiles, training records and the DDaT framework. Profile at <code>/modern/profile</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Purpose</th>
+            <th scope="col" class="govuk-table__header">Key fields</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>UserProfessionalProfile</code></th><td class="govuk-table__cell">Per-user profile (grade, role, profession).</td><td class="govuk-table__cell"><code>UserId</code>, <code>GradeId</code>, <code>GddRoleId</code>, <code>ProfessionId</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>TrainingCourse</code> / <code>TrainingRecord</code> / <code>TrainingRequest</code> / <code>TrainingNudge</code></th><td class="govuk-table__cell">Course catalogue and per-user state.</td><td class="govuk-table__cell"><code>Id</code>, <code>Title</code>, <code>Provider</code> / <code>UserId</code>, <code>CourseId</code>, <code>CompletedAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>LearningBudget</code></th><td class="govuk-table__cell">Per-team / per-user learning budget.</td><td class="govuk-table__cell"><code>OwnerUserId</code>, <code>FinancialYear</code>, <code>BudgetAmount</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>CapabilityGap</code></th><td class="govuk-table__cell">Identified gap against a skill.</td><td class="govuk-table__cell"><code>UserId</code>, <code>SkillId</code>, <code>GapLevel</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Skill</code> + <code>GddRole</code> + <code>HOPS</code></th><td class="govuk-table__cell">Skill / role taxonomies.</td><td class="govuk-table__cell"><code>Id</code>, <code>Name</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DdatFrameworkVersion</code> + <code>DdatFrameworkSkill</code> / <code>DdatFrameworkRole</code> / <code>DdatFrameworkRoleSkill</code> / <code>DdatFrameworkSkillGradeMapping</code> / <code>DdatFrameworkChangeNote</code></th><td class="govuk-table__cell">Versioned DDaT framework.</td><td class="govuk-table__cell"><code>VersionId</code>, <code>Code</code>, <code>Name</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>UserDdatFrameworkSkill</code></th><td class="govuk-table__cell">Per-user skill rating against the framework.</td><td class="govuk-table__cell"><code>UserId</code>, <code>SkillId</code>, <code>Level</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>StaffRoleReturn</code> + <code>StaffRoleReturnSkill</code></th><td class="govuk-table__cell">Periodic staff role return submission.</td><td class="govuk-table__cell"><code>BusinessAreaLookupId</code>, <code>Period</code>, <code>Headcount</code></td></tr>
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-l" id="lookups">Lookup tables</h2>
+<p class="govuk-body">Small reference tables used as foreign keys throughout the schema. Managed at <code>/modern/admin/lookups</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Used by</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>BusinessAreaLookup</code></th><td class="govuk-table__cell">Project, Risk, Issue, Action, BudgetOwner, EnterpriseReturn, &hellip;</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>PhaseLookup</code></th><td class="govuk-table__cell">Project (delivery phase)</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>RagStatusLookup</code></th><td class="govuk-table__cell">Project, ProjectRagHistory, MonthlyUpdate</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>RiskTier</code> / <code>RiskType</code></th><td class="govuk-table__cell">Risk</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ActionSource</code></th><td class="govuk-table__cell">Action</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DeliveryPriority</code></th><td class="govuk-table__cell">Project (Modern <code>PriorityId</code>)</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>KpiCategory</code></th><td class="govuk-table__cell">Kpi</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ActivityTypeLookup</code></th><td class="govuk-table__cell">Project (Modern <code>ActivityTypeId</code>), Demand pipeline</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>WorkItemTagLookup</code> + <code>ProjectWorkItemTag</code></th><td class="govuk-table__cell">Work item tagging</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>DirectorateLookup</code></th><td class="govuk-table__cell">Cross-cutting directorate identifier</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>RiskAppetiteLookup</code></th><td class="govuk-table__cell">Risk appetite (Modern <code>RiskAppetiteId</code>)</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>UniversalBarrierLookup</code></th><td class="govuk-table__cell">Demand pipeline</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>BusinessCaseStatusLookup</code></th><td class="govuk-table__cell">Business cases</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>Grade</code></th><td class="govuk-table__cell">UserProfessionalProfile</td></tr>
+    </tbody>
+</table>
+
+<h2 class="govuk-heading-l" id="audit">Audit &amp; observability</h2>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Entity</th>
+            <th scope="col" class="govuk-table__header">Purpose</th>
+            <th scope="col" class="govuk-table__header">Key fields</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>AuditLog</code></th><td class="govuk-table__cell">Generic audit row (entity &harr; action &harr; user &harr; when). Surfaced by Modern <code>LifecycleAuditEntry</code>.</td><td class="govuk-table__cell"><code>Id</code>, <code>EntityType</code>, <code>EntityId</code>, <code>Action</code>, <code>UserId</code>, <code>CreatedAt</code>, <code>PayloadJson</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>AuditHistory</code></th><td class="govuk-table__cell">Coarse audit trail for accessibility products.</td><td class="govuk-table__cell"><code>EntityType</code>, <code>EntityId</code>, <code>ChangedAt</code>, <code>ChangedBy</code>, <code>Summary</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>ApiRequestLog</code></th><td class="govuk-table__cell">Per-API-call log (token-authenticated requests).</td><td class="govuk-table__cell"><code>TokenId</code>, <code>Method</code>, <code>Path</code>, <code>StatusCode</code>, <code>DurationMs</code>, <code>CreatedAt</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>NotificationLog</code></th><td class="govuk-table__cell">Sent notification record.</td><td class="govuk-table__cell"><code>TemplateId</code>, <code>RecipientEmail</code>, <code>SentAt</code>, <code>Status</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>CompassNotificationEmailLog</code></th><td class="govuk-table__cell">CMS access request / admin email delivery log.</td><td class="govuk-table__cell"><code>RecipientEmail</code>, <code>TemplateRef</code>, <code>SentAt</code>, <code>NotifyResponse</code></td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>FipsSyncHistory</code></th><td class="govuk-table__cell">Per-run CMDB / FIPS sync record. Visible at <code>/modern/admin/sync</code>.</td><td class="govuk-table__cell"><code>StartedAt</code>, <code>FinishedAt</code>, <code>ItemsRead</code>, <code>ItemsUpserted</code>, <code>ItemsFailed</code></td></tr>
+    </tbody>
+</table>
+
+</div>@*  /developers-data-models  *@
+
+<details class="govuk-details" data-module="govuk-details">
+    <summary class="govuk-details__summary">
+        <span class="govuk-details__summary-text">Generating an authoritative list</span>
+    </summary>
+    <div class="govuk-details__text">
+        <p class="govuk-body">To see every entity in the running schema, run:</p>
+        <pre class="developers-code-block"><code>SELECT name FROM sys.tables ORDER BY name;</code></pre>
+        <p class="govuk-body">Or via EF Core CLI:</p>
+        <pre class="developers-code-block"><code>dotnet ef dbcontext info
+dotnet ef dbcontext scaffold "Server=...;Database=Compass;..." Microsoft.EntityFrameworkCore.SqlServer --output-dir ScaffoldOnly --no-onconfiguring</code></pre>
+    </div>
+</details>
+
+@section Aside {
+    <h2 class="docs-page-aside-heading">On this page</h2>
+    <ul class="docs-page-aside-nav">
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#overview">Overview</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#modern-viewmodels">Modern view models</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#identity-access">Identity &amp; access</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#org-structure">Organisational structure</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#projects">Work items (projects)</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#raid">RAID</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#demand">Demand pipeline &amp; triage</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#performance-reporting">Performance &amp; enterprise reporting</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#standards">Functional standards &amp; assessments</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#accessibility">Accessibility</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#capability">Capability &amp; training</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#lookups">Lookup tables</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#audit">Audit &amp; observability</a></li>
+    </ul>
+}

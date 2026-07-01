@@ -2,11 +2,14 @@
 @using Compass.ViewModels.Modern
 @{
   ViewData["Title"] = "Service register dashboard";
-  var productsHref = Url.Action("Fips", "ModernManage") ?? "#";
-  var myProductsHref = Url.Action("Fips", "ModernManage", new { tab = "my" }) ?? productsHref;
-  var activeProductsHref = Url.Action("Fips", "ModernManage", new { tab = "active" }) ?? productsHref;
-  var enterpriseProductsHref = Url.Action("Fips", "ModernManage", new { tab = "enterprise" }) ?? productsHref;
+  var products = Model.ActiveProducts;
+  var myProductsHref = Url.Action("Fips", "ModernManage", new { tab = "my" }) ?? "#";
+  var activeProductsHref = Url.Action("Fips", "ModernManage", new { tab = "active" }) ?? "#";
+  var enterpriseProductsHref = Url.Action("Fips", "ModernManage", new { tab = "enterprise" }) ?? "#";
   var serviceLinesHref = Url.Action("ServiceLines", "ModernManage") ?? "#";
+  var fipsPublicUrl = Model.FipsPublicBaseUrl;
+  var headerActions = new Microsoft.AspNetCore.Html.HtmlString(
+    $"<a class=\"govuk-button govuk-!-margin-bottom-0\" href=\"{fipsPublicUrl}\" rel=\"noopener noreferrer\">Go to FIPS</a>");
 }
 
 @section Breadcrumbs {
@@ -14,14 +17,32 @@
   <li class="govuk-breadcrumbs__list-item" aria-current="page">Service register</li>
 }
 
+@if (TempData["Success"] != null)
+{
+  <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="fips-dash-success-title">
+    <div class="govuk-notification-banner__header">
+      <h2 class="govuk-notification-banner__title" id="fips-dash-success-title">Success</h2>
+    </div>
+    <div class="govuk-notification-banner__content">
+      <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
+    </div>
+  </div>
+}
+@if (TempData["Error"] != null)
+{
+  <div class="govuk-error-summary" role="alert" style="margin-bottom:1.5rem;">
+    <h2 class="govuk-error-summary__title">Something went wrong</h2>
+    <div class="govuk-error-summary__body">@TempData["Error"]</div>
+  </div>
+}
+
 @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
   Caption = "Service register",
   Title = "Dashboard",
-  Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Summary of catalogue products and service lines you can manage in Compass.</p>")
+  Actions = headerActions
 })
 
-<section class="govuk-!-margin-top-6 govuk-!-margin-bottom-6" aria-labelledby="fips-dash-stats-heading">
-  <h2 class="govuk-heading-m" id="fips-dash-stats-heading">At a glance</h2>
+<section class="govuk-!-margin-top-6 govuk-!-margin-bottom-6" aria-label="Summary statistics">
   <div class="dfe-f-card-grid">
     @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
     {
@@ -62,20 +83,33 @@
   </div>
 </section>
 
-<section class="govuk-!-margin-bottom-6" aria-labelledby="fips-public-heading">
-  <article class="dfe-f-card dfe-f-card--action">
-    <div class="dfe-f-card__inner">
-      <header class="dfe-f-card__header">
-        <h2 class="govuk-heading-m dfe-f-card__heading govuk-!-margin-top-0" id="fips-public-heading">Find products and services on FIPS</h2>
-      </header>
-      <p class="dfe-f-card__body govuk-body govuk-!-margin-bottom-0">
-        Most colleagues browse the public catalogue at
-        <a class="govuk-link govuk-link--no-visited-state" href="@Model.FipsPublicBaseUrl" rel="noopener noreferrer">@Model.FipsPublicBaseUrl</a>
-        to discover what DfE offers, who it is for, and how to access it.
-      </p>
-      <div class="dfe-f-card__footer">
-        <a class="govuk-button govuk-!-margin-bottom-0" href="@Model.FipsPublicBaseUrl" rel="noopener noreferrer">Go to FIPS</a>
-      </div>
+<section id="fips-active-products" class="govuk-!-margin-bottom-6" aria-labelledby="fips-active-products-heading">
+  <h2 class="govuk-heading-m" id="fips-active-products-heading">Active products</h2>
+  <p class="govuk-body govuk-!-margin-bottom-4">
+    Active products in the service register, excluding enterprise services (see
+    <a class="govuk-link govuk-link--no-visited-state" href="@enterpriseProductsHref">Enterprise</a>).
+    Browse the public catalogue at
+    <a class="govuk-link govuk-link--no-visited-state" href="@fipsPublicUrl" rel="noopener noreferrer">@fipsPublicUrl</a>.
+  </p>
+
+  @if (!string.IsNullOrWhiteSpace(products.CategorisationItemName))
+  {
+    <div class="govuk-inset-text govuk-!-margin-bottom-4">
+      <p class="govuk-body govuk-!-margin-bottom-2">Showing products with categorisation value <strong>@products.CategorisationItemName</strong>.</p>
+      <p class="govuk-body govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab = "active" })">Clear categorisation filter</a></p>
     </div>
-  </article>
+  }
+  else if (!string.IsNullOrWhiteSpace(products.CategorisationGroupName))
+  {
+    <div class="govuk-inset-text govuk-!-margin-bottom-4">
+      <p class="govuk-body govuk-!-margin-bottom-2">Showing products in categorisation <strong>@products.CategorisationGroupName</strong>.</p>
+      <p class="govuk-body govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Fips", "ModernManage", new { tab = "active" })">Clear categorisation filter</a></p>
+    </div>
+  }
+
+  <div class="govuk-!-margin-bottom-4">
+    @await Html.PartialAsync("_SearchAndFilter", (SearchAndFilterViewModel)ViewBag.SearchAndFilter)
+  </div>
+
+  @await Html.PartialAsync("~/Views/Modern/Manage/_FipsManageProductsTable.cshtml", products)
 </section>

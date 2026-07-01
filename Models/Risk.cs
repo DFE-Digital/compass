@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Compass.Models.Raid;
 
 namespace Compass.Models;
 
@@ -31,9 +32,10 @@ public class Risk
     public string? ProductDocumentId { get; set; } // Product DocumentID from CMS (primary identifier)
 
     [Required]
-    [MaxLength(200)]
+    [MaxLength(RaidFieldLimits.TitleMaxLength)]
     public string Title { get; set; } = string.Empty;
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Description { get; set; }
 
     [MaxLength(100)]
@@ -79,6 +81,7 @@ public class Risk
 
     public DateTime? ClosedDate { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Notes { get; set; }
 
     #endregion
@@ -108,6 +111,8 @@ public class Risk
     [ForeignKey(nameof(RiskPriorityId))]
     public RiskPriority? RiskPriority { get; set; }
 
+    // ── Original risk rating (set on first save, not changed after) ──
+
     public int? RiskLikelihoodId { get; set; }
 
     [ForeignKey(nameof(RiskLikelihoodId))]
@@ -118,6 +123,56 @@ public class Risk
     [ForeignKey(nameof(RiskImpactLevelId))]
     public RiskImpactLevel? ImpactLevel { get; set; }
 
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? InherentScore { get; set; }
+
+    // ── Current risk rating (initially copies Original, updated over time) ──
+
+    public int? CurrentLikelihoodId { get; set; }
+
+    [ForeignKey(nameof(CurrentLikelihoodId))]
+    public RiskLikelihood? CurrentLikelihood { get; set; }
+
+    public int? CurrentImpactLevelId { get; set; }
+
+    [ForeignKey(nameof(CurrentImpactLevelId))]
+    public RiskImpactLevel? CurrentImpactLevel { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? CurrentScore { get; set; }
+
+    // ── Residual risk rating ──
+
+    public int? ResidualLikelihoodId { get; set; }
+
+    [ForeignKey(nameof(ResidualLikelihoodId))]
+    public RiskLikelihood? ResidualLikelihoodLevel { get; set; }
+
+    public int? ResidualImpactLevelId { get; set; }
+
+    [ForeignKey(nameof(ResidualImpactLevelId))]
+    public RiskImpactLevel? ResidualImpactLevel { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ResidualScore { get; set; }
+
+    // ── Tolerance risk rating ──
+
+    public int? ToleranceLikelihoodId { get; set; }
+
+    [ForeignKey(nameof(ToleranceLikelihoodId))]
+    public RiskLikelihood? ToleranceLikelihood { get; set; }
+
+    public int? ToleranceImpactLevelId { get; set; }
+
+    [ForeignKey(nameof(ToleranceImpactLevelId))]
+    public RiskImpactLevel? ToleranceImpactLevel { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ToleranceScore { get; set; }
+
+    // ── Other lookups ──
+
     public int? RiskProximityId { get; set; }
 
     [ForeignKey(nameof(RiskProximityId))]
@@ -127,12 +182,6 @@ public class Risk
 
     [ForeignKey(nameof(RiskCategoryId))]
     public RiskCategory? RiskCategory { get; set; }
-
-    [Column(TypeName = "decimal(18,2)")]
-    public decimal? InherentScore { get; set; }
-
-    [Column(TypeName = "decimal(18,2)")]
-    public decimal? ResidualScore { get; set; }
 
     public DateTime? IdentifiedDate { get; set; }
 
@@ -159,16 +208,31 @@ public class Risk
     [ForeignKey(nameof(SroUserId))]
     public User? SroUser { get; set; }
 
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? ResponseStrategy { get; set; }
 
-    [MaxLength(1000)]
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? HowIdentified { get; set; }
 
     /// <summary>Root cause or drivers (narrative).</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? Cause { get; set; }
 
     /// <summary>Consequence narrative if the risk materialises.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
     public string? ImpactIfRealised { get; set; }
+
+    /// <summary>Contingency arrangements if the risk materialises.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
+    public string? Contingency { get; set; }
+
+    /// <summary>Assurance arrangements for this risk.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
+    public string? Assurance { get; set; }
+
+    /// <summary>Financial impact narrative.</summary>
+    [MaxLength(RaidFieldLimits.NarrativeMaxLength)]
+    public string? FinancialImpact { get; set; }
 
     public int? CreatedByUserId { get; set; }
 
@@ -221,5 +285,8 @@ public class Risk
 
     /// <summary>Modern RAID: business areas from admin lookup (multi-select).</summary>
     public ICollection<RiskBusinessArea> RiskBusinessAreas { get; set; } = new List<RiskBusinessArea>();
+
+    /// <summary>Audit trail of rating changes (original → current over time).</summary>
+    public ICollection<RiskRatingHistory> RatingHistory { get; set; } = new List<RiskRatingHistory>();
 }
 

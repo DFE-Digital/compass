@@ -1,0 +1,35 @@
+@model Compass.ViewModels.Modern.CustomReportViewViewModel
+@{
+    var mwDetailPrefix = Url.Content("~/modern/work/detail/") ?? "/modern/work/detail/";
+}
+@if (Model.MilestoneRows.Count == 0)
+{
+<p class="govuk-body">No milestones recorded.</p>
+}
+else
+{
+<div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Work item</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Milestone</button></th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Due date</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            @foreach (var ms in Model.MilestoneRows)
+            {
+            var isOverdue = ms.DueDate.HasValue && ms.DueDate.Value < DateTime.UtcNow && ms.Status != "Completed" && ms.Status != "Done";
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@(mwDetailPrefix)@ms.ProjectId?tab=milestones">@ms.ProjectTitle</a></td>
+                <td class="govuk-table__cell">@ms.MilestoneTitle</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric@(isOverdue ? " mr-text-danger" : "")">@(ms.DueDate?.ToString("d MMM yyyy") ?? "—")</td>
+                <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@(ms.Status ?? "—")</span></td>
+            </tr>
+            }
+        </tbody>
+    </table>
+</div>
+}

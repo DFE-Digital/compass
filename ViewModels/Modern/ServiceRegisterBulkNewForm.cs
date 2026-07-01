@@ -20,6 +20,9 @@ public sealed class ServiceRegisterBulkNewForm
     public bool ApplyBusinessArea { get; set; }
     public int[]? BusinessAreaLookupIds { get; set; }
 
+    public bool ApplyDirectorate { get; set; }
+    public int[]? DirectorateLookupIds { get; set; }
+
     public bool ApplyChannel { get; set; }
     public int[]? BulkChannelIds { get; set; }
 

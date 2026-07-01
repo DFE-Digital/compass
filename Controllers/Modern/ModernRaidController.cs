@@ -32,6 +32,7 @@ public partial class ModernRaidController : Controller
     private readonly IRaidRiskEditorFormService _raidRiskEditorForm;
     private readonly IRaidIssueEditorFormService _raidIssueEditorForm;
     private readonly IReturnStatusService _returnStatus;
+    private readonly IViewAsUserService _viewAsUser;
 
     public ModernRaidController(
         CompassDbContext db,
@@ -41,7 +42,8 @@ public partial class ModernRaidController : Controller
         IPermissionService permissions,
         IRaidRiskEditorFormService raidRiskEditorForm,
         IRaidIssueEditorFormService raidIssueEditorForm,
-        IReturnStatusService returnStatus)
+        IReturnStatusService returnStatus,
+        IViewAsUserService viewAsUser)
     {
         _db = db;
         _businessAreaAdmins = businessAreaAdmins;
@@ -51,6 +53,7 @@ public partial class ModernRaidController : Controller
         _raidRiskEditorForm = raidRiskEditorForm;
         _raidIssueEditorForm = raidIssueEditorForm;
         _returnStatus = returnStatus;
+        _viewAsUser = viewAsUser;
     }
 
     private void SetRaidChrome(string subItem)
@@ -122,50 +125,8 @@ public partial class ModernRaidController : Controller
         };
     }
 
-    [HttpGet("")]
-    [HttpGet("index")]
-    [HttpGet("dashboard")]
-    [HttpGet("/ModernRaid")]
-    [HttpGet("/ModernRaid/Index")]
-    [HttpGet("/ModernRaid/Dashboard")]
-    public async Task<IActionResult> Dashboard(CancellationToken cancellationToken = default)
-    {
-        SetRaidChrome("raid-dashboard");
-        var userEmail = User.Identity?.Name;
-        if (string.IsNullOrWhiteSpace(userEmail))
-            return Challenge();
-
-        var emailLower = userEmail.Trim().ToLowerInvariant();
-        var viewer = await _db.Users.AsNoTracking()
-            .Where(u => u.Email.ToLower() == emailLower)
-            .Select(u => new { u.Id, u.Name, u.Email })
-            .FirstOrDefaultAsync(cancellationToken);
-
-        int? userId = viewer?.Id;
-        var displayName = !string.IsNullOrWhiteSpace(viewer?.Name)
-            ? viewer!.Name!.Trim()
-            : viewer?.Email ?? userEmail;
-
-        var projectIds = await RaidProjectsForUserEmail(emailLower)
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
-        var productServiceIds = await RaidProductServiceIdsForProjectsAsync(projectIds, cancellationToken);
-
-        var adminBusinessAreaIds = new List<int>();
-        if (userId is int uid2)
-        {
-            var adminIds = await _businessAreaAdmins.GetAdministeredBusinessAreaLookupIdsAsync(uid2, cancellationToken);
-            var leadershipIds = await _businessAreaLeadership.GetLeadershipBusinessAreaLookupIdsAsync(
-                uid2, cancellationToken);
-            adminBusinessAreaIds = adminIds.Union(leadershipIds).Distinct().ToList();
-        }
-
-        var vm = await BuildRaidDashboardViewModelAsync(
-            userId, emailLower, displayName, projectIds, productServiceIds, adminBusinessAreaIds,
-            cancellationToken: cancellationToken);
-
-        return View("~/Views/Modern/Raid/Dashboard.cshtml", vm);
-    }
+    [HttpGet("intelligence")]
+    public IActionResult Dashboard() => RedirectToAction(nameof(Registers));
     /// <summary>Same association rules as <see cref="Services.Modern.ModernWorkService"/> work dashboard.</summary>
     private IQueryable<Project> RaidProjectsForUserEmail(string emailLower) =>
         _db.Projects.AsNoTracking()
@@ -709,6 +670,13 @@ public partial class ModernRaidController : Controller
 
     private async Task<int?> ResolveCurrentUserIdAsync(CancellationToken cancellationToken)
     {
+        if (_viewAsUser.IsActive(HttpContext))
+        {
+            var active = _viewAsUser.GetActive(HttpContext);
+            if (active != null)
+                return active.UserId;
+        }
+
         var email = User.Identity?.Name
             ?? User.FindFirst(ClaimTypes.Email)?.Value
             ?? User.FindFirst("preferred_username")?.Value;

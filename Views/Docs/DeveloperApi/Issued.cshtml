@@ -1,0 +1,64 @@
+@{
+    var tokenValue = ViewBag.TokenValue as string;
+    var tokenName = ViewBag.TokenName as string;
+    var hasToken = !string.IsNullOrEmpty(tokenValue);
+}
+
+<div class="developers-docs__intro govuk-!-margin-bottom-6">
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">Copy your API key now</h1>
+    <p class="govuk-body-l govuk-!-margin-bottom-0">
+        This is the only time COMPASS will show this bearer token. Store it in a secrets manager.
+        We have also emailed it to you.
+    </p>
+</div>
+
+@if (!hasToken)
+{
+    <div class="govuk-warning-text">
+        <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+        <strong class="govuk-warning-text__text">
+            The token value is no longer available in this session. Recycle the key from
+            <a class="govuk-link" href="@Url.Action("TokenDetail", "DocsDeveloperApi", new { id = ViewBag.TokenId })">token management</a>
+            to receive a new value by email.
+        </strong>
+    </div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(tokenName))
+    {
+        <p class="govuk-body"><strong>Token name:</strong> @tokenName</p>
+    }
+    <div class="govuk-form-group">
+        <label class="govuk-label" for="issued-token">Bearer token</label>
+        <textarea class="govuk-textarea" id="issued-token" rows="3" readonly>@tokenValue</textarea>
+    </div>
+    <button type="button" class="govuk-button govuk-button--secondary" id="copy-issued-token">Copy to clipboard</button>
+    <p class="govuk-body govuk-!-margin-top-4">
+        Use in the <a class="govuk-link" href="@Url.Action("ApiExplorer", "Docs")">API explorer</a> or as
+        <code>Authorization: Bearer @tokenValue</code>
+    </p>
+}
+
+<div class="govuk-!-margin-top-6">
+    <a class="govuk-button" href="@Url.Action("Index", "DocsDeveloperApi")">Back to API keys</a>
+</div>
+
+@if (hasToken)
+{
+    @section Scripts {
+        <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+            (function () {
+                var ta = document.getElementById('issued-token');
+                var btn = document.getElementById('copy-issued-token');
+                if (btn && ta) {
+                    btn.addEventListener('click', function () {
+                        ta.select();
+                        navigator.clipboard.writeText(ta.value).catch(function () { document.execCommand('copy'); });
+                        btn.textContent = 'Copied';
+                    });
+                }
+            })();
+        </script>
+    }
+}

@@ -22,7 +22,7 @@ const NAV_MAP = {
   'reporting-hub': 'reporting', 'reporting-cross': 'reporting',
   'reporting-monthly-report': 'reporting', 'reporting-risks': 'reporting',
   'reporting-standards': 'reporting', 'reporting-perf-report': 'reporting',
-  'reporting-exports': 'reporting', 'reporting-monthly': 'reporting', 'reporting-performance': 'reporting', 'reporting-assessments': 'reporting', 'reporting-raid': 'reporting',
+  'reporting-exports': 'reporting', 'reporting-monthly': 'reporting', 'reporting-performance': 'reporting', 'reporting-performance-submission-progress': 'reporting', 'reporting-assessments': 'reporting', 'reporting-raid': 'reporting',
   'reporting-perf': 'reporting',
   'admin': 'admin', 'notifications': 'home',
   'global-search': 'home', 'user-profile': 'home',

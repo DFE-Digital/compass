@@ -34,6 +34,9 @@ public class HomeDashboardViewModel
     public IReadOnlyCollection<(ProductDto Product, ReturnStatus Status, DateTime DueDate)> ProductsNeedingReturns { get; set; } = Array.Empty<(ProductDto, ReturnStatus, DateTime)>();
     public IReadOnlyCollection<(Project Project, UpdateSubmissionStatus Status, DateTime DueDate)> ProjectsNeedingMonthlyUpdates { get; set; } = Array.Empty<(Project, UpdateSubmissionStatus, DateTime)>();
 
+    public IReadOnlyCollection<DashboardServiceRegisterTaskItem> IncompleteServiceRegisterProducts { get; set; } =
+        Array.Empty<DashboardServiceRegisterTaskItem>();
+
     /// <summary>Monthly update status per project for the applicable reporting period (matches tasks / project table logic).</summary>
     public IReadOnlyDictionary<int, UpdateSubmissionStatus> MonthlyUpdateStatusByProjectId { get; set; } =
         new Dictionary<int, UpdateSubmissionStatus>();
@@ -123,6 +126,14 @@ public class DashboardTaskItem
     public DateTime? DueDate { get; set; }
     public string? LinkLabel { get; set; }
     public string? LinkUrl { get; set; }
+}
+
+public sealed class DashboardServiceRegisterTaskItem
+{
+    public Guid ProductId { get; init; }
+    public string Title { get; init; } = "";
+    public int CompletionPercent { get; init; }
+    public string MissingFieldsHint { get; init; } = "";
 }
 
 public class DashboardReminder

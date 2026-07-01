@@ -154,6 +154,13 @@
             }
             if (this.input && user?.name) this.input.value = user.name;
             this.setMessage('User selected. Save your changes to store this contact.');
+            const objectId = objectIdValue;
+            if (this.input && objectId) {
+                this.input.dispatchEvent(new CustomEvent('userSelected', {
+                    bubbles: true,
+                    detail: { objectId, id: objectId, name: user?.name ?? '', email: user?.email ?? '' }
+                }));
+            }
         }
 
         clearSelection() {

@@ -5,6 +5,8 @@ namespace Compass.Models;
 
 public class Comment
 {
+    public const int TextMaxLength = 4000;
+
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
@@ -17,6 +19,7 @@ public class Comment
     public int EntityId { get; set; }
 
     [Required]
+    [MaxLength(TextMaxLength)]
     public string CommentText { get; set; } = string.Empty;
 
     public int CreatedByUserId { get; set; }

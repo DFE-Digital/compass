@@ -799,7 +799,7 @@ public class DemandTriageController : Controller
         {
             var projectId = await _service.CreateProjectFromDemandAsync(id, CurrentUserEmail, CurrentUserName);
             TempData["SuccessMessage"] = $"Project created (ID: {projectId}).";
-            return RedirectToAction("Details", "Project", new { id = projectId });
+            return RedirectToAction("Detail", "ModernWork", new { id = projectId });
         }
         catch (Exception ex)
         {

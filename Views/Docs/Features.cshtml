@@ -1,0 +1,630 @@
+@*
+    /docs/features — field reference for the major Modern COMPASS features.
+    Field descriptions are derived from the Modern view models in
+    Models/Modern/ and the EF Core models in Models/. Where a value is
+    constrained to a vocabulary the allowed values are listed in the "Notes"
+    column.
+*@
+
+<div class="developers-docs__intro govuk-!-margin-bottom-6">
+    <span class="govuk-caption-xl">Reference</span>
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">Feature reference</h1>
+    <p class="govuk-body-l govuk-!-margin-bottom-0">
+        Field-level reference for each Modern feature surface. Pair this with
+        <a class="govuk-link" href="@Url.Action("DataModels", "Docs")">Data models</a>
+        when authoring reports, integrations, or new UI components.
+    </p>
+</div>
+
+<h2 class="govuk-heading-l" id="overview">Overview</h2>
+<p class="govuk-body">Conventions used in the tables below:</p>
+<ul class="govuk-list govuk-list--bullet">
+    <li><strong>Modern field</strong> &mdash; the property name on the Modern view model (for example <code>WorkItem.RagStatusId</code>).</li>
+    <li><strong>DB column</strong> &mdash; the EF Core entity property that backs it (for example <code>Project.RagStatusLookupId</code>).</li>
+    <li><strong>Type</strong> &mdash; the C# / SQL type. <code>string(n)</code> means <code>nvarchar(n)</code>.</li>
+    <li><strong>Required</strong> &mdash; yes if the column is non-nullable at the database level.</li>
+    <li><strong>Notes</strong> &mdash; allowed values, units, foreign keys, Modern view link.</li>
+</ul>
+
+<div class="govuk-inset-text">
+    If this page disagrees with a model class in <code>Models/</code> or
+    <code>Models/Modern/</code>, the model class is correct. Open a PR to fix
+    the docs.
+</div>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<div class="developers-feature-reference">
+
+<h2 class="govuk-heading-l" id="work-items">Work items</h2>
+<p class="govuk-body">
+    Modern view model <code>Compass.Models.Modern.Work.WorkItem</code> wraps
+    EF entity <code>Compass.Models.Project</code>. List view at
+    <code>/modern/work</code>; detail at <code>/modern/work/{id}</code>.
+</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Modern field</th>
+            <th scope="col" class="govuk-table__header">DB column</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell"><code>Project.Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">Primary key. URL: <code>/modern/work/{Id}</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Title</code></td><td class="govuk-table__cell"><code>Project.Title</code></td><td class="govuk-table__cell">string(200), required</td><td class="govuk-table__cell">Display title.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Aim</code></td><td class="govuk-table__cell"><code>Project.Aim</code></td><td class="govuk-table__cell">string(4000)</td><td class="govuk-table__cell">One-paragraph &ldquo;why&rdquo;.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Description</code></td><td class="govuk-table__cell"><code>Project.StrategicObjectives</code> (legacy fallback)</td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">Long-form description shown on detail.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProblemStatement</code></td><td class="govuk-table__cell"><code>ProjectProblemStatement.Statement</code> (latest)</td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">Versioned via <code>ProjectProblemStatementHistory</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Status</code></td><td class="govuk-table__cell"><code>Project.Status</code></td><td class="govuk-table__cell">string(50), required</td><td class="govuk-table__cell">One of <code>Active</code>, <code>Paused</code>, <code>Completed</code>, <code>Cancelled</code>. Drives the Modern register tabs.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>RagStatusId</code></td><td class="govuk-table__cell"><code>Project.RagStatusLookupId</code></td><td class="govuk-table__cell">int? (FK <code>RagStatusLookup</code>)</td><td class="govuk-table__cell">Current RAG. Surfaced as a badge via <code>_WorkRagBadge</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PriorityId</code></td><td class="govuk-table__cell"><code>Project.DeliveryPriorityId</code></td><td class="govuk-table__cell">int? (FK <code>DeliveryPriority</code>)</td><td class="govuk-table__cell">P1..P4 priority lookup.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PriorityChangeReason</code></td><td class="govuk-table__cell"><code>Project.DeliveryPriorityChangeReason</code></td><td class="govuk-table__cell">string(2000)</td><td class="govuk-table__cell">Justification on priority change.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>DeliveryPhaseId</code></td><td class="govuk-table__cell"><code>Project.PhaseId</code></td><td class="govuk-table__cell">int? (FK <code>PhaseLookup</code>)</td><td class="govuk-table__cell">Discovery / Alpha / Beta / Live / Retired.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>WorkTypeId</code></td><td class="govuk-table__cell"><code>Project.BusinessAreaId</code> (legacy) or work-type lookup</td><td class="govuk-table__cell">int?</td><td class="govuk-table__cell">Categorisation for the Modern register.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PortfolioId</code></td><td class="govuk-table__cell"><code>Project.PrimaryOrganizationalGroupId</code></td><td class="govuk-table__cell">int? (FK <code>OrganizationalGroup</code>)</td><td class="govuk-table__cell">Owning portfolio / group.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PrimaryContactUserId</code></td><td class="govuk-table__cell"><code>Project.PrimaryContactUserId</code></td><td class="govuk-table__cell">int? (FK <code>User</code>)</td><td class="govuk-table__cell">Primary point of contact. Edited at <code>/modern/work/{id}/contact/primary</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>BudgetOwnerUserId</code></td><td class="govuk-table__cell"><code>ProjectBudgetOwner.UserId</code></td><td class="govuk-table__cell">int? (FK <code>User</code>)</td><td class="govuk-table__cell">Edited at <code>/modern/work/{id}/contact/budget-owner</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ActivityTypeId</code></td><td class="govuk-table__cell"><code>Project.ActivityTypeId</code></td><td class="govuk-table__cell">int? (FK <code>ActivityTypeLookup</code>)</td><td class="govuk-table__cell">Activity classification.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>RiskAppetiteId</code></td><td class="govuk-table__cell"><code>Project.RiskAppetiteId</code></td><td class="govuk-table__cell">int? (FK <code>RiskAppetiteLookup</code>)</td><td class="govuk-table__cell">Tolerance level.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SubjectToSpendControl</code></td><td class="govuk-table__cell"><code>Project.SubjectToSpendControl</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">CDDO spend controls flag.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>FlagshipProject</code></td><td class="govuk-table__cell"><code>Project.IsFlagship</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">Highlighted in registers and dashboards.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsCentralRiskBucket</code></td><td class="govuk-table__cell"><code>Project.IsCentralRiskBucket</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">Holds central / cross-cutting risks rather than delivery.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>StartDate</code></td><td class="govuk-table__cell"><code>Project.StartDate</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">UTC.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>TargetEndDate</code></td><td class="govuk-table__cell"><code>Project.TargetDeliveryDate</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">UTC.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>MissionPillarId</code> + <code>MissionPillars</code></td><td class="govuk-table__cell"><code>ProjectMission</code></td><td class="govuk-table__cell">int? + many-to-many</td><td class="govuk-table__cell">Edited at <code>/modern/work/{id}/edit/strategic-alignment</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PriorityOutcomeId</code> + <code>PriorityOutcomes</code></td><td class="govuk-table__cell"><code>ProjectObjective</code></td><td class="govuk-table__cell">int? + many-to-many</td><td class="govuk-table__cell">Edited at <code>/modern/work/{id}/edit/strategic-alignment</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Tags</code></td><td class="govuk-table__cell"><code>ProjectWorkItemTag</code> &harr; <code>WorkItemTagLookup</code></td><td class="govuk-table__cell">collection</td><td class="govuk-table__cell">Edited at <code>/modern/work/{id}/edit/tags</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Directorates</code></td><td class="govuk-table__cell"><code>ProjectDirectorate</code> &harr; <code>Division</code></td><td class="govuk-table__cell">collection</td><td class="govuk-table__cell">Edited at <code>/modern/work/{id}/directorates</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>GovernmentDepartments</code></td><td class="govuk-table__cell"><code>ProjectGovernmentDepartment</code></td><td class="govuk-table__cell">collection</td><td class="govuk-table__cell">Edited at <code>/modern/work/{id}/edit/multi-dept</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedAt</code> / <code>UpdatedAt</code></td><td class="govuk-table__cell"><code>Project.CreatedAt</code> / <code>UpdatedAt</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">UTC. Maintained by EF.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"><code>Project.IsDeleted</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">Soft-delete flag. The Modern register and JSON API always filter this.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="risks">Risks</h2>
+<p class="govuk-body">Entity: <code>Risk</code>. Modern register at <code>/modern/raid/risks</code>; detail at <code>/modern/raid/risks/{id}</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Title</code></td><td class="govuk-table__cell">string(200)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Description</code></td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>RiskTierId</code></td><td class="govuk-table__cell">int? (FK <code>RiskTier</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Tier 1..4. Tier changes go through <code>RaidEscalationTierChangeRequest</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>OwnerEmail</code></td><td class="govuk-table__cell">string(255)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Owner email (denormalised). Newer records also set <code>OwnerUserId</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ImpactRating</code> / <code>LikelihoodRating</code></td><td class="govuk-table__cell">int (1..5)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Gross score.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>RiskScore</code></td><td class="govuk-table__cell">int</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Computed <code>Impact &times; Likelihood</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ResidualImpact</code> / <code>ResidualLikelihood</code></td><td class="govuk-table__cell">int? (1..5)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">After mitigations.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProximityDate</code> / <code>TargetDate</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">UTC.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Response</code></td><td class="govuk-table__cell">string(20)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">One of <code>treat</code>, <code>tolerate</code>, <code>transfer</code>, <code>terminate</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Status</code></td><td class="govuk-table__cell">string(20)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>new</code>, <code>open</code>, <code>monitoring</code>, <code>escalated</code>, <code>closed</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ClosedDate</code> / <code>Notes</code></td><td class="govuk-table__cell">datetime? / string (max)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProjectId</code> / <code>ProductDocumentId</code></td><td class="govuk-table__cell">FKs</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Modern surfaces filter by these.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Source</code></td><td class="govuk-table__cell">string(150)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Free-text source (for example "Internal audit Q2").</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsDeleted</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Soft-delete.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="issues">Issues</h2>
+<p class="govuk-body">Entity: <code>Issue</code>. Modern register at <code>/modern/raid/issues</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Title</code></td><td class="govuk-table__cell">string(200)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Description</code></td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Severity</code></td><td class="govuk-table__cell">string(10)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>low</code>, <code>medium</code>, <code>high</code>, <code>critical</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Priority</code></td><td class="govuk-table__cell">string(10)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Optional ordering label (<code>P1</code>..<code>P4</code>).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>DetectedDate</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Defaults to <code>UtcNow</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>TargetResolutionDate</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Status</code></td><td class="govuk-table__cell">string(20)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>open</code>, <code>investigating</code>, <code>in_progress</code>, <code>resolved</code>, <code>closed</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ResolutionSummary</code> / <code>Workaround</code></td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>OwnerUserId</code></td><td class="govuk-table__cell">int? (FK <code>User</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Issue owner.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SourceType</code> / <code>SourceReference</code> / <code>SourceRecordUrl</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Provenance (for example <code>survey</code> + survey id).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SourceRiskId</code></td><td class="govuk-table__cell">int? (FK <code>Risk</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">When the issue is a materialised risk.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProjectId</code> / <code>ProductDocumentId</code></td><td class="govuk-table__cell">FKs</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsDeleted</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Soft-delete.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="near-misses">Near misses</h2>
+<p class="govuk-body">Entity: <code>NearMiss</code>. Modern register at <code>/modern/raid/near-misses</code>; detail at <code>/modern/raid/near-misses/{id}</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Reference</code></td><td class="govuk-table__cell">string(50)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Business reference (e.g. <code>NM-0042</code>). Auto-generated on create when empty.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>DateLogged</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">When the near miss was first recorded.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Impact</code></td><td class="govuk-table__cell">string(4000)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Free-text description of what nearly happened and the impact had it occurred.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>NearMissTypeId</code></td><td class="govuk-table__cell">int? (FK <code>NearMissType</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Type lookup (admin-managed).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>NearMissSeriousnessId</code></td><td class="govuk-table__cell">int? (FK <code>NearMissSeriousness</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Severity lookup (admin-managed).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>NearMissStatusId</code></td><td class="govuk-table__cell">int? (FK <code>NearMissStatus</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Lifecycle status lookup.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PostMitigationRagStatusLookupId</code></td><td class="govuk-table__cell">int? (FK <code>RagStatusLookup</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Residual RAG after mitigations.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>RiskTierId</code></td><td class="govuk-table__cell">int? (FK <code>RiskTier</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Tier classification (shared with risks).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>DirectorateLookupId</code></td><td class="govuk-table__cell">int? (FK <code>DirectorateLookup</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Owning directorate.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>BusinessAreaLookupId</code></td><td class="govuk-table__cell">int? (FK <code>BusinessAreaLookup</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Owning business area.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>NearMissOwners</code></td><td class="govuk-table__cell">join &rarr; <code>User</code></td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Multi-select owners (<code>NearMissOwner</code> join).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>NearMissMitigations</code></td><td class="govuk-table__cell">collection</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Per-mitigation rows.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>NearMissActions</code></td><td class="govuk-table__cell">collection</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Linked follow-up actions.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedByUserId</code> / <code>UpdatedByUserId</code></td><td class="govuk-table__cell">int? (FK <code>User</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Audit attribution.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedAt</code> / <code>UpdatedAt</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">UTC.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsDeleted</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Soft-delete.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="assumptions">Assumptions</h2>
+<p class="govuk-body">Entity: <code>Assumption</code>. Modern register at <code>/modern/raid/assumptions</code>; detail at <code>/modern/raid/assumptions/{id}</code>; create at <code>/modern/raid/assumptions/create</code>. May be scoped to a work item, a FIPS product, or organisation-wide.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Description</code></td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">The assumption being made.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>RaidAssociationKind</code></td><td class="govuk-table__cell">string(20)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">One of <code>WorkItem</code>, <code>Product</code>, <code>Organisation</code> (see <code>RaidAssociationKinds</code>).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProjectId</code></td><td class="govuk-table__cell">int? (FK <code>Project</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Set when scoped to a work item.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PrimaryProductId</code></td><td class="govuk-table__cell">int? (FK <code>FipsService</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Set when scoped to a product.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>OwnerUserId</code></td><td class="govuk-table__cell">int? (FK <code>User</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Person responsible for validating the assumption.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SroUserId</code></td><td class="govuk-table__cell">int? (FK <code>User</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Accountable SRO (denormalised for cross-scope assumptions).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AssumptionCriticalityId</code></td><td class="govuk-table__cell">int? (FK <code>AssumptionCriticality</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Criticality lookup (admin-managed).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AssumptionStatusId</code></td><td class="govuk-table__cell">int? (FK <code>AssumptionStatus</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Lifecycle status lookup (e.g. Open, Validated, Invalidated, Superseded).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ReviewDate</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Next planned review.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ValidationOutcome</code></td><td class="govuk-table__cell">string(500)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Recorded outcome when validated / invalidated.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AssumptionDivisions</code></td><td class="govuk-table__cell">join &rarr; <code>Division</code></td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Multi-select divisions.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AssumptionBusinessAreas</code></td><td class="govuk-table__cell">join &rarr; <code>BusinessAreaLookup</code></td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Multi-select business areas.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedAt</code> / <code>UpdatedAt</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">UTC.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsDeleted</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Soft-delete.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="dependencies">Dependencies</h2>
+<p class="govuk-body">Entity: <code>Dependency</code>. Cross-register at <code>/modern/raid/dependencies</code> with detail at <code>/modern/raid/dependencies/{id}</code>; per-work-item add at <code>/modern/work/{id}/dependency/add</code>. A dependency joins two RAID-or-work entities together.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SourceEntityType</code></td><td class="govuk-table__cell">string(50)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>Project</code>, <code>Risk</code>, <code>Issue</code>, <code>Milestone</code>, <code>Action</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SourceEntityId</code></td><td class="govuk-table__cell">int</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Id of the source row (paired with <code>SourceEntityType</code>).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>TargetEntityType</code></td><td class="govuk-table__cell">string(50)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Same vocabulary as <code>SourceEntityType</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>TargetEntityId</code></td><td class="govuk-table__cell">int</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Id of the target row.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>DependencyLinkTypeId</code></td><td class="govuk-table__cell">int? (FK <code>DependencyLinkType</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Structured link-type lookup. Prefer this over <code>DependencyType</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>DependencyType</code></td><td class="govuk-table__cell">string(200)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Legacy free-text label. New code should populate <code>DependencyLinkTypeId</code> instead.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>DependencyCriticalityId</code></td><td class="govuk-table__cell">int? (FK <code>DependencyCriticality</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Criticality lookup.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>OwnerUserId</code></td><td class="govuk-table__cell">int? (FK <code>User</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Coordinator (may differ from the underlying entity owners).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Organisation</code></td><td class="govuk-table__cell">string(200)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">External organisation the dependency is with (free text).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Description</code></td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Why the dependency exists.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>DueDate</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Target date by which the dependency needs to be resolved.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Status</code></td><td class="govuk-table__cell">string(20)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">One of <code>Active</code>, <code>Resolved</code>, <code>Cancelled</code>. Defaults to <code>Active</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ResolvedDate</code> / <code>ResolvedByEmail</code> / <code>ResolvedByName</code></td><td class="govuk-table__cell">datetime? / string(255) / string(200)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Set when <code>Status</code> moves to <code>Resolved</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedAt</code> / <code>UpdatedAt</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">UTC.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="milestones">Milestones</h2>
+<p class="govuk-body">Entity: <code>Milestone</code>; Modern row: <code>WorkMilestoneRow</code>. List at <code>/modern/work/{id}/milestones</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Name</code></td><td class="govuk-table__cell">string(200)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Description</code></td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>OwnerUserId</code> / <code>OwnerEmail</code></td><td class="govuk-table__cell">int? / string(255)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Prefer <code>OwnerUserId</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>BaselineDueDate</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Original planned date.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>DueDate</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Current planned date.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ActualDate</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Set on completion.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Status</code></td><td class="govuk-table__cell">string(20)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>not_started</code>, <code>on_track</code>, <code>at_risk</code>, <code>delayed</code>, <code>complete</code>, <code>cancelled</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProgressPercent</code></td><td class="govuk-table__cell">int? (0..100)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Optional progress hint.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ExternalRef</code></td><td class="govuk-table__cell">string(100)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Foreign-system reference.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProjectId</code> / <code>ProductDocumentId</code></td><td class="govuk-table__cell">FKs</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsDeleted</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Soft-delete.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedAt</code> / <code>UpdatedAt</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">UTC.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="monthly-updates">Monthly updates</h2>
+<p class="govuk-body">
+    Modern view model <code>Compass.Models.Modern.Work.MonthlyUpdate</code>
+    wraps EF entity <code>ProjectMonthlyUpdate</code>. Submission at
+    <code>/modern/work/{id}/monthly</code>; cross-org rollup at
+    <code>/modern/reporting/monthly-update</code>.
+</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Modern field</th>
+            <th scope="col" class="govuk-table__header">DB column</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell"><code>ProjectMonthlyUpdate.Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>WorkItemId</code></td><td class="govuk-table__cell"><code>ProjectMonthlyUpdate.ProjectId</code></td><td class="govuk-table__cell">int (FK)</td><td class="govuk-table__cell">Work item the update belongs to.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ReportMonth</code></td><td class="govuk-table__cell"><code>Year</code> + <code>Month</code></td><td class="govuk-table__cell">DateTime</td><td class="govuk-table__cell">Composed in the view model.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Narrative</code></td><td class="govuk-table__cell"><code>ProjectMonthlyUpdate.Narrative</code></td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">Aggregated headline narrative.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>RagStatusId</code></td><td class="govuk-table__cell"><code>DraftRagStatusLookupId</code> (draft) or last <code>ProjectRagHistory</code> (submitted)</td><td class="govuk-table__cell">int? (FK <code>RagStatusLookup</code>)</td><td class="govuk-table__cell">Resolved at submit time.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>RagDisplayName</code> / <code>RagCssClass</code></td><td class="govuk-table__cell">computed</td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">Display label and badge class. Includes legacy / history fallbacks.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>RagJustification</code> / <code>PathToGreen</code></td><td class="govuk-table__cell"><code>DraftRagJustification</code> / <code>DraftPathToGreen</code> (draft); legacy narrative columns on submit</td><td class="govuk-table__cell">string(4000)</td><td class="govuk-table__cell">Cleared on submit; archived to <code>ProjectRagHistory</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SubmittedBy</code> / <code>SubmittedByUserId</code></td><td class="govuk-table__cell"><code>CreatedByName</code> / <code>CreatedByUserId</code></td><td class="govuk-table__cell">string / int?</td><td class="govuk-table__cell">Captured at submit time.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SubmittedAt</code></td><td class="govuk-table__cell"><code>ProjectMonthlyUpdate.SubmittedAt</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">Set on submit. <code>NULL</code> means draft.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PermFte</code> / <code>MspFte</code></td><td class="govuk-table__cell"><code>MonthlyPermFte</code> / <code>MonthlyMspFte</code></td><td class="govuk-table__cell">decimal(18,2)?</td><td class="govuk-table__cell">Per-month FTE snapshot.</td></tr>
+    </tbody>
+</table>
+<p class="govuk-body">Each child <code>MonthlyUpdateNarrative</code> stores one heading + body pair (for example "Highlights", "Lowlights", "Next 30 days"). Use them when you need topic-level reporting; the rolled-up <code>Narrative</code> is fine for headline summaries.</p>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="standards">Standards</h2>
+<p class="govuk-body">
+    Standards in COMPASS come in two flavours. The Modern landing page at
+    <code>/modern/standards</code> links to both:
+</p>
+<ul class="govuk-list govuk-list--bullet">
+    <li><strong>DDT standards</strong> &mdash; the Digital, Data and Technology &ldquo;standards as code&rdquo; library (<code>DdtStandard</code> + supporting tables). Listed at <code>/modern/standards/ddt</code>, detail at <code>/modern/standards/ddt/{id}</code>.</li>
+    <li><strong>Functional standards</strong> &mdash; cross-government functional standards plus the self-assessment workflow (<code>FunctionalStandard</code> + <code>FunctionalStandardAssessment</code>). Listed at <code>/modern/standards/functional</code>, detail at <code>/modern/standards/functional/{id}</code>, assessment at <code>/modern/standards/functional/assessment/{assessmentId}/conduct</code>.</li>
+</ul>
+
+<h3 class="govuk-heading-m" id="standards-ddt">DDT standard (<code>DdtStandard</code>)</h3>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Surrogate key.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>StandardUuid</code></td><td class="govuk-table__cell">string(36)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Immutable UUID for standards-as-code consumers.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ParentStandardId</code></td><td class="govuk-table__cell">int? (FK <code>DdtStandard</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Set when this draft was created via &ldquo;Make a change&rdquo; on a published standard.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Title</code></td><td class="govuk-table__cell">string(500)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Display title (unique within active set).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Slug</code></td><td class="govuk-table__cell">string(500)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">URL-friendly identifier (auto from title).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Summary</code></td><td class="govuk-table__cell">string(2000)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Short summary.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Purpose</code> / <code>HowToMeet</code> / <code>Governance</code> / <code>RelatedGuidance</code></td><td class="govuk-table__cell">nvarchar(max), markdown</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Long-form sections.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Criteria</code></td><td class="govuk-table__cell">nvarchar(max), JSON array</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Acceptance criteria, serialised JSON.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>GovernanceApproval</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Whether governance approval has been granted.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Version</code> / <code>PreviousVersion</code></td><td class="govuk-table__cell">string(20)</td><td class="govuk-table__cell">yes / &mdash;</td><td class="govuk-table__cell">Semantic version (<code>MAJOR.MINOR.PATCH</code>). Defaults to <code>0.1.0</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Stage</code></td><td class="govuk-table__cell">string(50)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>Draft</code>, <code>Under Review</code>, <code>Approved</code>, <code>Published</code>, <code>Rejected</code>, <code>Archived</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsPublished</code> / <code>PublishedAt</code></td><td class="govuk-table__cell">bool / datetime?</td><td class="govuk-table__cell">yes / &mdash;</td><td class="govuk-table__cell"><code>PublishedAt</code> is set when stage moves to <code>Published</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>FirstPublished</code> / <code>LastUpdated</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Earliest publication and last content change.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>LegalStandard</code> / <code>LegalBasis</code></td><td class="govuk-table__cell">bool / string(1000)</td><td class="govuk-table__cell">yes / &mdash;</td><td class="govuk-table__cell">Flag and explanation when the standard is a legal requirement.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ValidityPeriod</code></td><td class="govuk-table__cell">int? (months)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">How long an assessment remains valid.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsModified</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">True when content has changed since last publish.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatorUserId</code></td><td class="govuk-table__cell">int? (FK <code>User</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Author.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Owners</code> / <code>Contacts</code></td><td class="govuk-table__cell">collections (<code>DdtStandardOwner</code> / <code>DdtStandardContact</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Owning team and contact users.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Categories</code> / <code>SubCategories</code></td><td class="govuk-table__cell">join &rarr; <code>StandardCategory</code> / <code>StandardSubCategory</code></td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Taxonomy used by the catalogue UI.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Phases</code></td><td class="govuk-table__cell">join &rarr; <code>PhaseLookup</code></td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Which delivery phases the standard applies to.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ValidationRules</code></td><td class="govuk-table__cell">collection (<code>DdtStandardValidationRule</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Machine-checkable rules (standards as code).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Versions</code></td><td class="govuk-table__cell">collection (<code>DdtStandardVersion</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Immutable version history snapshots.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Products</code></td><td class="govuk-table__cell">collection (<code>DdtStandardProduct</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Approved / tolerated product links.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Exceptions</code></td><td class="govuk-table__cell">collection (<code>DdtStandardException</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Recorded exceptions and waivers.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Comments</code></td><td class="govuk-table__cell">collection (<code>DdtStandardComment</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Review-time comments.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>UnpublishAudits</code></td><td class="govuk-table__cell">collection (<code>DdtStandardUnpublishAudit</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Audit trail for unpublish events (independent of the standard <code>AuditLog</code>).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>LegacyId</code> / <code>LegacyReference</code></td><td class="govuk-table__cell">string(100) / string(200)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Populated for standards imported from the previous Strapi CMS.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedAt</code> / <code>UpdatedAt</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">UTC.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsDeleted</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Soft-delete.</td></tr>
+    </tbody>
+</table>
+
+<h3 class="govuk-heading-m" id="standards-functional">Functional standard (<code>FunctionalStandard</code>)</h3>
+<p class="govuk-body">Top-level standard definition (e.g. GovS 002 Project Delivery). The catalogue is read-mostly; the editable surface is the assessment.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">User-defined (not identity); matches the GovS number.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Title</code></td><td class="govuk-table__cell">string(255)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Display title.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Description</code></td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Long-form scope description.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PublishedDate</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Source publication date.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Themes</code></td><td class="govuk-table__cell">collection (<code>FunctionalStandardTheme</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Themes &rarr; practice areas &rarr; criteria assessed during a self-assessment.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedAt</code> / <code>UpdatedAt</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">UTC.</td></tr>
+    </tbody>
+</table>
+
+<h3 class="govuk-heading-m" id="standards-functional-assessment">Functional standard assessment (<code>FunctionalStandardAssessment</code>)</h3>
+<p class="govuk-body">One self-assessment of a functional standard. Per-criterion responses live in <code>AssessmentCriteriaResponse</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>FunctionalStandardId</code></td><td class="govuk-table__cell">int (FK <code>FunctionalStandard</code>)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Standard being assessed.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AssessmentName</code></td><td class="govuk-table__cell">string(200)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Caller-supplied name (e.g. &ldquo;Q3 2025 self-assessment&rdquo;).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AssessedBy</code></td><td class="govuk-table__cell">string(200)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Assessor name / email.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AssessmentDate</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">When the assessment was conducted.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Notes</code></td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Overall narrative.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SubmittedAt</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Set when the assessment is submitted. <code>NULL</code> means in-progress.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CriteriaResponses</code></td><td class="govuk-table__cell">collection (<code>AssessmentCriteriaResponse</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">One row per assessed criterion with <code>Attainment</code> (<code>NotOrSeldomMet</code> = 0, <code>PartiallyMet</code> = 0.5, <code>FullyMet</code> = 1) and notes.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedAt</code> / <code>UpdatedAt</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">UTC.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="service-register">Service register</h2>
+<p class="govuk-body">
+    The service register is the catalogue of DfE digital products, sourced from
+    DfE&rsquo;s CMDB and curated in COMPASS. Operator UI at
+    <code>/modern/operations/service-register</code>; sync controls at
+    <code>/modern/operations/service-register/sync-settings</code>.
+</p>
+<p class="govuk-body">
+    Two storage tables back the register: <code>FipsService</code> (the legacy
+    survey identifier used by older modules) and <code>CMDBProduct</code> (the
+    curated CMDB-aligned record). New work should target <code>CMDBProduct</code>;
+    <code>FipsService</code> is kept for backward compatibility with surveys and
+    accessibility records keyed by <code>FipsId</code>.
+</p>
+
+<h3 class="govuk-heading-m" id="service-register-cmdb-product">CMDB product (<code>CMDBProduct</code>)</h3>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">Guid</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Stable identifier used everywhere downstream of the sync.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>UniqueID</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Auto-increment helper for UI ordering.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Title</code></td><td class="govuk-table__cell">string(300)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">CMDB title (used to match products on sync).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CMDBDescription</code> / <code>UserDescription</code></td><td class="govuk-table__cell">string (max)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">CMDB-sourced description and the COMPASS-curated override.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CMDBID</code></td><td class="govuk-table__cell">string(100)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Source CMDB record id.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProductURL</code></td><td class="govuk-table__cell">string(2000)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Live product URL (used by accessibility scans).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Status</code></td><td class="govuk-table__cell">enum <code>CMDBProductStatus</code></td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>New</code> (0), <code>Active</code> (1), <code>Inactive</code> (2), <code>Rejected</code> (3 &mdash; excluded by sync rules but still tracked).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsEnterpriseService</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">COMPASS-only flag that counts the product as an enterprise service for reporting and API extracts.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PhaseId</code></td><td class="govuk-table__cell">int? (FK <code>PhaseLookup</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Service phase (Discovery / Alpha / Beta / Live / Retired).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>LastCmdbSnapshotJson</code></td><td class="govuk-table__cell">nvarchar(max)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Last JSON snapshot from the CMDB service-offering row. Used by sync rules and ad-hoc reporting.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>BusinessAreas</code> / <code>Channels</code> / <code>UserGroups</code> / <code>Types</code> / <code>CategorisationItems</code></td><td class="govuk-table__cell">join tables</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Multi-select FIPS taxonomy joins (<code>CMDBProductBusinessArea</code>, <code>CMDBProductChannel</code>, etc.).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Contacts</code></td><td class="govuk-table__cell">collection (<code>CMDBProductContact</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Named contacts per <code>FipsContactRole</code> (with <code>CanManage</code> flag).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedAt</code> / <code>UpdatedAt</code> / <code>CreatedBy</code> / <code>UpdatedBy</code></td><td class="govuk-table__cell">datetime / string</td><td class="govuk-table__cell">yes / &mdash;</td><td class="govuk-table__cell">Audit columns.</td></tr>
+    </tbody>
+</table>
+
+<h3 class="govuk-heading-m" id="service-register-fips-service">Legacy product key (<code>FipsService</code>)</h3>
+<p class="govuk-body">Survey instances, accessibility records, and the older Modern surfaces key off <code>FipsService.FipsId</code>. New code should join through to <code>CMDBProduct.Id</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ServiceId</code></td><td class="govuk-table__cell">int</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">PK.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>FipsId</code></td><td class="govuk-table__cell">string(200)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Unique FIPS product id (also <code>ProductDocumentId</code> in other tables).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>DisplayName</code></td><td class="govuk-table__cell">string(300)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Override for UI lists.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsActive</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Filter for active products.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedUtc</code> / <code>UpdatedUtc</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes / &mdash;</td><td class="govuk-table__cell">UTC.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SurveyInstances</code></td><td class="govuk-table__cell">collection (<code>SurveyInstance</code>)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Performance / accessibility surveys raised against the product.</td></tr>
+    </tbody>
+</table>
+
+<h3 class="govuk-heading-m" id="service-register-sync-rules">CMDB sync rules (<code>FipsCmdbSyncRule</code>)</h3>
+<p class="govuk-body">
+    Pattern-matching rules applied during a CMDB sync (run from
+    <code>/modern/operations/service-register/sync-settings</code>) to set
+    <code>CMDBProduct.Status</code> or flip <code>IsEnterpriseService</code> on
+    matching rows.
+</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Name</code></td><td class="govuk-table__cell">string(200)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Friendly label shown in the admin UI.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>FieldScope</code></td><td class="govuk-table__cell">string(40)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Which text to evaluate. One of <code>Title</code>, <code>Description</code>, <code>ParentName</code>, <code>UserDescription</code>, <code>MappedText</code> (default &mdash; concatenates title, CMDB description, parent name and user description), <code>RawJson</code>, <code>ServiceClassification</code>. See <code>FipsCmdbSyncRuleScopes</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>MatchKind</code></td><td class="govuk-table__cell">string(20)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>Contains</code> (default) or <code>Regex</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Pattern</code></td><td class="govuk-table__cell">string(2000)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Substring or regex to match.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Action</code></td><td class="govuk-table__cell">string(30)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>SetStatus</code> (first matching rule wins, sets <code>TargetStatus</code>) or <code>SetEnterpriseService</code> (additive: marks <code>IsEnterpriseService = true</code>).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>TargetStatus</code></td><td class="govuk-table__cell">enum <code>CMDBProductStatus</code></td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Used by <code>SetStatus</code> rules. Typically <code>Rejected</code> or <code>Inactive</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SortOrder</code></td><td class="govuk-table__cell">int</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Evaluation order (lowest first).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IsActive</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Inactive rules are skipped during sync.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>CreatedAt</code> / <code>UpdatedAt</code></td><td class="govuk-table__cell">datetime</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">UTC.</td></tr>
+    </tbody>
+</table>
+
+<h3 class="govuk-heading-m" id="service-register-sync-history">Sync history (<code>FipsSyncHistory</code>)</h3>
+<p class="govuk-body">One row per sync run; surfaced in the sync settings page and consumed by the operations dashboard.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SyncType</code></td><td class="govuk-table__cell">string(100)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">For example <code>CMDB to Compass</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>SourceEnvironment</code> / <code>TargetEnvironment</code></td><td class="govuk-table__cell">string(50)</td><td class="govuk-table__cell">&mdash; / yes</td><td class="govuk-table__cell">For example <code>CMDB</code> &rarr; <code>Production</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>Status</code></td><td class="govuk-table__cell">string(50)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Defaults to <code>Pending</code>; moves to <code>Running</code> / <code>Completed</code> / <code>Failed</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>StartedAt</code> / <code>CompletedAt</code> / <code>DurationSeconds</code></td><td class="govuk-table__cell">datetime / int?</td><td class="govuk-table__cell">yes / &mdash;</td><td class="govuk-table__cell">Run timings.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>InitiatedBy</code></td><td class="govuk-table__cell">string(255)</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Operator who clicked &ldquo;Sync&rdquo;.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProductsCreated</code> / <code>ProductsUpdated</code> / <code>ProductsSkipped</code></td><td class="govuk-table__cell">int</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Per-run counters used by the dashboard tiles.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AssurancesSynced</code> / <code>AccessibilitySynced</code></td><td class="govuk-table__cell">int</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Counters for the related upserts.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ErrorsEncountered</code> / <code>ErrorDetails</code></td><td class="govuk-table__cell">int / nvarchar(max)</td><td class="govuk-table__cell">yes / &mdash;</td><td class="govuk-table__cell">Aggregate error count and details payload.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ActionsLog</code> / <code>Configuration</code></td><td class="govuk-table__cell">nvarchar(max), JSON</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Structured per-action log and the parameters used for the run.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="performance-metrics">Performance metrics (product returns)</h2>
+<p class="govuk-body">Entity: <code>PerformanceMetric</code> definition + <code>ProductReturn</code> and <code>ProductMetricValue</code> values. Modern UI at <code>/modern/performance</code>.</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PerformanceMetric.Id</code></td><td class="govuk-table__cell">int (identity)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PerformanceMetric.Name</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Metric display name.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PerformanceMetric.Unit</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">For example <code>count</code>, <code>%</code>, <code>&pound;</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PerformanceMetric.Frequency</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">One of <code>monthly</code>, <code>quarterly</code>, <code>annual</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>PerformanceMetric.IsActive</code></td><td class="govuk-table__cell">bool</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">Filter for active metrics only.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProductReturn.ProductDocumentId</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">CMS product id.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProductReturn.ReturnPeriod</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"><code>YYYY-MM</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProductReturn.SubmittedAt</code> / <code>SubmittedBy</code></td><td class="govuk-table__cell">datetime / string</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProductMetricValue.MetricId</code> + <code>ProductMetricValue.Value</code></td><td class="govuk-table__cell">FK + decimal</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One row per metric per return.</td></tr>
+    </tbody>
+</table>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="enterprise-metrics">Enterprise metrics</h2>
+<p class="govuk-body">Entity: <code>EnterpriseMetric</code> + <code>EnterpriseReturn</code> + <code>EnterpriseMetricValue</code>. Same shape as product returns but scoped to a <code>BusinessAreaLookup</code> instead of a product. Submissions at <code>/modern/performance/enterprise</code>.</p>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="accessibility">Accessibility</h2>
+<p class="govuk-body">Entities: <code>FipsService</code>, <code>ProductAccessibility</code>, <code>AccessibilityIssue</code>. Service list at <code>/modern/operations/service-register</code>; accessibility hub at <code>/accessibility</code> (legacy AdminLTE for now).</p>
+<table class="govuk-table">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Field</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Required</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProductAccessibility.ProductDocumentId</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">CMS product id (PK).</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProductAccessibility.StatementStatus</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">One of <code>none</code>, <code>draft</code>, <code>published</code>, <code>verified</code>, <code>expired</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>ProductAccessibility.LastReviewedAt</code></td><td class="govuk-table__cell">datetime?</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AccessibilityIssue.Title</code></td><td class="govuk-table__cell">string(200)</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AccessibilityIssue.Severity</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>low</code>, <code>medium</code>, <code>high</code>, <code>critical</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AccessibilityIssue.Status</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell">One of <code>open</code>, <code>in_progress</code>, <code>resolved</code>, <code>verified</code>, <code>wont_fix</code>.</td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>AccessibilityIssue.ProductDocumentId</code></td><td class="govuk-table__cell">string</td><td class="govuk-table__cell">yes</td><td class="govuk-table__cell"></td></tr>
+        <tr class="govuk-table__row"><td class="govuk-table__cell"><code>IssueWcagCriterion</code></td><td class="govuk-table__cell">join</td><td class="govuk-table__cell">&mdash;</td><td class="govuk-table__cell">Issue &harr; WCAG criterion code.</td></tr>
+    </tbody>
+</table>
+<p class="govuk-body">Related workflow tables: <code>AccessibilityRetestRequest</code>, <code>StatementVerificationRequest</code>, <code>StatementTemplate</code>, <code>AccessibilityEmailConfiguration</code>.</p>
+
+</div>@*  /developers-feature-reference  *@
+
+<div class="govuk-inset-text">
+    Want a field that isn't listed? Check the model file in
+    <code>Models/</code> or <code>Models/Modern/</code> first &mdash; every
+    database column is defined there. If a feature is missing entirely, add it
+    as a section to this page and link it from
+    <a class="govuk-link" href="@Url.Action("DataModels", "Docs")">Data models</a>.
+</div>
+
+@section Aside {
+    <h2 class="docs-page-aside-heading">On this page</h2>
+    <ul class="docs-page-aside-nav">
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#overview">Overview</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#work-items">Work items</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#risks">Risks</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#issues">Issues</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#near-misses">Near misses</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#assumptions">Assumptions</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#dependencies">Dependencies</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#milestones">Milestones</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#monthly-updates">Monthly updates</a></li>
+        <li>
+            <a class="govuk-link govuk-link--no-visited-state" href="#standards">Standards</a>
+            <ul class="docs-page-aside-nav docs-page-aside-nav--sub">
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#standards-ddt">DDT</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#standards-functional">Functional</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#standards-functional-assessment">Functional assessment</a></li>
+            </ul>
+        </li>
+        <li>
+            <a class="govuk-link govuk-link--no-visited-state" href="#service-register">Service register</a>
+            <ul class="docs-page-aside-nav docs-page-aside-nav--sub">
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#service-register-cmdb-product">CMDB product</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#service-register-fips-service">Legacy product key</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#service-register-sync-rules">Sync rules</a></li>
+                <li><a class="govuk-link govuk-link--no-visited-state" href="#service-register-sync-history">Sync history</a></li>
+            </ul>
+        </li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#performance-metrics">Performance metrics</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#enterprise-metrics">Enterprise metrics</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#accessibility">Accessibility</a></li>
+    </ul>
+}

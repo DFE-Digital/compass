@@ -1,0 +1,1277 @@
+@using Compass.Models.Modern.Work
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Compass.ViewModels
+@using Compass.ViewModels.Modern
+@model ModernResourcingReportViewModel
+@{
+  ViewData["Title"] = "Resourcing report";
+  var r = Model ?? new ModernResourcingReportViewModel();
+  var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+  var trendJson = JsonSerializer.Serialize(r.TrendPoints, jsonOpts);
+  var dirTrendJson = JsonSerializer.Serialize(r.DirectorateTrendSeries, jsonOpts);
+  var baTrendJson = JsonSerializer.Serialize(r.BusinessAreaTrendSeries, jsonOpts);
+  var priorityFilterOptions = r.WorkItemRows
+    .Select(w => string.IsNullOrWhiteSpace(w.Priority) ? "Not set" : w.Priority!.Trim())
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+    .ToList();
+  var bandFilterOptions = r.WorkItemRows
+    .Select(w => string.IsNullOrWhiteSpace(w.BandName) ? "—" : w.BandName.Trim())
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .OrderBy(b => b, StringComparer.OrdinalIgnoreCase)
+    .ToList();
+  var ragFilterOptions = r.WorkItemRows
+    .Select(w => string.IsNullOrWhiteSpace(w.Rag) ? "Not Set" : w.Rag.Trim())
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+    .ToList();
+  var drillSourceItems = r.WorkItemRows.Select(w => new BusinessAreaProjectItem
+  {
+    Id = w.WorkItemId,
+    Title = w.Title,
+    BusinessArea = w.BusinessArea,
+    Rag = string.IsNullOrWhiteSpace(w.Rag) ? "Not Set" : w.Rag,
+    Priority = string.IsNullOrWhiteSpace(w.Priority) ? "Not Set" : w.Priority!,
+    PermFte = w.PermFte,
+    MspFte = w.MspFte,
+    SubmittedUpdate = true
+  }).ToList();
+  var drillSourceById = drillSourceItems.ToDictionary(x => x.Id);
+  var drillProjectsByKey = new Dictionary<string, List<BusinessAreaProjectItem>>(StringComparer.OrdinalIgnoreCase);
+  foreach (var row in r.DirectorateRows)
+  {
+    drillProjectsByKey[$"directorate|{row.Name}"] = row.ProjectIds
+      .Where(id => drillSourceById.ContainsKey(id))
+      .Select(id => drillSourceById[id])
+      .ToList();
+  }
+  foreach (var row in r.BusinessAreaRows)
+  {
+    drillProjectsByKey[$"business-area|{row.Name}"] = row.ProjectIds
+      .Where(id => drillSourceById.ContainsKey(id))
+      .Select(id => drillSourceById[id])
+      .ToList();
+  }
+  foreach (var monthPoint in r.TrendPoints)
+  {
+    drillProjectsByKey[$"month|{monthPoint.Label}"] = monthPoint.WorkItemIds
+      .Where(id => drillSourceById.ContainsKey(id))
+      .Select(id => drillSourceById[id])
+      .ToList();
+  }
+  var mwDetailPrefix = Url.Content("~/modern/work/detail/") ?? "/modern/work/detail/";
+  var drillExportUrl = Url.Action("ExportDrilldown", "ModernReporting", new { source = "resourcing" }) ?? "";
+  string ReportWorkExportUrl(IEnumerable<int> projectIds, string label)
+  {
+    var ids = projectIds.Distinct().Where(id => id > 0).ToArray();
+    if (ids.Length == 0) return "";
+    return Url.Action("ExportWorkScope", "ModernReporting", new { ids, label }) ?? "";
+  }
+  ReportingTableExportBarModel ReportExportBar(string caption, IEnumerable<int> projectIds, string label) =>
+    new()
+    {
+      Caption = caption,
+      Count = projectIds.Distinct().Count(id => id > 0),
+      ExportUrl = ReportWorkExportUrl(projectIds, label),
+      ShowExport = projectIds.Any(id => id > 0)
+    };
+  var directorateExportIds = r.DirectorateRows.SelectMany(x => x.ProjectIds).Distinct().Where(id => id > 0).ToList();
+  var businessAreaExportIds = r.BusinessAreaRows.SelectMany(x => x.ProjectIds).Distinct().Where(id => id > 0).ToList();
+  var trendExportIds = r.TrendPoints.SelectMany(x => x.WorkItemIds).Distinct().Where(id => id > 0).ToList();
+  var workItemsExportIds = r.WorkItemRows.Select(x => x.WorkItemId).Distinct().Where(id => id > 0).ToList();
+  var workItemsExportBaseUrl = Url.Action("ExportWorkScope", "ModernReporting") ?? "";
+  var workItemsExportBaseUrlJson = JsonSerializer.Serialize(workItemsExportBaseUrl, jsonOpts);
+  var drillScriptModel = ReportingDrilldownConfig.Build(
+    drillProjectsByKey,
+    drillSourceItems,
+    drillExportUrl,
+    new Dictionary<string, string?>
+    {
+      ["source"] = "resourcing",
+      ["year"] = r.ReportYear.ToString(),
+      ["month"] = r.ReportMonth.ToString(),
+      ["businessAreaId"] = r.FilterBusinessAreaId?.ToString(),
+      ["directorateId"] = r.FilterDirectorateId?.ToString(),
+      ["groupId"] = r.GroupId?.ToString()
+    },
+    mwDetailPrefix,
+    new Dictionary<string, string>
+    {
+      ["directorate"] = "Directorate",
+      ["business-area"] = "Business area",
+      ["month"] = "Month"
+    });
+  string WorkHref(int id) => Url.Content($"~/modern/work/detail/{id}") ?? $"/modern/work/detail/{id}";
+  string DimLabel() => r.Dimension switch
+  {
+    "mission" => "Mission pillar",
+    "outcomes" => "Priority outcome",
+    "priority" => "Delivery priority",
+    _ => "All work"
+  };
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Resourcing report</li>
+}
+
+<div class="mr-dash">
+  @{
+    var lede = await Html.PartialAsync("_ReportingMutedBodyLede", "Resourcing totals from submitted monthly returns, with configurable banding by directorate, business area, and work item.");
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
+  {
+    Caption = "Reporting",
+    Title = $"Resourcing report — {r.MonthName}",
+    Lede = lede
+  })
+
+  @if (TempData["ErrorMessage"] != null)
+  {
+    <div class="dfe-c-error-summary" role="alert" style="margin-bottom:1.5rem;">
+      <p class="dfe-c-body" style="margin:0;">@TempData["ErrorMessage"]</p>
+    </div>
+  }
+
+  @await Html.PartialAsync("_ResourcingReportToolbar", r)
+
+  <div class="dfe-f-toggle-group mr-report-toggle-group govuk-!-margin-bottom-3" data-module="dfe-f-toggle-group">
+    <div class="dfe-f-toggle-group__controls govuk-body-s govuk-!-margin-bottom-2 mr-report-toggle-group__controls">
+      <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-expand-all>Expand all</button>
+      <span class="dfe-f-toggle-group__separator" aria-hidden="true"> · </span>
+      <button type="button" class="dfe-f-toggle-group__action" data-dfe-toggle-collapse-all>Collapse all</button>
+    </div>
+    <div class="dfe-f-toggle-group__items">
+
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="rs-summary-content" id="rs-summary-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Summary</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(r.SubmittedWorkItemCount)">@r.SubmittedWorkItemCount</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="rs-summary-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Scope</dt>
+                <dd class="govuk-summary-list__value">
+                  @DimLabel()
+                  @if (!string.IsNullOrWhiteSpace(r.GroupName))
+                  {
+                    <text> · @r.GroupName</text>
+                  }
+                </dd>
+              </div>
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Submitted work items</dt>
+                <dd class="govuk-summary-list__value">@r.SubmittedWorkItemCount</dd>
+              </div>
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">FTE total</dt>
+                <dd class="govuk-summary-list__value">@r.TotalPermFte.ToString("0.##")</dd>
+              </div>
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">MSC total</dt>
+                <dd class="govuk-summary-list__value">@r.TotalMspFte.ToString("0.##")</dd>
+              </div>
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Combined total (FTE + MSC)</dt>
+                <dd class="govuk-summary-list__value"><strong>@r.TotalResourcingFte.ToString("0.##")</strong></dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="rs-bands-content" id="rs-bands-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Resource bands</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(r.Bands.Count)">@r.Bands.Count</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="rs-bands-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+              <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+              <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Band</button></th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Range (FTE)</button></th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Description</button></th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @if (r.Bands.Count == 0)
+                  {
+                    <tr class="govuk-table__row"><td class="govuk-table__cell" colspan="3">No active resource bands configured in Admin.</td></tr>
+                  }
+                  else
+                  {
+                    @foreach (var b in r.Bands)
+                    {
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell"><span class="@WorkBadgeCss.ResourceBandDfeFrontendBadgeClass(b.CssClass)">@b.Name</span></td>
+                        <td class="govuk-table__cell">@b.MinFte.ToString("0.##") to @(b.MaxFte.HasValue ? b.MaxFte.Value.ToString("0.##") : "no upper limit")</td>
+                        <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(b.Description) ? "—" : b.Description)</td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="rs-dir-content" id="rs-dir-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Directorates</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(r.DirectorateRows.Count)">@r.DirectorateRows.Count</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="rs-dir-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <div id="rs-directorate-drill-host" data-mr-drill-host="rs-directorate-drill-host"></div>
+            <div class="mr-table-stack">
+              <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar("Report scope", directorateExportIds, "resourcing-directorates"))" />
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed rs-summary-table">
+                <colgroup>
+                  <col class="rs-col-area" />
+                  <col class="rs-col-metric" />
+                  <col class="rs-col-metric" />
+                  <col class="rs-col-metric" />
+                  <col class="rs-col-metric" />
+                </colgroup>
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Directorate</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Work items</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">FTE</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">MSC</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Combined</button></th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @if (r.DirectorateRows.Count == 0)
+                  {
+                    <tr class="govuk-table__row"><td class="govuk-table__cell" colspan="5">No submitted monthly resourcing data for this scope and period.</td></tr>
+                  }
+                  else
+                  {
+                    @foreach (var row in r.DirectorateRows)
+                    {
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">@row.Name</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">
+                          @if (row.WorkItemCount > 0)
+                          {
+                            <span class="mr-ba-drill" role="button" tabindex="0" data-dimension="directorate" data-ba="@row.Name" data-filter="total">@row.WorkItemCount</span>
+                          }
+                          else
+                          {
+                            <text>0</text>
+                          }
+                        </td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@row.PermFteTotal.ToString("0.##")</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@row.MspFteTotal.ToString("0.##")</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric"><strong>@row.ResourcingFteTotal.ToString("0.##")</strong></td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="rs-ba-content" id="rs-ba-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Business areas</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(r.BusinessAreaRows.Count)">@r.BusinessAreaRows.Count</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="rs-ba-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <div id="rs-business-area-drill-host" data-mr-drill-host="rs-business-area-drill-host"></div>
+            <div class="mr-table-stack">
+              <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar("Report scope", businessAreaExportIds, "resourcing-business-areas"))" />
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed rs-summary-table">
+                <colgroup>
+                  <col class="rs-col-area" />
+                  <col class="rs-col-metric" />
+                  <col class="rs-col-metric" />
+                  <col class="rs-col-metric" />
+                  <col class="rs-col-metric" />
+                </colgroup>
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Work items</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">FTE</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">MSC</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Combined</button></th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @if (r.BusinessAreaRows.Count == 0)
+                  {
+                    <tr class="govuk-table__row"><td class="govuk-table__cell" colspan="5">No submitted monthly resourcing data for this scope and period.</td></tr>
+                  }
+                  else
+                  {
+                    @foreach (var row in r.BusinessAreaRows)
+                    {
+                      <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">@row.Name</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">
+                          @if (row.WorkItemCount > 0)
+                          {
+                            <span class="mr-ba-drill" role="button" tabindex="0" data-dimension="business-area" data-ba="@row.Name" data-filter="total">@row.WorkItemCount</span>
+                          }
+                          else
+                          {
+                            <text>0</text>
+                          }
+                        </td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@row.PermFteTotal.ToString("0.##")</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@row.MspFteTotal.ToString("0.##")</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric"><strong>@row.ResourcingFteTotal.ToString("0.##")</strong></td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="rs-work-content" id="rs-work-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Work items</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(r.WorkItemRows.Count)">@r.WorkItemRows.Count</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="rs-work-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <div class="rs-work-filters govuk-!-margin-bottom-3">
+              <section class="rs-filter-card" aria-labelledby="rs-filter-title">
+                <h3 id="rs-filter-title" class="govuk-heading-s govuk-!-margin-bottom-1">Filter work items</h3>
+                <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-2">Select one or more priorities and bands to refine the table.</p>
+                <div class="rs-filter-groups">
+                  <fieldset class="govuk-fieldset rs-filter-group">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Priority</legend>
+                    <div class="govuk-checkboxes govuk-checkboxes--small rs-filter-checkboxes">
+                      @for (var i = 0; i < priorityFilterOptions.Count; i++)
+                      {
+                        var p = priorityFilterOptions[i];
+                        var id = $"rs-filter-priority-{i}";
+                        <div class="govuk-checkboxes__item">
+                          <input class="govuk-checkboxes__input rs-filter-input" id="@id" type="checkbox" data-filter-kind="priority" value="@p" />
+                          <label class="govuk-label govuk-checkboxes__label" for="@id">@p</label>
+                        </div>
+                      }
+                    </div>
+                  </fieldset>
+                  <fieldset class="govuk-fieldset rs-filter-group">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Band</legend>
+                    <div class="govuk-checkboxes govuk-checkboxes--small rs-filter-checkboxes">
+                      @for (var i = 0; i < bandFilterOptions.Count; i++)
+                      {
+                        var b = bandFilterOptions[i];
+                        var id = $"rs-filter-band-{i}";
+                        <div class="govuk-checkboxes__item">
+                          <input class="govuk-checkboxes__input rs-filter-input" id="@id" type="checkbox" data-filter-kind="band" value="@b" />
+                          <label class="govuk-label govuk-checkboxes__label" for="@id">@b</label>
+                        </div>
+                      }
+                    </div>
+                  </fieldset>
+                  <fieldset class="govuk-fieldset rs-filter-group">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">RAG status</legend>
+                    <div class="govuk-checkboxes govuk-checkboxes--small rs-filter-checkboxes">
+                      @for (var i = 0; i < ragFilterOptions.Count; i++)
+                      {
+                        var rag = ragFilterOptions[i];
+                        var id = $"rs-filter-rag-{i}";
+                        <div class="govuk-checkboxes__item">
+                          <input class="govuk-checkboxes__input rs-filter-input" id="@id" type="checkbox" data-filter-kind="rag" value="@rag" />
+                          <label class="govuk-label govuk-checkboxes__label" for="@id">@rag</label>
+                        </div>
+                      }
+                    </div>
+                  </fieldset>
+                </div>
+              </section>
+              <div id="rs-active-filters" class="rs-active-filters" hidden>
+                <span class="govuk-body-s govuk-!-font-weight-bold govuk-!-margin-bottom-0">Active filters:</span>
+                <div id="rs-active-filter-chips" class="rs-active-filter-chips"></div>
+              </div>
+              <div class="rs-work-filters__actions">
+                <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-1" id="rs-filter-clear" hidden>Clear filters</button>
+                <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-0" id="rs-work-filter-count"></p>
+              </div>
+            </div>
+            <div id="rs-work-export-wrap" class="mr-table-stack">
+              <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar("Report scope", workItemsExportIds, "resourcing-work-items"))" />
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Work item</button></th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Directorates</button></th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">RAG</button></th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Priority</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">FTE</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">MSC</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Combined</button></th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Band</button></th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @if (r.WorkItemRows.Count == 0)
+                  {
+                    <tr class="govuk-table__row"><td class="govuk-table__cell" colspan="9">No submitted monthly resourcing data for this scope and period.</td></tr>
+                  }
+                  else
+                  {
+                    @foreach (var row in r.WorkItemRows)
+                    {
+                      var rowPriority = string.IsNullOrWhiteSpace(row.Priority) ? "Not set" : row.Priority.Trim();
+                      var rowBand = string.IsNullOrWhiteSpace(row.BandName) ? "—" : row.BandName.Trim();
+                      var rowRag = string.IsNullOrWhiteSpace(row.Rag) ? "Not Set" : row.Rag.Trim();
+                      <tr class="govuk-table__row rs-work-row" data-priority="@rowPriority" data-band="@rowBand" data-rag="@rowRag" data-work-id="@row.WorkItemId">
+                        <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@WorkHref(row.WorkItemId)">@row.Title</a></td>
+                        <td class="govuk-table__cell">@row.BusinessArea</td>
+                        <td class="govuk-table__cell">@row.Directorates</td>
+                        <td class="govuk-table__cell">
+                          <span class="@WorkBadgeCss.RagBadgeClass(row.Rag) dfe-f-badge--small">@row.Rag</span>
+                        </td>
+                        <td class="govuk-table__cell">
+                          @if (!string.IsNullOrWhiteSpace(row.Priority))
+                          {
+                            <span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(row.Priority) dfe-f-badge--small">@row.Priority.ToUpperInvariant()</span>
+                          }
+                          else
+                          {
+                            <text>—</text>
+                          }
+                        </td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@row.PermFte.ToString("0.##")</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@row.MspFte.ToString("0.##")</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric"><strong>@row.ResourcingFte.ToString("0.##")</strong></td>
+                        <td class="govuk-table__cell"><span class="@WorkBadgeCss.ResourceBandDfeFrontendBadgeClass(row.BandCssClass)">@row.BandName</span></td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="rs-trend-content" id="rs-trend-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Resourcing trend (from January 2026)</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(r.TrendPoints.Count)">@r.TrendPoints.Count</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="rs-trend-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <div id="rs-trend-drill-host" data-mr-drill-host="rs-trend-drill-host"></div>
+            <div class="rs-view-toolbar">
+              <div class="rs-view-toggle" data-rs-view-toggle="rs-trend-main">
+                <button type="button" class="rs-view-toggle__btn rs-view-toggle__btn--active" data-rs-view="chart">Chart</button>
+                <button type="button" class="rs-view-toggle__btn" data-rs-view="table">Table</button>
+              </div>
+              <div class="rs-export-actions">
+                <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 rs-export-png-btn" data-rs-export-png="rs-trend-main">Export PNG</button>
+              </div>
+            </div>
+            <div class="rs-view-panel" data-rs-panel="rs-trend-main" data-rs-active-view="chart">
+              <div class="rs-view-panel__chart" data-rs-chart-view>
+                <div class="rs-trend-grid">
+                  <div class="rs-trend-card">
+                    <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Resourcing totals over time</h3>
+                    <div class="rs-trend-wrap">
+                      <canvas id="chart-resourcing-trend" aria-label="Resourcing totals trend chart"></canvas>
+                    </div>
+                  </div>
+                  <div class="rs-trend-card">
+                    <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Month-on-month change (combined)</h3>
+                    <div class="rs-trend-wrap">
+                      <canvas id="chart-resourcing-change" aria-label="Month-on-month change chart"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="rs-view-panel__table" data-rs-table-view hidden>
+            <div class="mr-table-stack">
+              <partial name="~/Views/Modern/Reporting/_ReportingTableExportBar.cshtml" model="@(ReportExportBar("Report scope", trendExportIds, "resourcing-trend"))" />
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Month</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Submitted work items</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">FTE</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">MSC</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Combined</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Change</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">% change</button></th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @{
+                    ResourcingTrendMonthPoint? prevPoint = null;
+                  }
+                  @foreach (var t in r.TrendPoints)
+                  {
+                    var delta = prevPoint is null ? (decimal?)null : t.ResourcingFteTotal - prevPoint.ResourcingFteTotal;
+                    var deltaPct = (prevPoint is null || prevPoint.ResourcingFteTotal == 0m || !delta.HasValue)
+                      ? (decimal?)null
+                      : (delta.Value / prevPoint.ResourcingFteTotal) * 100m;
+                    var deltaClass = !delta.HasValue
+                      ? "rs-delta rs-delta--flat"
+                      : delta.Value > 0m
+                        ? "rs-delta rs-delta--up"
+                        : delta.Value < 0m
+                          ? "rs-delta rs-delta--down"
+                          : "rs-delta rs-delta--flat";
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">@t.Label</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">
+                        @if (t.SubmittedWorkItemCount > 0)
+                        {
+                          <span class="mr-ba-drill" role="button" tabindex="0" data-dimension="month" data-ba="@t.Label" data-filter="total">@t.SubmittedWorkItemCount</span>
+                        }
+                        else
+                        {
+                          <text>0</text>
+                        }
+                      </td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">@t.PermFteTotal.ToString("0.##")</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">@t.MspFteTotal.ToString("0.##")</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric"><strong>@t.ResourcingFteTotal.ToString("0.##")</strong></td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">
+                        @if (delta.HasValue)
+                        {
+                          <span class="@deltaClass">
+                            @(delta.Value > 0m ? "▲ " : delta.Value < 0m ? "▼ " : "")
+                            @(delta.Value > 0m ? "+" : "")@delta.Value.ToString("0.##")
+                          </span>
+                        }
+                        else
+                        {
+                          <text>—</text>
+                        }
+                      </td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">
+                        @if (deltaPct.HasValue)
+                        {
+                          <span class="@deltaClass">
+                            @(deltaPct.Value > 0m ? "+" : "")@deltaPct.Value.ToString("0.#")%
+                          </span>
+                        }
+                        else
+                        {
+                          <text>—</text>
+                        }
+                      </td>
+                    </tr>
+                    prevPoint = t;
+                  }
+                </tbody>
+                </table>
+              </div>
+            </div>
+              </div>@* /.rs-view-panel__table *@
+            </div>@* /.rs-view-panel *@
+          </div>
+        </div>
+      </div>
+
+      @if (r.DirectorateTrendSeries.Count > 0)
+      {
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="rs-trend-dir-content" id="rs-trend-dir-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Trend by directorate</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(r.DirectorateTrendSeries.Count)">@r.DirectorateTrendSeries.Count</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="rs-trend-dir-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <div class="rs-view-toolbar">
+              <div class="rs-view-toggle" data-rs-view-toggle="rs-trend-dir">
+                <button type="button" class="rs-view-toggle__btn" data-rs-view="chart">Chart</button>
+                <button type="button" class="rs-view-toggle__btn rs-view-toggle__btn--active" data-rs-view="table">Table</button>
+              </div>
+              <div class="rs-export-actions">
+                <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 rs-export-png-btn" data-rs-export-png="rs-trend-dir">Export PNG</button>
+              </div>
+            </div>
+            <div class="rs-view-panel" data-rs-panel="rs-trend-dir" data-rs-active-view="table">
+              <div class="rs-view-panel__chart" data-rs-chart-view hidden>
+                <div class="rs-trend-grid">
+                  <div class="rs-trend-card" data-rs-dir-chart-host></div>
+                </div>
+              </div>
+              <div class="rs-view-panel__table" data-rs-table-view>
+            @foreach (var series in r.DirectorateTrendSeries)
+            {
+              <h3 class="govuk-heading-s govuk-!-margin-bottom-2">@series.GroupName</h3>
+              <div class="dfe-f-table-wrapper govuk-!-margin-bottom-4" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Month</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Work items</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">FTE</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">MSC</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Combined</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Change</button></th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @{
+                    ResourcingTrendMonthPoint? prevDirPt = null;
+                  }
+                  @foreach (var pt in series.Points)
+                  {
+                    var d = prevDirPt is null ? (decimal?)null : pt.ResourcingFteTotal - prevDirPt.ResourcingFteTotal;
+                    var dc = !d.HasValue ? "rs-delta rs-delta--flat" : d.Value > 0m ? "rs-delta rs-delta--up" : d.Value < 0m ? "rs-delta rs-delta--down" : "rs-delta rs-delta--flat";
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">@pt.Label</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">@pt.SubmittedWorkItemCount</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">@pt.PermFteTotal.ToString("0.##")</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">@pt.MspFteTotal.ToString("0.##")</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric"><strong>@pt.ResourcingFteTotal.ToString("0.##")</strong></td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">
+                        @if (d.HasValue)
+                        {
+                          <span class="@dc">@(d.Value > 0m ? "+" : "")@d.Value.ToString("0.##")</span>
+                        }
+                        else
+                        {
+                          <text>—</text>
+                        }
+                      </td>
+                    </tr>
+                    prevDirPt = pt;
+                  }
+                </tbody>
+                </table>
+              </div>
+            }
+              </div>@* /.rs-view-panel__table *@
+            </div>@* /.rs-view-panel *@
+          </div>
+        </div>
+      </div>
+      }
+
+      @if (r.BusinessAreaTrendSeries.Count > 0)
+      {
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="rs-trend-ba-content" id="rs-trend-ba-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Trend by business area</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(r.BusinessAreaTrendSeries.Count)">@r.BusinessAreaTrendSeries.Count</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="rs-trend-ba-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <div class="rs-view-toolbar">
+              <div class="rs-view-toggle" data-rs-view-toggle="rs-trend-ba">
+                <button type="button" class="rs-view-toggle__btn" data-rs-view="chart">Chart</button>
+                <button type="button" class="rs-view-toggle__btn rs-view-toggle__btn--active" data-rs-view="table">Table</button>
+              </div>
+              <div class="rs-export-actions">
+                <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 rs-export-png-btn" data-rs-export-png="rs-trend-ba">Export PNG</button>
+              </div>
+            </div>
+            <div class="rs-view-panel" data-rs-panel="rs-trend-ba" data-rs-active-view="table">
+              <div class="rs-view-panel__chart" data-rs-chart-view hidden>
+                <div class="rs-trend-grid">
+                  <div class="rs-trend-card" data-rs-ba-chart-host></div>
+                </div>
+              </div>
+              <div class="rs-view-panel__table" data-rs-table-view>
+            @foreach (var series in r.BusinessAreaTrendSeries)
+            {
+              <h3 class="govuk-heading-s govuk-!-margin-bottom-2">@series.GroupName</h3>
+              <div class="dfe-f-table-wrapper govuk-!-margin-bottom-4" data-module="dfe-f-table">
+                <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Month</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Work items</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">FTE</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">MSC</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Combined</button></th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Change</button></th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @{
+                    ResourcingTrendMonthPoint? prevBaPt = null;
+                  }
+                  @foreach (var pt in series.Points)
+                  {
+                    var d = prevBaPt is null ? (decimal?)null : pt.ResourcingFteTotal - prevBaPt.ResourcingFteTotal;
+                    var dc = !d.HasValue ? "rs-delta rs-delta--flat" : d.Value > 0m ? "rs-delta rs-delta--up" : d.Value < 0m ? "rs-delta rs-delta--down" : "rs-delta rs-delta--flat";
+                    <tr class="govuk-table__row">
+                      <td class="govuk-table__cell">@pt.Label</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">@pt.SubmittedWorkItemCount</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">@pt.PermFteTotal.ToString("0.##")</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">@pt.MspFteTotal.ToString("0.##")</td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric"><strong>@pt.ResourcingFteTotal.ToString("0.##")</strong></td>
+                      <td class="govuk-table__cell govuk-table__cell--numeric">
+                        @if (d.HasValue)
+                        {
+                          <span class="@dc">@(d.Value > 0m ? "+" : "")@d.Value.ToString("0.##")</span>
+                        }
+                        else
+                        {
+                          <text>—</text>
+                        }
+                      </td>
+                    </tr>
+                    prevBaPt = pt;
+                  }
+                </tbody>
+                </table>
+              </div>
+            }
+              </div>@* /.rs-view-panel__table *@
+            </div>@* /.rs-view-panel *@
+          </div>
+        </div>
+      </div>
+      }
+
+      @await Html.PartialAsync("_ReportingDrilldownPanel")
+      @await Html.PartialAsync("_ReportingWorkItemModal")
+
+    </div>
+  </div>
+</div>
+
+@section Styles {
+  @await Html.PartialAsync("_MrReportCoreStyles")
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/reporting-table-export.css")" asp-append-version="true" />
+  <style>
+    .rs-trend-grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+      margin-bottom: 1rem;
+    }
+    .rs-trend-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+    }
+    .rs-trend-wrap {
+      height: 18rem;
+      position: relative;
+    }
+    .rs-summary-table .rs-col-area { width: 40%; }
+    .rs-summary-table .rs-col-metric { width: 12%; }
+    .rs-work-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1rem;
+      align-items: flex-start;
+    }
+    .rs-filter-card {
+      flex: 1 1 34rem;
+      border: 2px solid #1d70b8;
+      border-radius: 8px;
+      background: #f8fbff;
+      padding: 0.85rem 1rem;
+    }
+    .rs-filter-groups {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(12rem, 1fr));
+      gap: 0.75rem 1rem;
+    }
+    .rs-filter-group { margin: 0; min-width: 0; }
+    .rs-filter-checkboxes {
+      max-height: 13rem;
+      overflow-y: auto;
+      border: 1px solid #d2d5d8;
+      border-radius: 4px;
+      padding: 0.5rem 0.75rem;
+      background: #fff;
+    }
+    .rs-active-filters {
+      flex: 1 1 100%;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: -0.25rem;
+    }
+    .rs-active-filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .rs-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border: 1px solid #b1b4b6;
+      border-radius: 999px;
+      padding: 0.2rem 0.5rem;
+      background: #f3f2f1;
+      font-size: 0.875rem;
+      line-height: 1.2;
+    }
+    .rs-filter-chip__remove {
+      border: 0;
+      background: transparent;
+      color: #1d70b8;
+      cursor: pointer;
+      padding: 0;
+      font-size: 0.875rem;
+      text-decoration: underline;
+    }
+    .rs-work-filters__actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
+    .rs-delta {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .rs-delta--up { color: #00703c; }
+    .rs-delta--down { color: #d4351c; }
+    .rs-delta--flat { color: #505a5f; }
+    .rs-view-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .rs-view-toggle {
+      display: inline-flex;
+      border: 1px solid #b1b4b6;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .rs-view-toggle__btn {
+      border: 0;
+      background: #f3f2f1;
+      padding: 0.35rem 0.85rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #0b0c0c;
+      line-height: 1.3;
+    }
+    .rs-view-toggle__btn + .rs-view-toggle__btn { border-left: 1px solid #b1b4b6; }
+    .rs-view-toggle__btn--active {
+      background: #1d70b8;
+      color: #fff;
+    }
+    .rs-export-actions { margin-left: auto; }
+    .rs-export-png-btn { font-size: 0.8125rem !important; padding: 0.3rem 0.75rem !important; }
+    @@media (max-width: 900px) {
+      .rs-filter-groups { grid-template-columns: 1fr; }
+      .rs-work-filters__actions { align-items: flex-start; }
+    }
+  </style>
+}
+
+@section Scripts {
+  @await Html.PartialAsync("_ReportingDrilldownScripts", drillScriptModel)
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" nonce="@Context.Items["Nonce"]"></script>
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      var points = @Html.Raw(trendJson);
+      var dirTrendSeries = @Html.Raw(dirTrendJson);
+      var baTrendSeries = @Html.Raw(baTrendJson);
+      var workExportBaseUrl = @Html.Raw(workItemsExportBaseUrlJson);
+      var canChart = points && points.length && typeof Chart !== 'undefined';
+
+      var chartFont = { family: "'Inter', system-ui, -apple-system, sans-serif" };
+      var chartDefaults = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 14, boxHeight: 14, useBorderRadius: true, borderRadius: 3, font: Object.assign({ size: 12, weight: '600' }, chartFont), padding: 12 }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(11,12,12,0.92)',
+            titleFont: Object.assign({ size: 13, weight: '700' }, chartFont),
+            bodyFont: Object.assign({ size: 12 }, chartFont),
+            padding: 10,
+            cornerRadius: 6
+          }
+        },
+        scales: {
+          x: { ticks: { maxRotation: 45, minRotation: 0, font: Object.assign({ size: 11 }, chartFont) }, grid: { display: false } },
+          y: { beginAtZero: true, ticks: { font: Object.assign({ size: 11 }, chartFont) } }
+        }
+      };
+
+      var seriesColors = [
+        '#1d70b8', '#00703c', '#f47738', '#912b88', '#d4351c',
+        '#28a197', '#4c2c92', '#b58840', '#5694ca', '#003078'
+      ];
+
+      /* ===== Main trend charts ===== */
+      var labels = [];
+      var combined = [];
+      var perm = [];
+      var msp = [];
+      var change = [];
+      if (canChart) {
+        labels = points.map(function (p) { return p.label; });
+        combined = points.map(function (p) { return Number(p.resourcingFteTotal || 0); });
+        perm = points.map(function (p) { return Number(p.permFteTotal || 0); });
+        msp = points.map(function (p) { return Number(p.mspFteTotal || 0); });
+        change = combined.map(function (value, idx, arr) {
+          if (idx === 0) return 0;
+          return Number((value - arr[idx - 1]).toFixed(2));
+        });
+      }
+
+      var trendEl = document.getElementById('chart-resourcing-trend');
+      if (canChart && trendEl) {
+        new Chart(trendEl.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              { label: 'Combined', data: combined, borderColor: '#1d70b8', backgroundColor: 'rgba(29,112,184,0.14)', pointBackgroundColor: '#1d70b8', pointBorderColor: '#fff', pointBorderWidth: 1.5, borderWidth: 2.5, tension: 0.3, fill: true, pointRadius: 3, pointHoverRadius: 6 },
+              { label: 'FTE', data: perm, borderColor: '#00703c', backgroundColor: 'rgba(0,112,60,0.12)', pointBackgroundColor: '#00703c', pointBorderColor: '#fff', pointBorderWidth: 1.5, borderWidth: 2, tension: 0.3, fill: false, pointRadius: 3, pointHoverRadius: 6 },
+              { label: 'MSC', data: msp, borderColor: '#f47738', backgroundColor: 'rgba(244,119,56,0.12)', pointBackgroundColor: '#f47738', pointBorderColor: '#fff', pointBorderWidth: 1.5, borderWidth: 2, tension: 0.3, fill: false, pointRadius: 3, pointHoverRadius: 6 }
+            ]
+          },
+          options: chartDefaults
+        });
+      }
+
+      var changeEl = document.getElementById('chart-resourcing-change');
+      if (canChart && changeEl) {
+        new Chart(changeEl.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Change vs previous month',
+              data: change,
+              backgroundColor: change.map(function (v) { return v > 0 ? 'rgba(0,112,60,0.75)' : v < 0 ? 'rgba(212,53,28,0.75)' : 'rgba(177,180,182,0.8)'; }),
+              borderColor: change.map(function (v) { return v > 0 ? '#00703c' : v < 0 ? '#d4351c' : '#b1b4b6'; }),
+              borderWidth: 1.5,
+              borderRadius: 3
+            }]
+          },
+          options: Object.assign({}, chartDefaults, {
+            plugins: Object.assign({}, chartDefaults.plugins, { legend: { display: false } })
+          })
+        });
+      }
+
+      /* ===== Directorate + Business area trend charts (lazy-rendered on toggle) ===== */
+      var dirChartBuilt = false;
+      var baChartBuilt = false;
+
+      function buildGroupChart(host, seriesData, title) {
+        if (!seriesData || !seriesData.length || !host) return;
+        host.innerHTML = '';
+        var heading = document.createElement('h3');
+        heading.className = 'govuk-heading-s govuk-!-margin-bottom-2';
+        heading.textContent = title;
+        host.appendChild(heading);
+        var wrap = document.createElement('div');
+        wrap.className = 'rs-trend-wrap';
+        wrap.style.height = Math.max(18, seriesData.length * 2) + 'rem';
+        var canvas = document.createElement('canvas');
+        canvas.setAttribute('aria-label', title + ' chart');
+        wrap.appendChild(canvas);
+        host.appendChild(wrap);
+
+        var monthLabels = seriesData[0].points.map(function (p) { return p.label; });
+        var datasets = seriesData.map(function (s, i) {
+          var color = seriesColors[i % seriesColors.length];
+          return {
+            label: s.groupName,
+            data: s.points.map(function (p) { return Number(p.resourcingFteTotal || 0); }),
+            borderColor: color,
+            backgroundColor: color + '22',
+            pointBackgroundColor: color,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 1,
+            borderWidth: 2,
+            tension: 0.3,
+            fill: false,
+            pointRadius: 2,
+            pointHoverRadius: 5
+          };
+        });
+
+        new Chart(canvas.getContext('2d'), {
+          type: 'line',
+          data: { labels: monthLabels, datasets: datasets },
+          options: chartDefaults
+        });
+      }
+
+      /* ===== View toggle logic ===== */
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-rs-view]');
+        if (!btn) return;
+        var toggleGroup = btn.closest('[data-rs-view-toggle]');
+        if (!toggleGroup) return;
+        var panelId = toggleGroup.getAttribute('data-rs-view-toggle');
+        var view = btn.getAttribute('data-rs-view');
+        var panel = document.querySelector('[data-rs-panel="' + panelId + '"]');
+        if (!panel) return;
+
+        toggleGroup.querySelectorAll('[data-rs-view]').forEach(function (b) {
+          b.classList.toggle('rs-view-toggle__btn--active', b === btn);
+        });
+
+        panel.setAttribute('data-rs-active-view', view);
+        var chartView = panel.querySelector('[data-rs-chart-view]');
+        var tableView = panel.querySelector('[data-rs-table-view]');
+        if (chartView) chartView.hidden = (view !== 'chart');
+        if (tableView) tableView.hidden = (view !== 'table');
+
+        if (view === 'chart' && panelId === 'rs-trend-dir' && !dirChartBuilt) {
+          dirChartBuilt = true;
+          var host = document.querySelector('[data-rs-dir-chart-host]');
+          buildGroupChart(host, dirTrendSeries, 'Combined FTE+MSC by directorate');
+        }
+        if (view === 'chart' && panelId === 'rs-trend-ba' && !baChartBuilt) {
+          baChartBuilt = true;
+          var host = document.querySelector('[data-rs-ba-chart-host]');
+          buildGroupChart(host, baTrendSeries, 'Combined FTE+MSC by business area');
+        }
+      });
+
+      /* ===== PNG export ===== */
+      function downloadPng(canvas, filename) {
+        var link = document.createElement('a');
+        link.download = filename;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      }
+
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-rs-export-png]');
+        if (!btn) return;
+        var panelId = btn.getAttribute('data-rs-export-png');
+        var panel = document.querySelector('[data-rs-panel="' + panelId + '"]');
+        if (!panel) return;
+
+        var activeView = panel.getAttribute('data-rs-active-view') || 'chart';
+        var filename = 'resourcing-' + panelId + '-' + activeView + '.png';
+
+        if (activeView === 'chart') {
+          var chartView = panel.querySelector('[data-rs-chart-view]');
+          if (!chartView) return;
+          var canvases = chartView.querySelectorAll('canvas');
+          if (canvases.length === 1) {
+            downloadPng(canvases[0], filename);
+          } else if (canvases.length > 1 && typeof html2canvas !== 'undefined') {
+            html2canvas(chartView, { backgroundColor: '#ffffff', scale: 2 }).then(function (c) {
+              downloadPng(c, filename);
+            });
+          }
+        } else {
+          var tableView = panel.querySelector('[data-rs-table-view]');
+          if (!tableView || typeof html2canvas === 'undefined') return;
+          html2canvas(tableView, { backgroundColor: '#ffffff', scale: 2 }).then(function (c) {
+            downloadPng(c, filename);
+          });
+        }
+      });
+
+      function selectedValues(kind) {
+        return filterInputs
+          .filter(function (el) { return el.getAttribute('data-filter-kind') === kind && el.checked; })
+          .map(function (el) { return el.value; });
+      }
+
+      function escHtml(value) {
+        return String(value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      function escAttr(value) {
+        return escHtml(value)
+          .replace(/"/g, '&quot;');
+      }
+
+      function setFilterValue(kind, value, checked) {
+        filterInputs.forEach(function (el) {
+          if (el.getAttribute('data-filter-kind') === kind && el.value === value) {
+            el.checked = checked;
+          }
+        });
+      }
+
+      function renderActiveFilterChips(priorities, bands, rags) {
+        if (!chipWrap || !chipContainer) return;
+        var chips = [];
+        priorities.forEach(function (p) {
+          chips.push('<span class="rs-filter-chip">Priority: ' + escHtml(p) +
+            ' <button type="button" class="rs-filter-chip__remove" data-chip-kind="priority" data-chip-value="' + escAttr(p) + '" aria-label="Remove priority filter ' + escAttr(p) + '">x</button></span>');
+        });
+        bands.forEach(function (b) {
+          chips.push('<span class="rs-filter-chip">Band: ' + escHtml(b) +
+            ' <button type="button" class="rs-filter-chip__remove" data-chip-kind="band" data-chip-value="' + escAttr(b) + '" aria-label="Remove band filter ' + escAttr(b) + '">x</button></span>');
+        });
+        rags.forEach(function (r) {
+          chips.push('<span class="rs-filter-chip">RAG: ' + escHtml(r) +
+            ' <button type="button" class="rs-filter-chip__remove" data-chip-kind="rag" data-chip-value="' + escAttr(r) + '" aria-label="Remove RAG filter ' + escAttr(r) + '">x</button></span>');
+        });
+        chipWrap.innerHTML = chips.join('');
+        chipContainer.hidden = chips.length === 0;
+      }
+
+      var filterInputs = Array.prototype.slice.call(document.querySelectorAll('.rs-filter-input'));
+      var clearBtn = document.getElementById('rs-filter-clear');
+      var countEl = document.getElementById('rs-work-filter-count');
+      var chipContainer = document.getElementById('rs-active-filters');
+      var chipWrap = document.getElementById('rs-active-filter-chips');
+      var workExportWrap = document.getElementById('rs-work-export-wrap');
+      var workExportBar = workExportWrap ? workExportWrap.querySelector('.mr-table-export-bar') : null;
+      var workExportLink = workExportWrap ? workExportWrap.querySelector('.mr-table-export-bar__actions a') : null;
+      var workExportCount = workExportWrap ? workExportWrap.querySelector('.mr-table-export-bar__count') : null;
+      var rows = Array.prototype.slice.call(document.querySelectorAll('.rs-work-row'));
+
+      function buildWorkExportUrl(ids, label) {
+        if (!workExportBaseUrl || !ids || !ids.length) return '';
+        var params = new URLSearchParams();
+        ids.forEach(function (id) { params.append('ids', String(id)); });
+        params.set('label', label || 'resourcing-work-items');
+        return workExportBaseUrl + '?' + params.toString();
+      }
+
+      function applyWorkFilters() {
+        var priSelected = selectedValues('priority');
+        var bandSelected = selectedValues('band');
+        var ragSelected = selectedValues('rag');
+        var hasAnyFilter = priSelected.length + bandSelected.length + ragSelected.length > 0;
+        var visible = 0;
+        var visibleIds = [];
+        rows.forEach(function (row) {
+          var rowPri = row.getAttribute('data-priority') || '';
+          var rowBand = row.getAttribute('data-band') || '';
+          var rowRag = row.getAttribute('data-rag') || '';
+          var priMatch = priSelected.length === 0 || priSelected.indexOf(rowPri) >= 0;
+          var bandMatch = bandSelected.length === 0 || bandSelected.indexOf(rowBand) >= 0;
+          var ragMatch = ragSelected.length === 0 || ragSelected.indexOf(rowRag) >= 0;
+          var show = priMatch && bandMatch && ragMatch;
+          row.hidden = !show;
+          if (show) {
+            visible++;
+            var rawId = row.getAttribute('data-work-id');
+            var id = Number(rawId);
+            if (!Number.isNaN(id) && id > 0) visibleIds.push(id);
+          }
+        });
+        if (countEl) countEl.textContent = visible + ' of ' + rows.length + ' work items shown';
+        if (clearBtn) clearBtn.hidden = !hasAnyFilter;
+        if (workExportWrap && workExportBar && workExportLink && workExportCount) {
+          var uniqueIds = Array.from(new Set(visibleIds));
+          if (uniqueIds.length === 0) {
+            workExportBar.hidden = true;
+            workExportLink.hidden = true;
+          } else {
+            workExportBar.hidden = false;
+            workExportLink.hidden = false;
+            var label = hasAnyFilter ? 'resourcing-work-items-filtered' : 'resourcing-work-items';
+            workExportCount.textContent = uniqueIds.length + ' work item' + (uniqueIds.length === 1 ? '' : 's');
+            workExportLink.href = buildWorkExportUrl(uniqueIds, label);
+          }
+        }
+        renderActiveFilterChips(priSelected, bandSelected, ragSelected);
+      }
+
+      filterInputs.forEach(function (el) { el.addEventListener('change', applyWorkFilters); });
+      if (chipWrap) {
+        chipWrap.addEventListener('click', function (event) {
+          var btn = event.target.closest('.rs-filter-chip__remove');
+          if (!btn) return;
+          var kind = btn.getAttribute('data-chip-kind') || '';
+          var value = btn.getAttribute('data-chip-value') || '';
+          if (!kind || !value) return;
+          setFilterValue(kind, value, false);
+          applyWorkFilters();
+        });
+      }
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+          filterInputs.forEach(function (el) { el.checked = false; });
+          applyWorkFilters();
+        });
+      }
+      applyWorkFilters();
+    })();
+  </script>
+}

@@ -57,11 +57,79 @@ public static class RiskAuditTimelineBuilder
                 items.Add(row);
         }
 
+        items.AddRange(await LoadProgressUpdateItemsAsync(db, riskId, cancellationToken));
+
         return items
             .DistinctBy(i => $"{i.WhenUtc:o}|{i.What}|{i.Detail}")
             .OrderByDescending(i => i.WhenUtc)
             .Take(80)
             .ToList();
+    }
+
+    private static async Task<IReadOnlyList<RiskAuditTimelineItemVm>> LoadProgressUpdateItemsAsync(
+        CompassDbContext db,
+        int riskId,
+        CancellationToken cancellationToken)
+    {
+        var items = new List<RiskAuditTimelineItemVm>();
+
+        var comments = await db.Comments.AsNoTracking()
+            .Include(c => c.CreatedByUser)
+            .Where(c => c.EntityType == "Risk" && c.EntityId == riskId && !c.IsDeleted)
+            .OrderByDescending(c => c.CreatedAt)
+            .Take(120)
+            .ToListAsync(cancellationToken);
+
+        foreach (var comment in comments)
+        {
+            items.Add(new RiskAuditTimelineItemVm
+            {
+                WhenUtc = comment.CreatedAt,
+                ActorDisplay = CommentAuthor(comment.CreatedByUser),
+                What = "Progress update",
+                Detail = comment.CommentText,
+                IsAlert = false
+            });
+        }
+
+        var mitigations = await db.RiskActions.AsNoTracking()
+            .Include(ra => ra.Action)
+            .Where(ra => ra.RiskId == riskId && ra.Action != null && !ra.Action.IsDeleted)
+            .Select(ra => new { ra.ActionId, ra.Action!.Title, ra.Action.Notes })
+            .ToListAsync(cancellationToken);
+
+        foreach (var mitigation in mitigations)
+        {
+            foreach (var (when, text) in RiskCommentTimelineBuilder.ParseMitigationUpdateLines(mitigation.Notes))
+            {
+                if (string.IsNullOrWhiteSpace(text) || when == DateTime.MinValue)
+                    continue;
+
+                items.Add(new RiskAuditTimelineItemVm
+                {
+                    WhenUtc = when == DateTime.MinValue ? DateTime.MinValue : when,
+                    ActorDisplay = "Mitigation action",
+                    What = "Mitigation progress update",
+                    Detail = string.IsNullOrWhiteSpace(mitigation.Title)
+                        ? text.Trim()
+                        : $"{mitigation.Title}: {text.Trim()}",
+                    IsAlert = false
+                });
+            }
+        }
+
+        return items;
+    }
+
+    private static string CommentAuthor(User? user)
+    {
+        if (user == null)
+            return "Unknown user";
+        if (!string.IsNullOrWhiteSpace(user.Name))
+            return user.Name.Trim();
+        if (!string.IsNullOrWhiteSpace(user.Email))
+            return user.Email.Trim();
+        return "Unknown user";
     }
 
     /// <summary>Single plain-English paragraph summarising risk field changes since a point in time (for monthly review).</summary>
@@ -395,6 +463,9 @@ public static class RiskAuditTimelineBuilder
             "Notes" or "HowIdentified" => new ChangeLine($"{Friendly(key)} updated", false),
             "Cause" => new ChangeLine("Cause updated", false),
             "ImpactIfRealised" => new ChangeLine("Impact if realised updated", false),
+            "Contingency" => new ChangeLine("Contingency updated", false),
+            "Assurance" => new ChangeLine("Assurance updated", false),
+            "FinancialImpact" => new ChangeLine("Financial impact updated", false),
             _ => new ChangeLine($"{Friendly(key)} updated", false)
         };
     }

@@ -21,6 +21,15 @@
     "other" => "Other",
     _ => key
   };
+  string AissIssuesQuery(string criterionKey) => criterionKey switch
+  {
+    "bp" => "view=open&issueType=best_practice_issue",
+    "ux" => "view=open&issueType=usability_issue",
+    "a" or "aa" or "aaa" => "view=open&issueType=wcag_issue",
+    _ => "view=open"
+  };
+  string AissIssuesHref(int serviceId, string criterionKey) =>
+    $"{Model.AissWebBaseUrl}/services/{serviceId}/issues?{AissIssuesQuery(criterionKey)}";
 }
 @section Breadcrumbs {
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
@@ -107,7 +116,7 @@
     @if (s.ByService is { Count: > 0 } list)
     {
       <h2 class="govuk-heading-m govuk-!-margin-top-6">By service</h2>
-      <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-2">FIPS / AISS services with open issue counts and open issues by bucket.</p>
+      <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-2">FIPS / AISS services with open issue counts and open issues by bucket. Service names link to the service register in Compass. Issue counts link to open issues in AISS (opens in a new tab).</p>
       <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
         <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
         <table id="aiss-ops-byservice" class="govuk-table govuk-table--small-text-until-tablet govuk-!-margin-bottom-0 modern-aiss-byservice-table" aria-label="Open issues by service">
@@ -129,15 +138,47 @@
             @foreach (var row in list.OrderByDescending(x => x.IssuesOpen).ThenBy(x => x.Name))
             {
               var o = row.OpenByCriterion;
+              var registerId = row.Register?.Id;
+              var compassHref = registerId is { } rid && rid != Guid.Empty
+                ? Url.Action("FipsProduct", "ModernManage", new { id = rid, tab = "accessibility" })
+                : null;
+              var serviceLabel = string.IsNullOrWhiteSpace(row.Name) ? "—" : row.Name;
               <tr class="govuk-table__row">
-                <th scope="row" class="govuk-table__header modern-aiss-byservice-table__service">@(string.IsNullOrWhiteSpace(row.Name) ? "—" : row.Name)</th>
-                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.IssuesOpen</td>
-                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.A ?? 0)</td>
-                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.Aa ?? 0)</td>
-                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.Aaa ?? 0)</td>
-                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.Bp ?? 0)</td>
-                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.Ux ?? 0)</td>
-                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@(o?.Other ?? 0)</td>
+                <th scope="row" class="govuk-table__header modern-aiss-byservice-table__service">
+                  @if (!string.IsNullOrEmpty(compassHref))
+                  {
+                    <a href="@compassHref" class="govuk-link govuk-link--no-visited-state">@serviceLabel</a>
+                  }
+                  else
+                  {
+                    @serviceLabel
+                  }
+                </th>
+                @foreach (var cell in new (string key, int count)[]
+                {
+                  ("open", row.IssuesOpen),
+                  ("a", o?.A ?? 0),
+                  ("aa", o?.Aa ?? 0),
+                  ("aaa", o?.Aaa ?? 0),
+                  ("bp", o?.Bp ?? 0),
+                  ("ux", o?.Ux ?? 0),
+                  ("other", o?.Other ?? 0)
+                })
+                {
+                  <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">
+                    @if (cell.count > 0 && row.ServiceId > 0)
+                    {
+                      var criterionLabel = cell.key == "open" ? "open issues" : CriterionLabel(cell.key);
+                      <a href="@AissIssuesHref(row.ServiceId, cell.key)" class="govuk-link govuk-link--no-visited-state" target="_blank" rel="noopener noreferrer">
+                        @cell.count<span class="govuk-visually-hidden"> @criterionLabel for @serviceLabel (opens in AISS in new tab)</span>
+                      </a>
+                    }
+                    else
+                    {
+                      @cell.count
+                    }
+                  </td>
+                }
               </tr>
             }
           </tbody>

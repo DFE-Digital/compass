@@ -2,6 +2,7 @@ using Compass.Data;
 using Compass.Filters;
 using Compass.Models;
 using Compass.Models.DemandPipeline;
+using Compass.Services;
 using Compass.Services.DemandPipeline;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,11 +18,19 @@ public partial class ModernDemandController : Controller
 {
     private readonly CompassDbContext _db;
     private readonly Compass.Services.DemandPipeline.IDemandScoringFrameworkService _demandScoringFramework;
+    private readonly IWorkItemNotificationService _workItemNotifications;
+    private readonly ILogger<ModernDemandController> _logger;
 
-    public ModernDemandController(CompassDbContext db, Compass.Services.DemandPipeline.IDemandScoringFrameworkService demandScoringFramework)
+    public ModernDemandController(
+        CompassDbContext db,
+        Compass.Services.DemandPipeline.IDemandScoringFrameworkService demandScoringFramework,
+        IWorkItemNotificationService workItemNotifications,
+        ILogger<ModernDemandController> logger)
     {
         _db = db;
         _demandScoringFramework = demandScoringFramework;
+        _workItemNotifications = workItemNotifications;
+        _logger = logger;
     }
 
     /// <summary>Landing URL for demand — redirects to the dashboard.</summary>

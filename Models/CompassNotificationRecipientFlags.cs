@@ -13,4 +13,8 @@ public enum CompassNotificationRecipientFlags
     CentralOps = 4,
     /// <summary>Risk owner or issue owner / creator on the RAID record.</summary>
     RiskIssueOwnerOrCreator = 8,
+    /// <summary>PMO contact(s) on the work item.</summary>
+    PmoContact = 16,
+    /// <summary>User who created the work item.</summary>
+    WorkItemCreator = 32,
 }

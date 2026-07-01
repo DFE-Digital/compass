@@ -205,6 +205,7 @@ public class MonthlyUpdate
     public int? SubmittedByUserId { get; set; }
     public decimal? PermFte { get; set; }
     public decimal? MspFte { get; set; }
+    public string? PeopleNarrative { get; set; }
 }
 
 public class WorkAppUser

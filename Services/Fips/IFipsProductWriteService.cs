@@ -28,6 +28,7 @@ public interface IFipsProductWriteService
         int[]? channelIds,
         int[]? userGroupIds,
         int[]? typeIds,
+        int[]? directorateIds = null,
         int[]? categorisationItemIds = null,
         int? reportingContactUserId = null,
         /// <summary>When null, <see cref="CMDBProduct.IsEnterpriseService"/> is left unchanged.</summary>
