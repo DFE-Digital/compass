@@ -24,6 +24,24 @@ public interface IPerformanceReportingEligibilityService
     /// Checks if a specific product is excluded from reporting
     /// </summary>
     Task<bool> IsProductExcludedAsync(string fipsId, int year, int month);
+
+    /// <summary>
+    /// Checks if a product is excluded for a calendar month using document id and/or FIPS id.
+    /// </summary>
+    bool IsProductExcluded(
+        string? productDocumentId,
+        string? fipsId,
+        int year,
+        int month,
+        PerformanceReportingEligibilityCache cache);
+
+    /// <summary>
+    /// Checks if a product is excluded for any month overlapping a commission period.
+    /// </summary>
+    bool IsProductExcludedForCommission(
+        ProductDto product,
+        Commission commission,
+        PerformanceReportingEligibilityCache cache);
     
     /// <summary>
     /// Loads all eligibility configurations into memory for efficient batch checking
@@ -34,6 +52,17 @@ public interface IPerformanceReportingEligibilityService
     /// Determines if a product is required to report using pre-loaded cache (much faster for batch operations)
     /// </summary>
     bool IsReportingRequired(string fipsId, string? businessArea, int year, int month, PerformanceReportingEligibilityCache cache);
+
+    /// <summary>
+    /// Determines if a product is required to report using document id and/or FIPS id.
+    /// </summary>
+    bool IsReportingRequired(
+        string? productDocumentId,
+        string? fipsId,
+        string? businessArea,
+        int year,
+        int month,
+        PerformanceReportingEligibilityCache cache);
     
     /// <summary>
     /// Finds the next active reporting period after the given year/month

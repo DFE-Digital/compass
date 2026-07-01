@@ -30,6 +30,7 @@ public class ModernPerformanceController : Controller
     private readonly IPermissionService _permissions;
     private readonly IBusinessAreaAdminService _businessAreaAdmins;
     private readonly IBusinessAreaLeadershipService _businessAreaLeadership;
+    private readonly IPerformanceReportingEligibilityService _eligibilityService;
 
     public ModernPerformanceController(
         CompassDbContext context,
@@ -38,7 +39,8 @@ public class ModernPerformanceController : Controller
         ILogger<ModernPerformanceController> logger,
         IPermissionService permissions,
         IBusinessAreaAdminService businessAreaAdmins,
-        IBusinessAreaLeadershipService businessAreaLeadership)
+        IBusinessAreaLeadershipService businessAreaLeadership,
+        IPerformanceReportingEligibilityService eligibilityService)
     {
         _context = context;
         _productsApi = productsApi;
@@ -47,6 +49,7 @@ public class ModernPerformanceController : Controller
         _permissions = permissions;
         _businessAreaAdmins = businessAreaAdmins;
         _businessAreaLeadership = businessAreaLeadership;
+        _eligibilityService = eligibilityService;
     }
 
     private void SetChrome(string subNavItem)
@@ -126,6 +129,31 @@ public class ModernPerformanceController : Controller
 
         var allCatalog = await _productsApi.GetAllProductsAsync(null);
         return CommissionReportingProductScope.GetAllActivePublishedEligible(allCatalog);
+    }
+
+    private async Task<List<ProductDto>> GetCommissionScopeProductsAsync(
+        string userEmail,
+        string tab,
+        Commission commission,
+        CancellationToken cancellationToken)
+    {
+        var scopeProducts = (await GetProductsForCommissionTabAsync(userEmail, tab, cancellationToken))
+            .Where(p => CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commission, p))
+            .ToList();
+
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
+        return scopeProducts
+            .Where(p => !_eligibilityService.IsProductExcludedForCommission(p, commission, eligibilityCache))
+            .ToList();
+    }
+
+    private async Task<bool> IsProductExcludedFromCommissionAsync(
+        ProductDto product,
+        Commission commission,
+        CancellationToken cancellationToken)
+    {
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
+        return _eligibilityService.IsProductExcludedForCommission(product, commission, eligibilityCache);
     }
 
     /// <summary>Commission periods (open vs closed / other).</summary>
@@ -224,10 +252,7 @@ public class ModernPerformanceController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var scopeProducts = await GetProductsForCommissionTabAsync(userEmail, tab, cancellationToken);
-        var scopeProductsFiltered = scopeProducts
-            .Where(p => CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commission, p))
-            .ToList();
+        var scopeProductsFiltered = await GetCommissionScopeProductsAsync(userEmail, tab, commission, cancellationToken);
 
         var submissionList = await _context.CommissionSubmissions.AsNoTracking()
             .Include(cs => cs.MetricValues)
@@ -487,6 +512,12 @@ public class ModernPerformanceController : Controller
         {
             TempData["ErrorMessage"] =
                 "This product is not in scope for this commission (phase and type rules are set on the commission in Admin).";
+            return RedirectToAction(nameof(Commission), new { commissionId, tab = returnTabNorm });
+        }
+
+        if (await IsProductExcludedFromCommissionAsync(product, commission, cancellationToken))
+        {
+            TempData["ErrorMessage"] = "This product is excluded from performance reporting for this commission period.";
             return RedirectToAction(nameof(Commission), new { commissionId, tab = returnTabNorm });
         }
 
@@ -904,9 +935,7 @@ public class ModernPerformanceController : Controller
 
         tab = NormalizeCommissionTab(tab);
 
-        var scopeProducts = (await GetProductsForCommissionTabAsync(userEmail, tab, cancellationToken))
-            .Where(p => CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commission, p))
-            .ToList();
+        var scopeProducts = await GetCommissionScopeProductsAsync(userEmail, tab, commission, cancellationToken);
 
         var templateMetrics =
             await CommissionReportingMetricsHelper.LoadEnabledMetricsForCommissionPeriodAsync(_context, commission,
@@ -1247,9 +1276,7 @@ public class ModernPerformanceController : Controller
         Commission commission,
         CancellationToken cancellationToken)
     {
-        var scopeProducts = (await GetProductsForCommissionTabAsync(userEmail, tab, cancellationToken))
-            .Where(p => CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commission, p));
-
+        var scopeProducts = await GetCommissionScopeProductsAsync(userEmail, tab, commission, cancellationToken);
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in scopeProducts)
         {
@@ -1477,6 +1504,15 @@ public class ModernPerformanceController : Controller
         if (!CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commission, product))
         {
             errors.Add("Product is not in scope for this commission (phase/type rules).");
+            return errors;
+        }
+
+        if (_eligibilityService.IsProductExcludedForCommission(
+                product,
+                commission,
+                await _eligibilityService.LoadEligibilityCacheAsync()))
+        {
+            errors.Add("Product is excluded from performance reporting for this commission period.");
             return errors;
         }
 

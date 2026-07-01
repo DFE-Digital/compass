@@ -517,6 +517,25 @@ public partial class ModernReportingController : Controller
         }
     }
 
+    /// <summary>Live performance submission progress — same in-scope products as commission workspace All products.</summary>
+    [HttpGet("performance-submission-progress")]
+    public async Task<IActionResult> PerformanceSubmissionProgress(int? commissionId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _commissionReportingAnalytics.BuildPerformanceSubmissionProgressPageAsync(commissionId, cancellationToken);
+            SetNav("reporting-performance-submission-progress");
+            return View("~/Views/Modern/Reporting/PerformanceSubmissionProgress.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading performance submission progress report");
+            TempData["ErrorMessage"] = "Could not load performance submission progress. Please try again.";
+            SetNav("reporting-performance-submission-progress");
+            return View("~/Views/Modern/Reporting/PerformanceSubmissionProgress.cshtml", new ModernReportingPerformanceSubmissionProgressViewModel());
+        }
+    }
+
     /// <summary>Published service assessments from SAS: portfolio summary, published list, and actions by standard.</summary>
     [HttpGet("assessments")]
     public async Task<IActionResult> Assessments(CancellationToken cancellationToken = default)
