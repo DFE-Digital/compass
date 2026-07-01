@@ -1,0 +1,139 @@
+@{
+    var resources = ViewBag.Resources as string[] ?? Array.Empty<string>();
+    var environments = ViewBag.Environments as string[] ?? new[] { "DEV", "TEST", "PROD" };
+    var isInternal = ViewBag.IsInternal as bool? ?? false;
+}
+
+<div class="developers-docs__intro govuk-!-margin-bottom-6">
+    <span class="govuk-caption-xl">Your keys</span>
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">Request an API key</h1>
+    <p class="govuk-body-l">
+        Anyone can request read-only access to all data. Other permissions are reviewed by an admin.
+        @if (isInternal)
+        {
+            <text> As an @@education.gov.uk account, read-only requests are approved automatically.</text>
+        }
+    </p>
+</div>
+
+@if (ViewBag.PortalError != null)
+{
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
+        <h2 class="govuk-error-summary__title">There is a problem</h2>
+        <div class="govuk-error-summary__body"><p>@ViewBag.PortalError</p></div>
+    </div>
+}
+
+<form method="post" action="@Url.Action("RequestSubmit", "DocsDeveloperApi")">
+    @Html.AntiForgeryToken()
+
+    <div class="govuk-form-group">
+        <label class="govuk-label" for="environment">Environment</label>
+        <div class="govuk-hint">Must match your Azure environment: DEV, TEST or PROD.</div>
+        <select class="govuk-select" id="environment" name="environment" required>
+            <option value="">Choose environment</option>
+            @foreach (var env in environments)
+            {
+                <option value="@env">@env</option>
+            }
+        </select>
+    </div>
+
+    <div class="govuk-form-group">
+        <label class="govuk-label" for="projectSlug">Short project name</label>
+        <div class="govuk-hint">Lowercase letters, numbers and hyphens (for example <code>powerbi-risks</code>). Used in the token name.</div>
+        <input class="govuk-input govuk-input--width-20" id="projectSlug" name="projectSlug" type="text" required maxlength="32" pattern="[a-z0-9][a-z0-9-]*" />
+    </div>
+
+    <div class="govuk-form-group">
+        <label class="govuk-label" for="justification">Why do you need this key?</label>
+        <textarea class="govuk-textarea" id="justification" name="justification" rows="3"></textarea>
+    </div>
+
+    <div class="govuk-form-group">
+        <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+            <div class="govuk-checkboxes__item">
+                <input class="govuk-checkboxes__input" id="readOnlyAllData" name="readOnlyAllData" type="checkbox" value="true" checked data-read-only-all />
+                <label class="govuk-label govuk-checkboxes__label" for="readOnlyAllData">
+                    Read-only access to <strong>all</strong> API data (recommended for reporting and Power BI)
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <details class="govuk-details govuk-!-margin-bottom-4" data-advanced-permissions>
+        <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Custom permissions (create / update on specific resources)</span></summary>
+        <div class="govuk-details__text">
+            <p class="govuk-body">Select only what you need. Delete is not available — contact <a class="govuk-link" href="mailto:design.ops@education.gov.uk">design.ops@education.gov.uk</a>.</p>
+            <table class="govuk-table govuk-table--small">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th class="govuk-table__header">Resource</th>
+                        <th class="govuk-table__header">Read</th>
+                        <th class="govuk-table__header">Create</th>
+                        <th class="govuk-table__header">Update</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var resource in resources)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">@resource</td>
+                            <td class="govuk-table__cell">
+                                <div class="govuk-checkboxes govuk-checkboxes--small">
+                                    <div class="govuk-checkboxes__item">
+                                        <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_read" id="@(resource)_read" value="on" data-perm-checkbox />
+                                        <label class="govuk-label govuk-checkboxes__label" for="@(resource)_read"><span class="govuk-visually-hidden">Read @resource</span></label>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="govuk-table__cell">
+                                <div class="govuk-checkboxes govuk-checkboxes--small">
+                                    <div class="govuk-checkboxes__item">
+                                        <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_create" id="@(resource)_create" value="on" data-perm-checkbox />
+                                        <label class="govuk-label govuk-checkboxes__label" for="@(resource)_create"><span class="govuk-visually-hidden">Create @resource</span></label>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="govuk-table__cell">
+                                <div class="govuk-checkboxes govuk-checkboxes--small">
+                                    <div class="govuk-checkboxes__item">
+                                        <input class="govuk-checkboxes__input" type="checkbox" name="@(resource)_update" id="@(resource)_update" value="on" data-perm-checkbox />
+                                        <label class="govuk-label govuk-checkboxes__label" for="@(resource)_update"><span class="govuk-visually-hidden">Update @resource</span></label>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </details>
+
+    <button type="submit" class="govuk-button">Submit request</button>
+    <a class="govuk-link govuk-!-margin-left-3" href="@Url.Action("Index", "DocsDeveloperApi")">Cancel</a>
+</form>
+
+@section Scripts {
+    <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+        (function () {
+            var readOnlyAll = document.querySelector('[data-read-only-all]');
+            var permBoxes = document.querySelectorAll('[data-perm-checkbox]');
+            function sync() {
+                var disable = readOnlyAll && readOnlyAll.checked;
+                permBoxes.forEach(function (cb) {
+                    cb.disabled = disable;
+                    if (disable) cb.checked = false;
+                });
+            }
+            if (readOnlyAll) readOnlyAll.addEventListener('change', sync);
+            permBoxes.forEach(function (cb) {
+                cb.addEventListener('change', function () {
+                    if (cb.checked && readOnlyAll) readOnlyAll.checked = false;
+                    sync();
+                });
+            });
+            sync();
+        })();
+    </script>
+}

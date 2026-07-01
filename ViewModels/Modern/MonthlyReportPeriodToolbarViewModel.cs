@@ -41,22 +41,27 @@ public class MonthlyReportPeriodToolbarViewModel
     public string PreviousNavUrl { get; set; } = "#";
     public string NextNavUrl { get; set; } = "#";
 
+    public string? ExportUrl { get; set; }
+
     public static MonthlyReportPeriodToolbarViewModel FromSubmissionProgress(
         ModernMonthlySubmissionProgressViewModel m,
         string formAction,
-        Func<int?, int?, int?, int?, string> navUrlBuilder)
+        Func<int?, int?, int?, int?, string> navUrlBuilder,
+        string? exportUrl = null)
     {
         var periodMetaParts = new List<string>();
         if (!string.IsNullOrWhiteSpace(m.SubmissionWindowDescription))
             periodMetaParts.Add(m.SubmissionWindowDescription);
         periodMetaParts.Add($"Submission window {m.SubmissionWindowStart:d MMM} – {m.SubmissionWindowEnd:d MMM yyyy}");
 
-        return Create(
+        var toolbar = Create(
             m,
             formAction,
             navUrlBuilder,
             idPrefix: "msp",
             periodMeta: periodMetaParts.Count == 0 ? null : " · " + string.Join(" · ", periodMetaParts));
+        toolbar.ExportUrl = exportUrl;
+        return toolbar;
     }
 
     public static MonthlyReportPeriodToolbarViewModel FromMonthlyReport(

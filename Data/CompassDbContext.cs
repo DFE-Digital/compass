@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System.Data;
 using System.Text.Json;
 using Compass.Models;
@@ -50,6 +51,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<BusinessAreaLeadershipMember> BusinessAreaLeadershipMembers { get; set; }
     public DbSet<CompassNotificationSetting> CompassNotificationSettings { get; set; }
     public DbSet<CompassNotificationEmailLog> CompassNotificationEmailLogs { get; set; }
+    public DbSet<HttpErrorEmailSettings> HttpErrorEmailSettings { get; set; }
     public DbSet<UserPreference> UserPreferences { get; set; }
 
     // Role-based access control
@@ -63,6 +65,8 @@ public partial class CompassDbContext : DbContext
     // API Management
     public DbSet<ApiToken> ApiTokens { get; set; }
     public DbSet<ApiTokenPermission> ApiTokenPermissions { get; set; }
+    public DbSet<ApiTokenRequest> ApiTokenRequests { get; set; }
+    public DbSet<ApiTokenMember> ApiTokenMembers { get; set; }
     public DbSet<ApiRequestLog> ApiRequestLogs { get; set; }
 
     // Operational reports
@@ -230,6 +234,7 @@ public partial class CompassDbContext : DbContext
     public DbSet<DirectorateLookup> DirectorateLookups { get; set; }
     public DbSet<RiskAppetiteLookup> RiskAppetiteLookups { get; set; }
     public DbSet<RagStatusLookup> RagStatusLookups { get; set; }
+    public DbSet<ResourceBandLookup> ResourceBandLookups { get; set; }
 
     // Project relationships
     public DbSet<ProjectStatusUpdate> ProjectStatusUpdates { get; set; }
@@ -270,6 +275,20 @@ public partial class CompassDbContext : DbContext
     public DbSet<AssumptionBusinessArea> AssumptionBusinessAreas { get; set; }
     public DbSet<RaidEscalationTierChangeRequest> RaidEscalationTierChangeRequests { get; set; }
     public DbSet<Compass.Models.Raid.RaidMonthlyReview> RaidMonthlyReviews { get; set; }
+
+    // RAID Registers
+    public DbSet<RaidRegister> RaidRegisters { get; set; }
+    public DbSet<RaidRegisterUser> RaidRegisterUsers { get; set; }
+    public DbSet<RaidRegisterWorkItem> RaidRegisterWorkItems { get; set; }
+    public DbSet<RaidRegisterService> RaidRegisterServices { get; set; }
+    public DbSet<RaidRegisterDirectorate> RaidRegisterDirectorates { get; set; }
+    public DbSet<RaidRegisterBusinessArea> RaidRegisterBusinessAreas { get; set; }
+    public DbSet<RaidRegisterRisk> RaidRegisterRisks { get; set; }
+    public DbSet<RaidRegisterIssue> RaidRegisterIssues { get; set; }
+    public DbSet<RaidRegisterAssumption> RaidRegisterAssumptions { get; set; }
+    public DbSet<RaidRegisterDependency> RaidRegisterDependencies { get; set; }
+    public DbSet<RaidRegisterNearMiss> RaidRegisterNearMisses { get; set; }
+    public DbSet<RaidRegisterSpreadsheetLayout> RaidRegisterSpreadsheetLayouts { get; set; }
 
     /// <summary>CMS access requests (Design histories, DDT manual, etc.) for Operations.</summary>
     public DbSet<CmsAccessRequest> CmsAccessRequests { get; set; }
@@ -352,15 +371,20 @@ public partial class CompassDbContext : DbContext
     // FIPS CMDB products
     public DbSet<CMDBProduct> CMDBProducts { get; set; }
     public DbSet<CMDBProductBusinessArea> CMDBProductBusinessAreas { get; set; }
+    public DbSet<CMDBProductDirectorate> CMDBProductDirectorates { get; set; }
     public DbSet<CMDBProductChannel> CMDBProductChannels { get; set; }
     public DbSet<CMDBProductUserGroup> CMDBProductUserGroups { get; set; }
     public DbSet<CMDBProductType> CMDBProductTypes { get; set; }
     public DbSet<CMDBProductFipsCategorisationItem> CMDBProductFipsCategorisationItems { get; set; }
     public DbSet<CMDBProductContact> CMDBProductContacts { get; set; }
+    public DbSet<CMDBProductObjective> CMDBProductObjectives { get; set; }
+    public DbSet<CMDBProductMission> CMDBProductMissions { get; set; }
+    public DbSet<CMDBProductWorkItemTag> CMDBProductWorkItemTags { get; set; }
     public DbSet<FipsCmdbSyncRule> FipsCmdbSyncRules { get; set; }
 
     // FIPS configuration
     public DbSet<FipsBusinessArea> FipsBusinessAreas { get; set; }
+    public DbSet<FipsDirectorate> FipsDirectorates { get; set; }
     public DbSet<FipsChannel> FipsChannels { get; set; }
     public DbSet<FipsType> FipsTypes { get; set; }
     public DbSet<FipsUserGroup> FipsUserGroups { get; set; }
@@ -401,6 +425,7 @@ public partial class CompassDbContext : DbContext
 
         var auditEntries = PrepareAuditEntries();
         var result = base.SaveChanges(acceptAllChangesOnSuccess);
+        RefreshAuditEntityIds(auditEntries);
         AppendAuditEntries(auditEntries, acceptAllChangesOnSuccess);
         return result;
     }
@@ -416,6 +441,7 @@ public partial class CompassDbContext : DbContext
 
         var auditEntries = PrepareAuditEntries();
         var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        RefreshAuditEntityIds(auditEntries);
         await AppendAuditEntriesAsync(auditEntries, acceptAllChangesOnSuccess, cancellationToken);
         return result;
     }
@@ -423,10 +449,17 @@ public partial class CompassDbContext : DbContext
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         => SaveChangesAsync(true, cancellationToken);
 
-    private List<AuditLog> PrepareAuditEntries()
+    private sealed class PendingAuditEntry
     {
-        ChangeTracker.DetectChanges();
-        var auditEntries = new List<AuditLog>();
+        public required AuditLog Audit { get; init; }
+        public required EntityEntry Entry { get; init; }
+    }
+
+    private List<PendingAuditEntry> PrepareAuditEntries()
+    {
+        // Do not call ChangeTracker.DetectChanges() here — SaveChanges will detect changes once.
+        // A full-graph DetectChanges is expensive when many entities are tracked (e.g. FIPS product Includes).
+        var auditEntries = new List<PendingAuditEntry>();
         var timestamp = DateTime.UtcNow;
         var currentUserId = _auditContextProvider.UserId;
         var currentUserName = _auditContextProvider.UserName;
@@ -441,7 +474,7 @@ public partial class CompassDbContext : DbContext
                 continue;
             }
 
-            if (entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)
+            if (entry.State is EntityState.Detached or EntityState.Unchanged)
             {
                 continue;
             }
@@ -482,10 +515,27 @@ public partial class CompassDbContext : DbContext
                     break;
             }
 
-            auditEntries.Add(audit);
+            auditEntries.Add(new PendingAuditEntry { Audit = audit, Entry = entry });
         }
 
         return auditEntries;
+    }
+
+    private void RefreshAuditEntityIds(IEnumerable<PendingAuditEntry> auditEntries)
+    {
+        foreach (var pending in auditEntries)
+        {
+            if (pending.Entry.State == EntityState.Detached)
+            {
+                continue;
+            }
+
+            var entityId = GetPrimaryKey(pending.Entry);
+            if (!string.IsNullOrWhiteSpace(entityId))
+            {
+                pending.Audit.EntityId = entityId;
+            }
+        }
     }
 
     private string SerializePropertyValues(IEnumerable<PropertyEntry> properties, bool includeOriginalValues)
@@ -598,9 +648,9 @@ public partial class CompassDbContext : DbContext
         return IsMissingAuditColumnException(exception.InnerException);
     }
 
-    private void AppendAuditEntries(IEnumerable<AuditLog> auditEntries, bool acceptAllChangesOnSuccess)
+    private void AppendAuditEntries(IEnumerable<PendingAuditEntry> auditEntries, bool acceptAllChangesOnSuccess)
     {
-        var entries = auditEntries.ToList();
+        var entries = auditEntries.Select(p => p.Audit).ToList();
         if (!entries.Any())
         {
             return;
@@ -627,9 +677,9 @@ public partial class CompassDbContext : DbContext
         }
     }
 
-    private async Task AppendAuditEntriesAsync(IEnumerable<AuditLog> auditEntries, bool acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+    private async Task AppendAuditEntriesAsync(IEnumerable<PendingAuditEntry> auditEntries, bool acceptAllChangesOnSuccess, CancellationToken cancellationToken)
     {
-        var entries = auditEntries.ToList();
+        var entries = auditEntries.Select(p => p.Audit).ToList();
         if (!entries.Any())
         {
             return;
@@ -1120,6 +1170,66 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<Risk>()
             .HasIndex(r => r.ProximityDate);
 
+        // Risk: multiple FK columns pointing at the same lookup tables need explicit config
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.CurrentLikelihood)
+            .WithMany()
+            .HasForeignKey(r => r.CurrentLikelihoodId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.CurrentImpactLevel)
+            .WithMany()
+            .HasForeignKey(r => r.CurrentImpactLevelId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.ResidualLikelihoodLevel)
+            .WithMany()
+            .HasForeignKey(r => r.ResidualLikelihoodId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.ResidualImpactLevel)
+            .WithMany()
+            .HasForeignKey(r => r.ResidualImpactLevelId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.ToleranceLikelihood)
+            .WithMany()
+            .HasForeignKey(r => r.ToleranceLikelihoodId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Risk>()
+            .HasOne(r => r.ToleranceImpactLevel)
+            .WithMany()
+            .HasForeignKey(r => r.ToleranceImpactLevelId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<RiskRatingHistory>(e =>
+        {
+            e.HasOne(h => h.Risk)
+                .WithMany(r => r.RatingHistory)
+                .HasForeignKey(h => h.RiskId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(h => h.Likelihood)
+                .WithMany()
+                .HasForeignKey(h => h.LikelihoodId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(h => h.ImpactLevel)
+                .WithMany()
+                .HasForeignKey(h => h.ImpactLevelId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(h => h.ChangedByUser)
+                .WithMany()
+                .HasForeignKey(h => h.ChangedByUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasIndex(h => h.RiskId);
+            e.HasIndex(h => new { h.RiskId, h.RatingType });
+            e.HasIndex(h => h.ChangedAt);
+        });
+
         modelBuilder.Entity<RiskKeyRiskIndicator>(e =>
         {
             e.HasOne(x => x.Risk)
@@ -1128,7 +1238,12 @@ public partial class CompassDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => x.RiskId);
             e.HasIndex(x => new { x.RiskId, x.SortOrder });
+            ConfigureRaidNarrativeColumns(e.Property(x => x.Description));
+            ConfigureRaidNarrativeColumns(e.Property(x => x.Metric));
+            ConfigureRaidNarrativeColumns(e.Property(x => x.Threshold));
         });
+
+        ConfigureRaidRiskNarrativeColumns(modelBuilder.Entity<Risk>());
 
         // Issue configuration
         modelBuilder.Entity<Issue>()
@@ -1317,6 +1432,101 @@ public partial class CompassDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        // ── RAID Registers ──────────────────────────────────────────
+
+        modelBuilder.Entity<RaidRegister>(e =>
+        {
+            e.HasIndex(x => x.CreatedByUserId);
+            e.HasIndex(x => x.DirectorateLookupId);
+            e.HasIndex(x => x.BusinessAreaLookupId);
+            e.HasOne(x => x.CreatedByUser).WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.DirectorateLookup).WithMany().HasForeignKey(x => x.DirectorateLookupId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.BusinessAreaLookup).WithMany().HasForeignKey(x => x.BusinessAreaLookupId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterUser>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.UserId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Users).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterWorkItem>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.ProjectId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.WorkItems).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Project).WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterService>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.FipsServiceId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Services).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsService).WithMany().HasForeignKey(x => x.FipsServiceId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterDirectorate>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.DirectorateLookupId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Directorates).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.DirectorateLookup).WithMany().HasForeignKey(x => x.DirectorateLookupId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterBusinessArea>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.BusinessAreaLookupId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.BusinessAreas).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.BusinessAreaLookup).WithMany().HasForeignKey(x => x.BusinessAreaLookupId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterRisk>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.RiskId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Risks).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Risk).WithMany().HasForeignKey(x => x.RiskId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterIssue>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.IssueId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Issues).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Issue).WithMany().HasForeignKey(x => x.IssueId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterAssumption>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.AssumptionId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Assumptions).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Assumption).WithMany().HasForeignKey(x => x.AssumptionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterDependency>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.DependencyId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.Dependencies).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Dependency).WithMany().HasForeignKey(x => x.DependencyId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterNearMiss>(e =>
+        {
+            e.HasKey(x => new { x.RaidRegisterId, x.NearMissId });
+            e.HasOne(x => x.RaidRegister).WithMany(r => r.NearMisses).HasForeignKey(x => x.RaidRegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.NearMiss).WithMany().HasForeignKey(x => x.NearMissId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AddedByUser).WithMany().HasForeignKey(x => x.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RaidRegisterSpreadsheetLayout>(e =>
+        {
+            e.HasIndex(x => x.EntityType).IsUnique();
+            e.Property(x => x.EntityType).HasMaxLength(32);
+            e.Property(x => x.ColumnOrderJson).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.UpdatedByUser).WithMany().HasForeignKey(x => x.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<Issue>()
             .HasIndex(i => i.ProductDocumentId);
 
@@ -1333,7 +1543,7 @@ public partial class CompassDbContext : DbContext
         {
             e.Property(x => x.Title).HasMaxLength(500);
             e.Property(x => x.EventKind).HasMaxLength(50);
-            e.Property(x => x.DecisionSummary).HasColumnType("nvarchar(max)");
+            ConfigureRaidNarrativeColumns(e.Property(x => x.DecisionSummary));
             e.HasOne(x => x.Issue)
                 .WithMany(i => i.AssuranceEvents)
                 .HasForeignKey(x => x.IssueId)
@@ -1342,13 +1552,7 @@ public partial class CompassDbContext : DbContext
             e.HasIndex(x => new { x.IssueId, x.SortOrder });
         });
 
-        modelBuilder.Entity<Issue>()
-            .Property(i => i.DetailedCause)
-            .HasColumnType("nvarchar(max)");
-
-        modelBuilder.Entity<Issue>()
-            .Property(i => i.AssuranceArrangements)
-            .HasColumnType("nvarchar(max)");
+        ConfigureRaidIssueNarrativeColumns(modelBuilder.Entity<Issue>());
 
         // Milestone configuration
         modelBuilder.Entity<Milestone>()
@@ -1561,6 +1765,16 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<Models.Action>()
             .HasIndex(a => new { a.Status, a.Priority });
+
+        modelBuilder.Entity<Models.Action>()
+            .Property(a => a.Title)
+            .HasMaxLength(RaidNarrativeMaxLength)
+            .HasColumnType("nvarchar(4000)");
+
+        modelBuilder.Entity<Models.Action>()
+            .Property(a => a.Notes)
+            .HasMaxLength(RaidNarrativeMaxLength)
+            .HasColumnType("nvarchar(4000)");
 
         modelBuilder.Entity<Models.Action>()
             .HasIndex(a => a.DueDate);
@@ -1872,6 +2086,16 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<DeliveryPriority>()
             .HasIndex(dp => dp.SortOrder);
 
+        modelBuilder.Entity<ResourceBandLookup>()
+            .HasIndex(rb => rb.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<ResourceBandLookup>()
+            .HasIndex(rb => rb.IsActive);
+
+        modelBuilder.Entity<ResourceBandLookup>()
+            .HasIndex(rb => rb.SortOrder);
+
         // User preferences
         modelBuilder.Entity<UserPreference>()
             .HasOne(up => up.User)
@@ -1902,6 +2126,35 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ApiToken>()
             .HasIndex(at => at.ExpiresAt);
+
+        modelBuilder.Entity<ApiToken>()
+            .HasIndex(at => at.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<ApiToken>()
+            .HasIndex(at => at.OwnerEmail);
+
+        modelBuilder.Entity<ApiTokenRequest>()
+            .HasOne(r => r.IssuedApiToken)
+            .WithMany()
+            .HasForeignKey(r => r.IssuedApiTokenId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ApiTokenRequest>()
+            .HasIndex(r => r.Status);
+
+        modelBuilder.Entity<ApiTokenRequest>()
+            .HasIndex(r => r.RequestorEmail);
+
+        modelBuilder.Entity<ApiTokenMember>()
+            .HasOne(m => m.ApiToken)
+            .WithMany(t => t.Members)
+            .HasForeignKey(m => m.ApiTokenId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ApiTokenMember>()
+            .HasIndex(m => new { m.ApiTokenId, m.UserEmail })
+            .IsUnique();
 
         modelBuilder.Entity<ApiTokenPermission>()
             .HasOne(atp => atp.ApiToken)
@@ -1977,6 +2230,18 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<AccessibilityEmailConfiguration>()
             .HasIndex(ec => new { ec.Purpose, ec.EmailAddress })
             .IsUnique();
+
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .HasKey(s => s.Id);
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .Property(s => s.Id)
+            .ValueGeneratedNever();
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .Property(s => s.ContactEmail)
+            .HasMaxLength(256);
+        modelBuilder.Entity<HttpErrorEmailSettings>()
+            .Property(s => s.UpdatedByEmail)
+            .HasMaxLength(256);
 
         // StatementTemplate configuration
         modelBuilder.Entity<StatementTemplate>()
@@ -2062,6 +2327,11 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ProjectRagHistory>()
             .HasIndex(prh => prh.ChangedAt);
+
+        ConfigureMonthlyReportTextColumns(modelBuilder.Entity<ProjectMonthlyUpdate>());
+        ConfigureMonthlyReportTextColumns(modelBuilder.Entity<MonthlyUpdateNarrative>());
+        ConfigureMonthlyReportTextColumns(modelBuilder.Entity<Project>());
+        ConfigureMonthlyReportTextColumns(modelBuilder.Entity<ProjectRagHistory>());
 
         // ProjectSuccess configuration
         modelBuilder.Entity<ProjectSuccess>()
@@ -3352,7 +3622,9 @@ public partial class CompassDbContext : DbContext
             e.Property(x => x.CMDBDescription).HasColumnType("nvarchar(max)");
             e.Property(x => x.UserDescription).HasColumnType("nvarchar(max)");
             e.Property(x => x.LastCmdbSnapshotJson).HasColumnType("nvarchar(max)");
+            e.Property(x => x.OtherDepartments).HasColumnType("nvarchar(max)");
             e.HasOne(x => x.Phase).WithMany().HasForeignKey(x => x.PhaseId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.RiskAppetiteLookup).WithMany().HasForeignKey(x => x.RiskAppetiteLookupId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<FipsCmdbSyncRule>(e =>
@@ -3379,6 +3651,23 @@ public partial class CompassDbContext : DbContext
         {
             e.HasOne(x => x.CMDBProduct).WithMany(p => p.BusinessAreas).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.FipsBusinessArea).WithMany().HasForeignKey(x => x.FipsBusinessAreaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FipsDirectorate>(e =>
+        {
+            e.HasIndex(x => x.DirectorateLookupId)
+                .IsUnique()
+                .HasFilter("[DirectorateLookupId] IS NOT NULL");
+            e.HasOne(x => x.DirectorateLookup)
+                .WithMany()
+                .HasForeignKey(x => x.DirectorateLookupId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<CMDBProductDirectorate>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.Directorates).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.FipsDirectorate).WithMany().HasForeignKey(x => x.FipsDirectorateId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<CMDBProductChannel>(e =>
@@ -3417,6 +3706,33 @@ public partial class CompassDbContext : DbContext
         {
             e.HasOne(x => x.CMDBProduct).WithMany(p => p.Contacts).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.FipsContactRole).WithMany().HasForeignKey(x => x.FipsContactRoleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CMDBProductObjective>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.Objectives).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Objective).WithMany().HasForeignKey(x => x.ObjectiveId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.CMDBProductId, x.ObjectiveId }).IsUnique();
+        });
+
+        modelBuilder.Entity<CMDBProductMission>(e =>
+        {
+            e.HasOne(x => x.CMDBProduct).WithMany(p => p.Missions).HasForeignKey(x => x.CMDBProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Mission).WithMany().HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.CMDBProductId, x.MissionId }).IsUnique();
+        });
+
+        modelBuilder.Entity<CMDBProductWorkItemTag>(e =>
+        {
+            e.HasKey(x => new { x.CMDBProductId, x.WorkItemTagLookupId });
+            e.HasOne(x => x.CMDBProduct)
+                .WithMany(p => p.WorkItemTags)
+                .HasForeignKey(x => x.CMDBProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.WorkItemTagLookup)
+                .WithMany()
+                .HasForeignKey(x => x.WorkItemTagLookupId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<FipsUserGroup>(e =>
@@ -3654,6 +3970,70 @@ public partial class CompassDbContext : DbContext
             e.Property(x => x.Reason).HasColumnType("nvarchar(max)");
         });
 
+        modelBuilder.Entity<Comment>(e =>
+        {
+            ConfigureRaidNarrativeColumns(e.Property(c => c.CommentText));
+        });
+
+    }
+
+    private const int RaidNarrativeMaxLength = 4000;
+
+    private static void ConfigureRaidNarrativeColumns<T>(PropertyBuilder<T> property) =>
+        property.HasMaxLength(RaidNarrativeMaxLength).HasColumnType("nvarchar(4000)");
+
+    private static void ConfigureRaidRiskNarrativeColumns(EntityTypeBuilder<Risk> e)
+    {
+        e.Property(r => r.Title).HasMaxLength(200).HasColumnType("nvarchar(200)");
+        ConfigureRaidNarrativeColumns(e.Property(r => r.Description));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.Cause));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.ImpactIfRealised));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.Contingency));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.Assurance));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.FinancialImpact));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.Notes));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.ResponseStrategy));
+        ConfigureRaidNarrativeColumns(e.Property(r => r.HowIdentified));
+        e.Property(r => r.Status).HasMaxLength(20).HasColumnType("nvarchar(20)");
+        e.Property(r => r.Response).HasMaxLength(20).HasColumnType("nvarchar(20)");
+    }
+
+    private static void ConfigureRaidIssueNarrativeColumns(EntityTypeBuilder<Issue> e)
+    {
+        e.Property(i => i.Title).HasMaxLength(200).HasColumnType("nvarchar(200)");
+        ConfigureRaidNarrativeColumns(e.Property(i => i.Description));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.Workaround));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.ResolutionSummary));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.UserImpactSummary));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.ServiceImpactSummary));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.DetailedCause));
+        ConfigureRaidNarrativeColumns(e.Property(i => i.AssuranceArrangements));
+        e.Property(i => i.Severity).HasMaxLength(10).HasColumnType("nvarchar(10)");
+        e.Property(i => i.Priority).HasMaxLength(10).HasColumnType("nvarchar(10)");
+        e.Property(i => i.Status).HasMaxLength(20).HasColumnType("nvarchar(20)");
+    }
+
+    private static void ConfigureMonthlyReportTextColumns(EntityTypeBuilder<ProjectMonthlyUpdate> e)
+    {
+        ConfigureRaidNarrativeColumns(e.Property(x => x.Narrative));
+        ConfigureRaidNarrativeColumns(e.Property(x => x.PeopleNarrative));
+        ConfigureRaidNarrativeColumns(e.Property(x => x.DraftRagJustification));
+        ConfigureRaidNarrativeColumns(e.Property(x => x.DraftPathToGreen));
+    }
+
+    private static void ConfigureMonthlyReportTextColumns(EntityTypeBuilder<MonthlyUpdateNarrative> e) =>
+        ConfigureRaidNarrativeColumns(e.Property(x => x.Narrative));
+
+    private static void ConfigureMonthlyReportTextColumns(EntityTypeBuilder<Project> e)
+    {
+        ConfigureRaidNarrativeColumns(e.Property(x => x.RagJustification));
+        ConfigureRaidNarrativeColumns(e.Property(x => x.PathToGreen));
+    }
+
+    private static void ConfigureMonthlyReportTextColumns(EntityTypeBuilder<ProjectRagHistory> e)
+    {
+        ConfigureRaidNarrativeColumns(e.Property(x => x.Justification));
+        ConfigureRaidNarrativeColumns(e.Property(x => x.PathToGreen));
     }
 }
 

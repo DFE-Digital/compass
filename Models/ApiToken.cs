@@ -28,10 +28,27 @@ public class ApiToken
     [Required]
     [MaxLength(100)]
     public string CreatedByEmail { get; set; } = string.Empty;
-    
+
+    [MaxLength(256)]
+    public string? OwnerEmail { get; set; }
+
+    [MaxLength(10)]
+    public string? Environment { get; set; }
+
+    [MaxLength(50)]
+    public string? ProjectSlug { get; set; }
+
+  /// <summary>RO, CREATE, UPDATE, CRU or FULL — appended to generated token names.</summary>
+    [MaxLength(20)]
+    public string? AccessTier { get; set; }
+
+    public bool IsSelfService { get; set; }
+
     // Navigation properties
     public virtual ICollection<ApiTokenPermission> Permissions { get; set; } = new List<ApiTokenPermission>();
-    
+
     public virtual ICollection<ApiRequestLog> RequestLogs { get; set; } = new List<ApiRequestLog>();
+
+    public virtual ICollection<ApiTokenMember> Members { get; set; } = new List<ApiTokenMember>();
 }
 

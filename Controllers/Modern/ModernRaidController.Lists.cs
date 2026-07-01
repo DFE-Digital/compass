@@ -24,6 +24,13 @@ public partial class ModernRaidController
 
     private string GetCurrentUserEmailNormalized()
     {
+        if (_viewAsUser.IsActive(HttpContext))
+        {
+            var active = _viewAsUser.GetActive(HttpContext);
+            if (!string.IsNullOrWhiteSpace(active?.Email))
+                return active.Email.Trim().ToLowerInvariant();
+        }
+
         var email = User.Identity?.Name
             ?? User.FindFirst(ClaimTypes.Email)?.Value
             ?? User.FindFirst("preferred_username")?.Value;
@@ -46,14 +53,46 @@ public partial class ModernRaidController
                  (ra.Action.AssignedToEmail != null && ra.Action.AssignedToEmail.ToLower() == emailLower))));
     }
 
+    private static IReadOnlyList<int> MergeRaidRegisterFilterIds(int? singleId, int[]? arrayIds)
+    {
+        if (arrayIds is { Length: > 0 })
+            return arrayIds.Where(id => id > 0).Distinct().ToList();
+
+        return singleId is > 0 ? new List<int> { singleId.Value } : Array.Empty<int>();
+    }
+
+    private IQueryable<Risk> WhereRiskMatchesAnyDivision(IQueryable<Risk> query, IReadOnlyList<int> divisionIds)
+    {
+        if (divisionIds.Count == 0)
+            return query;
+
+        var ids = divisionIds.ToList();
+        return query.Where(r =>
+            (r.ProjectId != null &&
+             _db.ProjectDirectorates.Any(pd => pd.ProjectId == r.ProjectId && ids.Contains(pd.DivisionId))) ||
+            r.RiskDivisions.Any(rd => ids.Contains(rd.DivisionId)));
+    }
+
+    private IQueryable<Risk> WhereRiskMatchesAnyBusinessArea(IQueryable<Risk> query, IReadOnlyList<int> businessAreaIds)
+    {
+        if (businessAreaIds.Count == 0)
+            return query;
+
+        var ids = businessAreaIds.ToList();
+        return query.Where(r =>
+            (r.ProjectId != null &&
+             _db.Projects.Any(p => p.Id == r.ProjectId && p.BusinessAreaId != null && ids.Contains(p.BusinessAreaId.Value))) ||
+            r.RiskBusinessAreas.Any(rba => ids.Contains(rba.BusinessAreaLookupId)));
+    }
+
     /// <summary>
     /// Issues query using the same portfolio filters as the risk register (work item, division, business area, search).
     /// Risk-only filters (status, tier) do not apply.
     /// </summary>
     private IQueryable<Issue> IssueQueryableAlignedToRiskRegisterFilters(
         int? projectId,
-        int? divisionId,
-        int? effectiveBusinessAreaId,
+        IReadOnlyList<int> divisionIds,
+        IReadOnlyList<int> businessAreaIds,
         string? search)
     {
         IQueryable<Issue> iq = _db.Issues.AsNoTracking().Where(i => !i.IsDeleted);
@@ -61,22 +100,22 @@ public partial class ModernRaidController
         if (projectId is > 0)
             iq = iq.Where(i => i.ProjectId == projectId);
 
-        if (divisionId is > 0)
+        if (divisionIds.Count > 0)
         {
-            var d = divisionId.Value;
+            var ids = divisionIds.ToList();
             iq = iq.Where(i =>
                 (i.ProjectId != null &&
-                 _db.ProjectDirectorates.Any(pd => pd.ProjectId == i.ProjectId && pd.DivisionId == d)) ||
-                i.IssueDivisions.Any(idv => idv.DivisionId == d));
+                 _db.ProjectDirectorates.Any(pd => pd.ProjectId == i.ProjectId && ids.Contains(pd.DivisionId))) ||
+                i.IssueDivisions.Any(idv => ids.Contains(idv.DivisionId)));
         }
 
-        if (effectiveBusinessAreaId is > 0)
+        if (businessAreaIds.Count > 0)
         {
-            var baId = effectiveBusinessAreaId.Value;
+            var ids = businessAreaIds.ToList();
             iq = iq.Where(i =>
                 (i.ProjectId != null &&
-                 _db.Projects.Any(p => p.Id == i.ProjectId && p.BusinessAreaId == baId)) ||
-                i.IssueBusinessAreas.Any(iba => iba.BusinessAreaLookupId == baId));
+                 _db.Projects.Any(p => p.Id == i.ProjectId && p.BusinessAreaId != null && ids.Contains(p.BusinessAreaId.Value))) ||
+                i.IssueBusinessAreas.Any(iba => ids.Contains(iba.BusinessAreaLookupId)));
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -148,6 +187,8 @@ public partial class ModernRaidController
         string? tab,
         bool openOnly,
         int? divisionId,
+        IReadOnlyList<int> divisionFilterIds,
+        IReadOnlyList<int> businessAreaFilterIds,
         int? effectiveBusinessAreaId,
         bool raidBusinessAreaExplicitNone,
         bool raidBusinessAreaFromSavedPreference,
@@ -197,23 +238,11 @@ public partial class ModernRaidController
         if (riskTierId is > 0)
             qBase = qBase.Where(r => r.RiskTierId == riskTierId);
 
-        if (divisionId is > 0)
-        {
-            var did = divisionId.Value;
-            qBase = qBase.Where(r =>
-                (r.ProjectId != null &&
-                 _db.ProjectDirectorates.Any(pd => pd.ProjectId == r.ProjectId && pd.DivisionId == did)) ||
-                r.RiskDivisions.Any(rd => rd.DivisionId == did));
-        }
+        if (divisionFilterIds.Count > 0)
+            qBase = WhereRiskMatchesAnyDivision(qBase, divisionFilterIds);
 
-        if (effectiveBusinessAreaId is > 0)
-        {
-            var baId = effectiveBusinessAreaId.Value;
-            qBase = qBase.Where(r =>
-                (r.ProjectId != null &&
-                 _db.Projects.Any(p => p.Id == r.ProjectId && p.BusinessAreaId == baId)) ||
-                r.RiskBusinessAreas.Any(rba => rba.BusinessAreaLookupId == baId));
-        }
+        if (businessAreaFilterIds.Count > 0)
+            qBase = WhereRiskMatchesAnyBusinessArea(qBase, businessAreaFilterIds);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -236,7 +265,7 @@ public partial class ModernRaidController
             await stripOpenRisk.CountAsync(r => r.RiskScore <= 5);
 
         var issueStripQ = IssueQueryableAlignedToRiskRegisterFilters(
-            projectId, divisionId, effectiveBusinessAreaId, search);
+            projectId, divisionFilterIds, businessAreaFilterIds, search);
         var registerStripOpenIssueCount =
             await issueStripQ.Where(i => i.ClosedDate == null).CountAsync(cancellationToken);
 
@@ -301,7 +330,8 @@ public partial class ModernRaidController
                 r.ImpactLevel?.Label ?? r.ImpactRating.ToString(),
                 r.RiskScore,
                 r.RiskTier?.Name,
-                Snippet(r.Description, 8000)));
+                Snippet(r.Description, 8000),
+                r.ClosedDate.HasValue));
         }
 
         var statusRaw = await _db.RiskStatuses.AsNoTracking()
@@ -353,8 +383,10 @@ public partial class ModernRaidController
             OpenCount = openCount,
             ClosedCount = closedCount,
             AllCount = allCount,
-            DivisionId = divisionId,
-            BusinessAreaId = effectiveBusinessAreaId,
+            DivisionId = divisionFilterIds.Count == 1 ? divisionFilterIds[0] : divisionId,
+            DivisionIds = divisionFilterIds,
+            BusinessAreaId = businessAreaFilterIds.Count == 1 ? businessAreaFilterIds[0] : effectiveBusinessAreaId,
+            BusinessAreaIds = businessAreaFilterIds,
             RaidBusinessAreaExplicitNone = raidBusinessAreaExplicitNone,
             RaidBusinessAreaFromSavedPreference = raidBusinessAreaFromSavedPreference,
             ShowRaidRegisterBusinessAreaBar = showRaidRegisterBusinessAreaBar,
@@ -376,23 +408,54 @@ public partial class ModernRaidController
     }
 
     [HttpGet("risks")]
+    [HttpHead("risks")]
     [HttpGet("/ModernRaid/Risks")]
+    [HttpHead("/ModernRaid/Risks")]
     public async Task<IActionResult> Risks(
         string? search,
         int? projectId,
         int? divisionId,
+        [FromQuery] int[]? divisionIds,
         int? riskStatusId,
         int? riskTierId,
         string? tab,
         int? businessAreaId,
+        [FromQuery] int[]? businessAreaIds,
         bool openOnly = true,
         int page = 1,
         CancellationToken cancellationToken = default)
     {
         SetRaidChrome("raid-risks");
         var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
-        var (effectiveBa, explicitNone, fromSaved) =
-            await ResolveRaidRegisterBusinessAreaAsync(businessAreaId, cancellationToken);
+
+        var divisionFilterIds = MergeRaidRegisterFilterIds(divisionId, divisionIds);
+
+        IReadOnlyList<int> businessAreaFilterIds;
+        bool explicitNone;
+        bool fromSaved;
+        int? effectiveBa;
+
+        if (businessAreaIds is { Length: > 0 })
+        {
+            businessAreaFilterIds = businessAreaIds.Where(id => id > 0).Distinct().ToList();
+            explicitNone = false;
+            fromSaved = false;
+            effectiveBa = businessAreaFilterIds.Count == 1 ? businessAreaFilterIds[0] : null;
+        }
+        else if (Request.Query.ContainsKey("businessAreaIds"))
+        {
+            businessAreaFilterIds = Array.Empty<int>();
+            explicitNone = true;
+            fromSaved = false;
+            effectiveBa = null;
+        }
+        else
+        {
+            (effectiveBa, explicitNone, fromSaved) =
+                await ResolveRaidRegisterBusinessAreaAsync(businessAreaId, cancellationToken);
+            businessAreaFilterIds = effectiveBa is > 0 ? new List<int> { effectiveBa.Value } : Array.Empty<int>();
+        }
+
         var savedHint = currentUserId is > 0
             ? await GetSavedRaidRegisterBusinessAreaIdAsync(currentUserId.Value, cancellationToken)
             : null;
@@ -400,6 +463,8 @@ public partial class ModernRaidController
         var vm = await BuildRiskRegisterAsync(
             search, projectId, riskStatusId, riskTierId, tab, openOnly,
             divisionId: divisionId,
+            divisionFilterIds: divisionFilterIds,
+            businessAreaFilterIds: businessAreaFilterIds,
             effectiveBusinessAreaId: effectiveBa,
             raidBusinessAreaExplicitNone: explicitNone,
             raidBusinessAreaFromSavedPreference: fromSaved,
@@ -408,7 +473,7 @@ public partial class ModernRaidController
             savedRaidBusinessAreaLookupIdForHint: savedHint,
             page,
             groupRowsByRiskTier: false,
-            loadDivisionOptions: false,
+            loadDivisionOptions: true,
             loadBusinessAreaOptions: true,
             cancellationToken);
         ViewData["RaidRegisterListAction"] = nameof(Risks);

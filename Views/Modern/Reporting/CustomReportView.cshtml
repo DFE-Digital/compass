@@ -1,0 +1,399 @@
+@model Compass.ViewModels.Modern.CustomReportViewViewModel
+@using Compass.Models
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = Model.Name;
+    var cspNonce = Context.Items["Nonce"]?.ToString() ?? "";
+    string RagBadge(string? rag) => WorkBadgeCss.RagCompactBadgeClass(rag ?? "Not set");
+    string PriBadge(string? pri) => WorkBadgeCss.PriorityDfeFrontendBadgeClass(pri ?? "Not set") + " dfe-f-badge--small";
+    var mwDetailPrefix = Url.Content("~/modern/work/detail/") ?? "/modern/work/detail/";
+
+    var now = DateTime.UtcNow;
+    var months = new List<(int Year, int Month, string Label)>();
+    for (var dt = new DateTime(now.Year, now.Month, 1); dt >= new DateTime(2026, 1, 1); dt = dt.AddMonths(-1))
+    {
+        months.Add((dt.Year, dt.Month, dt.ToString("MMMM yyyy")));
+    }
+}
+
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("CustomReports", "ModernReporting")">Custom reports</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Name</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Title = Model.Name,
+    Caption = "Custom report",
+    Lede = Model.Description != null ? new Microsoft.AspNetCore.Html.HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{Html.Encode(Model.Description)}</p>") : null,
+    Actions = await Html.PartialAsync("~/Views/Modern/Reporting/_CustomReportViewActions.cshtml", Model)
+})
+
+<div class="mr-dash">
+
+<div class="mr-toolbar mr-toolbar--compact govuk-!-margin-bottom-3">
+  <div class="mr-toolbar__row">
+    <div class="mr-toolbar__nav mr-toolbar__nav--compact">
+      @{
+        var prevMonth = new DateTime(Model.ReportYear, Model.ReportMonth, 1).AddMonths(-1);
+        var nextMonth = new DateTime(Model.ReportYear, Model.ReportMonth, 1).AddMonths(1);
+        var hasPrev = prevMonth >= new DateTime(2026, 1, 1);
+        var hasNext = nextMonth <= new DateTime(now.Year, now.Month, 1);
+      }
+      @if (hasPrev)
+      {
+        <a class="govuk-link mr-toolbar__nav-link govuk-link--no-visited-state" href="@Url.Action("CustomReportView", "ModernReporting", new { id = Model.ReportId, year = prevMonth.Year, month = prevMonth.Month })">← @prevMonth.ToString("MMM yy")</a>
+      }
+      <span class="mr-toolbar__period">@Model.MonthName</span>
+      @if (hasNext)
+      {
+        <a class="govuk-link mr-toolbar__nav-link govuk-link--no-visited-state" href="@Url.Action("CustomReportView", "ModernReporting", new { id = Model.ReportId, year = nextMonth.Year, month = nextMonth.Month })">@nextMonth.ToString("MMM yy") →</a>
+      }
+    </div>
+    <form method="get" action="@Url.Action("CustomReportView", "ModernReporting", new { id = Model.ReportId })" class="mr-toolbar__filters mr-toolbar__filters--compact" data-page-loading>
+      <select name="month" class="govuk-select" id="cr-filter-month" aria-label="Reporting period" style="min-width:10rem;">
+        @foreach (var mo in months)
+        {
+          if (mo.Year == Model.ReportYear && mo.Month == Model.ReportMonth)
+          { <option value="@mo.Month" selected>@mo.Label</option> }
+          else
+          { <option value="@mo.Month" data-year="@mo.Year">@mo.Label</option> }
+        }
+      </select>
+      <input type="hidden" name="year" id="cr-filter-year" value="@Model.ReportYear" />
+      <button type="submit" class="govuk-button govuk-!-margin-bottom-0" id="cr-filter-apply">Apply</button>
+    </form>
+  </div>
+</div>
+
+<div class="govuk-grid-row govuk-!-margin-bottom-4">
+  <div class="govuk-grid-column-full">
+    <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-0" style="display:flex; gap:30px; flex-wrap:wrap;">
+      <div class="govuk-summary-list__row" style="display:flex; gap:8px; border:none; padding:0;">
+        <dt class="govuk-summary-list__key" style="width:auto; padding:0;">Created by</dt>
+        <dd class="govuk-summary-list__value" style="padding:0;">@Model.OwnerName</dd>
+      </div>
+      <div class="govuk-summary-list__row" style="display:flex; gap:8px; border:none; padding:0;">
+        <dt class="govuk-summary-list__key" style="width:auto; padding:0;">Visibility</dt>
+        <dd class="govuk-summary-list__value" style="padding:0;">
+          @if (Model.Visibility == CustomReportVisibility.Public)
+          {
+          <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Public</span>
+          }
+          else
+          {
+          <span class="dfe-f-badge dfe-f-badge--small">Private</span>
+          }
+        </dd>
+      </div>
+      <div class="govuk-summary-list__row" style="display:flex; gap:8px; border:none; padding:0;">
+        <dt class="govuk-summary-list__key" style="width:auto; padding:0;">Scope</dt>
+        <dd class="govuk-summary-list__value" style="padding:0;">@Model.WorkItems.Count work item@(Model.WorkItems.Count != 1 ? "s" : ""), @Model.ServiceRegisterItems.Count service@(Model.ServiceRegisterItems.Count != 1 ? "s" : "")</dd>
+      </div>
+    </dl>
+  </div>
+</div>
+
+@if (Model.Sections.Count == 0 && Model.WorkItems.Count == 0)
+{
+<div class="govuk-inset-text">
+  This report has no sections configured. @if (Model.IsOwner) { <a class="govuk-link" href="@Url.Action("CustomReportEdit", "ModernReporting", new { id = Model.ReportId })">Edit this report</a> } to add sections.
+</div>
+}
+else
+{
+<div class="mr-report-view-controls govuk-!-margin-bottom-3" role="toolbar" aria-label="Report section controls">
+  <span class="mr-report-view-controls__label govuk-body-s govuk-!-font-weight-bold">Sections</span>
+  <div class="mr-report-view-controls__actions">
+    <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-dfe-toggle-expand-all>Expand all sections</button>
+    <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-dfe-toggle-collapse-all>Collapse all sections</button>
+  </div>
+</div>
+
+<div class="dfe-f-toggle-group" data-module="dfe-f-toggle-group">
+
+@if (Model.WorkItems.Count > 0)
+{
+<div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3"
+     data-module="dfe-f-toggle"
+     data-mr-section-id="scope-summary"
+     data-mr-section-title="Work items in scope">
+  <div class="dfe-f-toggle__title-wrapper">
+    <h2 class="dfe-f-toggle__heading">
+      <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="cr-sec-scope-summary">
+        <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+        <span class="dfe-f-toggle__title">Work items in scope</span>
+        <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(Model.WorkItems.Count)">@Model.WorkItems.Count</span></span>
+      </button>
+    </h2>
+  </div>
+  <div id="cr-sec-scope-summary" class="dfe-f-toggle__content">
+    <div class="dfe-f-toggle__body govuk-body">
+      <div class="dfe-f-card-grid govuk-!-margin-bottom-4">
+        <div class="dfe-f-stat-card">
+          <p class="govuk-body-s dfe-f-stat-card__label">Work items</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.WorkItems.Count</p>
+        </div>
+        @if (Model.ServiceRegisterItems.Count > 0)
+        {
+        <div class="dfe-f-stat-card">
+          <p class="govuk-body-s dfe-f-stat-card__label">Services</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.ServiceRegisterItems.Count</p>
+        </div>
+        }
+        @if (Model.RiskCount > 0)
+        {
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+          <p class="govuk-body-s dfe-f-stat-card__label">Open risks</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.RiskCount</p>
+        </div>
+        }
+        @if (Model.IssueCount > 0)
+        {
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+          <p class="govuk-body-s dfe-f-stat-card__label">Open issues</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.IssueCount</p>
+        </div>
+        }
+      </div>
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Work item</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">RAG</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Priority</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var w in Model.WorkItems)
+            {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@(mwDetailPrefix)@w.Id">@w.Title</a></td>
+              <td class="govuk-table__cell"><span class="@RagBadge(w.Rag)">@(w.Rag ?? "Not set")</span></td>
+              <td class="govuk-table__cell"><span class="@PriBadge(w.Priority)">@(w.Priority ?? "Not set")</span></td>
+              <td class="govuk-table__cell">@(w.BusinessArea ?? "—")</td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+}
+
+  @foreach (var sec in Model.Sections)
+  {
+  <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3"
+       data-module="dfe-f-toggle"
+       data-mr-section-id="@sec.SectionType"
+       data-mr-section-title="@sec.Label">
+    <div class="dfe-f-toggle__title-wrapper">
+      <h2 class="dfe-f-toggle__heading">
+        <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="cr-sec-@sec.SectionType">
+          <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+          <span class="dfe-f-toggle__title">@sec.Label</span>
+        </button>
+      </h2>
+    </div>
+    <div id="cr-sec-@sec.SectionType" class="dfe-f-toggle__content">
+      <div class="dfe-f-toggle__body govuk-body">
+        @switch (sec.SectionType)
+        {
+          case CustomReportSectionTypes.CountWorkItems:
+            @await Html.PartialAsync("~/Views/Modern/Reporting/_CrSectionCountWorkItems.cshtml", Model)
+            break;
+          case CustomReportSectionTypes.CountServiceRegister:
+            @await Html.PartialAsync("~/Views/Modern/Reporting/_CrSectionCountServiceRegister.cshtml", Model)
+            break;
+          case CustomReportSectionTypes.CountRisks:
+            <div class="dfe-f-card-grid">
+              <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+                <p class="govuk-body-s dfe-f-stat-card__label">Open risks</p>
+                <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.RiskCount</p>
+              </div>
+            </div>
+            break;
+          case CustomReportSectionTypes.CountIssues:
+            <div class="dfe-f-card-grid">
+              <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+                <p class="govuk-body-s dfe-f-stat-card__label">Open issues</p>
+                <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.IssueCount</p>
+              </div>
+            </div>
+            break;
+          case CustomReportSectionTypes.CountAccessibilityIssues:
+            <div class="dfe-f-card-grid">
+              <div class="dfe-f-stat-card">
+                <p class="govuk-body-s dfe-f-stat-card__label">Accessibility issues</p>
+                <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.AccessibilityIssueCount</p>
+              </div>
+            </div>
+            break;
+          case CustomReportSectionTypes.TableRagPriority:
+            @await Html.PartialAsync("~/Views/Modern/Reporting/_CrSectionRagPriority.cshtml", Model)
+            break;
+          case CustomReportSectionTypes.TableMilestones:
+            @await Html.PartialAsync("~/Views/Modern/Reporting/_CrSectionMilestones.cshtml", Model)
+            break;
+          case CustomReportSectionTypes.TablePathToGreen:
+            @await Html.PartialAsync("~/Views/Modern/Reporting/_CrSectionPathToGreen.cshtml", Model)
+            break;
+          case CustomReportSectionTypes.TableMonthlyUpdates:
+            @await Html.PartialAsync("~/Views/Modern/Reporting/_CrSectionMonthlyUpdates.cshtml", Model)
+            break;
+          case CustomReportSectionTypes.TableRag:
+            @await Html.PartialAsync("~/Views/Modern/Reporting/_CrSectionRag.cshtml", Model)
+            break;
+          case CustomReportSectionTypes.TableResourcing:
+            @await Html.PartialAsync("~/Views/Modern/Reporting/_CrSectionResourcing.cshtml", Model)
+            break;
+          case CustomReportSectionTypes.Intelligence:
+            @await Html.PartialAsync("~/Views/Modern/Reporting/_CrSectionIntelligence.cshtml", Model)
+            break;
+        }
+      </div>
+    </div>
+  </div>
+  }
+</div>
+}
+
+</div>
+
+@section Styles {
+<link rel="stylesheet" href="@Url.Content("~/modern/css/reporting-drilldown.css")" asp-append-version="true" />
+<style nonce="@cspNonce">
+  .mr-dash .mr-report-section-panel.dfe-f-toggle {
+    margin-bottom: 0;
+    background-color: var(--govuk-surface-background-colour, var(--surface-bg, #f4f8fb));
+    border-color: var(--govuk-surface-border-colour, #8eb8dc);
+  }
+  .mr-dash .mr-report-section-panel.dfe-f-toggle .dfe-f-toggle__title-wrapper {
+    background-color: var(--govuk-surface-background-colour, var(--surface-bg, #f4f8fb));
+  }
+  .mr-dash .mr-report-section-panel > .dfe-f-toggle__content {
+    overflow-x: auto;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .mr-dash .mr-report-section-panel .dfe-f-toggle__body {
+    min-width: 0;
+  }
+  .mr-toggle-panel__meta {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .mr-report-view-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    padding: 0.85rem 1rem;
+    background: var(--govuk-surface-background-colour, var(--surface-bg, #f4f8fb));
+    border: 1px solid var(--govuk-surface-border-colour, #8eb8dc);
+    border-left: 4px solid #1d70b8;
+  }
+  .mr-report-view-controls__label { margin: 0; color: #0b0c0c; }
+  .mr-report-view-controls__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+  .mr-report-view-controls .govuk-button { margin-bottom: 0; }
+  .mr-dist-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+    align-items: start;
+    min-width: 0;
+  }
+  .mr-dist-grid > .mr-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .mr-card {
+    background: var(--rpt-bg-card, #fff);
+    border: 1px solid var(--rpt-border, #e5e7eb);
+    border-radius: var(--rpt-radius, 8px);
+    padding: 1.25rem;
+    box-shadow: var(--rpt-shadow, 0 1px 3px rgba(0,0,0,0.06));
+  }
+  .mr-card__title { font-size: 0.9375rem; font-weight: 700; margin: 0 0 0.75rem 0; }
+  .mr-chart-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    height: 220px;
+    max-height: 220px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+  }
+  .mr-chart-wrap canvas { display: block; max-width: 100% !important; }
+  .mr-text-danger { color: #d4351c; }
+  .mr-toolbar {
+    background: var(--rpt-bg-card, #fff);
+    border: 1px solid var(--rpt-border, #e5e7eb);
+    border-radius: var(--rpt-radius, 8px);
+    padding: 0.65rem 0.85rem;
+    box-shadow: var(--rpt-shadow, 0 1px 3px rgba(0,0,0,0.06));
+    margin-bottom: 1rem;
+  }
+  .mr-toolbar--compact .mr-toolbar__row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; justify-content: space-between; }
+  .mr-toolbar__nav { display: flex; align-items: center; gap: 0.65rem; flex: 0 1 auto; min-width: 0; }
+  .mr-toolbar__nav--compact { flex-wrap: wrap; }
+  .mr-toolbar__nav-link { font-size: 0.8125rem; font-weight: 600; white-space: nowrap; }
+  .mr-toolbar__period { font-weight: 700; font-size: 0.9375rem; white-space: nowrap; }
+  .mr-toolbar__filters { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .mr-toolbar__filters--compact { flex: 1 1 auto; justify-content: flex-end; }
+  .mr-toolbar__filters .govuk-select { flex: 0 0 auto; }
+  .mr-toolbar__filters .govuk-button { margin-bottom: 0; }
+  @@media (max-width: 768px) {
+    .mr-dist-grid { grid-template-columns: 1fr; }
+  }
+</style>
+}
+
+@section Scripts {
+<script nonce="@cspNonce">
+(function() {
+    var monthSelect = document.getElementById('cr-filter-month');
+    var yearInput = document.getElementById('cr-filter-year');
+    if (monthSelect && yearInput) {
+        monthSelect.addEventListener('change', function() {
+            var opt = monthSelect.options[monthSelect.selectedIndex];
+            var yr = opt.getAttribute('data-year');
+            if (yr) yearInput.value = yr;
+        });
+    }
+
+    function setAllToggles(expanded) {
+        var toggles = document.querySelectorAll('.dfe-f-toggle__button');
+        toggles.forEach(function(btn) {
+            var isExpanded = btn.getAttribute('aria-expanded') === 'true';
+            if (isExpanded !== expanded) {
+                var contentId = btn.getAttribute('aria-controls');
+                var content = contentId ? document.getElementById(contentId) : null;
+                if (content) {
+                    btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                    if (expanded) { content.removeAttribute('hidden'); }
+                    else { content.setAttribute('hidden', ''); }
+                }
+            }
+        });
+    }
+
+    var expandAll = document.querySelector('[data-dfe-toggle-expand-all]');
+    var collapseAll = document.querySelector('[data-dfe-toggle-collapse-all]');
+    if (expandAll) expandAll.addEventListener('click', function() { setAllToggles(true); });
+    if (collapseAll) collapseAll.addEventListener('click', function() { setAllToggles(false); });
+})();
+</script>
+}

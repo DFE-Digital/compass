@@ -1,0 +1,106 @@
+@using Compass.Models
+@{
+    var tokens = ViewBag.Tokens as List<ApiToken> ?? new List<ApiToken>();
+    var pending = ViewBag.PendingRequests as List<ApiTokenRequest> ?? new List<ApiTokenRequest>();
+}
+
+<div class="developers-docs__intro govuk-!-margin-bottom-6">
+    <span class="govuk-caption-xl">Your keys</span>
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">Your API keys</h1>
+    <p class="govuk-body-l govuk-!-margin-bottom-0">
+        Request, manage and recycle your COMPASS API bearer tokens. Token values are only shown once when issued or recycled.
+    </p>
+</div>
+
+@if (ViewBag.PortalMessage != null)
+{
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region">
+        <div class="govuk-notification-banner__content"><p class="govuk-body">@ViewBag.PortalMessage</p></div>
+    </div>
+}
+@if (ViewBag.PortalError != null)
+{
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" role="alert">
+        <h2 class="govuk-error-summary__title">There is a problem</h2>
+        <div class="govuk-error-summary__body"><p>@ViewBag.PortalError</p></div>
+    </div>
+}
+
+<div class="govuk-button-group govuk-!-margin-bottom-6">
+    <a class="govuk-button" href="@Url.Action("Request", "DocsDeveloperApi")">Request an API key</a>
+    <a class="govuk-button govuk-button--secondary" href="@Url.Action("Logs", "DocsDeveloperApi")">View API logs</a>
+    <a class="govuk-button govuk-button--secondary" href="@Url.Action("Api", "Docs")">API reference</a>
+</div>
+
+@if (pending.Count > 0)
+{
+    <h2 class="govuk-heading-m">Pending requests</h2>
+    <table class="govuk-table govuk-!-margin-bottom-6">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th class="govuk-table__header">Environment</th>
+                <th class="govuk-table__header">Project</th>
+                <th class="govuk-table__header">Submitted</th>
+                <th class="govuk-table__header">Status</th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            @foreach (var r in pending)
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">@r.Environment</td>
+                    <td class="govuk-table__cell">@r.ProjectSlug</td>
+                    <td class="govuk-table__cell">@r.CreatedAt.ToString("d MMM yyyy HH:mm") UTC</td>
+                    <td class="govuk-table__cell">Pending admin review</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<h2 class="govuk-heading-m">Your API keys</h2>
+@if (tokens.Count == 0)
+{
+    <p class="govuk-body">You do not have any API keys yet. <a class="govuk-link" href="@Url.Action("Request", "DocsDeveloperApi")">Request an API key</a> to get started.</p>
+}
+else
+{
+    <table class="govuk-table">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th class="govuk-table__header">Name</th>
+                <th class="govuk-table__header">Environment</th>
+                <th class="govuk-table__header">Access</th>
+                <th class="govuk-table__header">Status</th>
+                <th class="govuk-table__header">Last used</th>
+                <th class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            @foreach (var t in tokens)
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell"><strong>@t.Name</strong></td>
+                    <td class="govuk-table__cell">@(t.Environment ?? "—")</td>
+                    <td class="govuk-table__cell">@(t.AccessTier ?? "—")</td>
+                    <td class="govuk-table__cell">@(t.IsActive ? "Active" : "Suspended")</td>
+                    <td class="govuk-table__cell">@(t.LastUsedAt?.ToString("d MMM yyyy") ?? "Never")</td>
+                    <td class="govuk-table__cell">
+                        <a class="govuk-link" href="@Url.Action("TokenDetail", "DocsDeveloperApi", new { id = t.Id })">Manage</a>
+                        ·
+                        <a class="govuk-link" href="@Url.Action("Logs", "DocsDeveloperApi", new { tokenId = t.Id })">Logs</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<div class="govuk-inset-text govuk-!-margin-top-6">
+    <p class="govuk-body govuk-!-margin-bottom-0">
+        <strong>Naming convention:</strong> keys are named <code>{ENV}-{LEVEL}-{project}</code> (for example <code>DEV-RO-my-app</code>).
+        Levels are <code>RO</code> (read only), <code>CREATE</code>, <code>UPDATE</code>, <code>CRU</code> (create + update), or <code>FULL</code> (includes delete — admin only).
+        Delete access is not available through self-service; contact
+        <a class="govuk-link" href="mailto:design.ops@education.gov.uk">design.ops@education.gov.uk</a>.
+    </p>
+</div>

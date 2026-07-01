@@ -1,0 +1,167 @@
+@model Compass.ViewModels.Modern.AuditExplorerDetailVm
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = $"Audit entry: {Model.ActionFriendly} {Model.EntityFriendly}";
+  var diffHasChanges = Model.DiffFields.Any(f => f.Status != AuditDiffStatus.Unchanged);
+
+  string TagFor(AuditDiffStatus s) => s switch
+  {
+    AuditDiffStatus.Added => "govuk-tag govuk-tag--green",
+    AuditDiffStatus.Removed => "govuk-tag govuk-tag--red",
+    AuditDiffStatus.Changed => "govuk-tag govuk-tag--blue",
+    _ => "govuk-tag govuk-tag--grey",
+  };
+  string LabelFor(AuditDiffStatus s) => s switch
+  {
+    AuditDiffStatus.Added => "Added",
+    AuditDiffStatus.Removed => "Removed",
+    AuditDiffStatus.Changed => "Changed",
+    _ => "Unchanged",
+  };
+
+  IHtmlContent RenderValue(string? value, bool isMuted)
+  {
+    if (string.IsNullOrEmpty(value))
+    {
+      return new HtmlString("<span class=\"dfe-c-text-muted\">Not set</span>");
+    }
+    var encoded = System.Net.WebUtility.HtmlEncode(value);
+    var cls = isMuted ? "audit-diff-value audit-diff-value--muted" : "audit-diff-value";
+    return new HtmlString($"<div class=\"{cls}\">{encoded}</div>");
+  }
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@(Model.BackUrl ?? Url.Action("AuditExplorer", "ModernAdmin"))">Audit explorer</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Entry detail</li>
+}
+
+<div class="audit-explorer audit-explorer__detail">
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
+  {
+    Caption = $"Audit entry · {Model.FeatureName}",
+    Title = $"{Model.ActionFriendly} {Model.EntityFriendly}",
+    BackLinkHref = Model.BackUrl ?? Url.Action("AuditExplorer", "ModernAdmin"),
+    BackLinkText = "Back to results",
+    Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{System.Net.WebUtility.HtmlEncode(Model.PlainEnglishSummary)}</p>")
+  })
+
+  <div class="audit-explorer-detail-grid">
+    <div>
+      <h2 class="govuk-heading-m govuk-!-margin-bottom-2">What happened</h2>
+      <dl class="govuk-summary-list govuk-summary-list--no-border audit-explorer-meta">
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Action</dt>
+          <dd class="govuk-summary-list__value"><strong class="govuk-tag @Model.ActionTagColour">@Model.ActionFriendly</strong></dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Feature</dt>
+          <dd class="govuk-summary-list__value">@Model.FeatureName</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Entity</dt>
+          <dd class="govuk-summary-list__value">@Model.EntityFriendly</dd>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Model.EntityReference))
+        {
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Reference</dt>
+            <dd class="govuk-summary-list__value">@Model.EntityReference</dd>
+          </div>
+        }
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">When (UTC)</dt>
+          <dd class="govuk-summary-list__value">@Compass.Services.AuditFeatureMap.FormatTimestamp(Model.ChangedUtc)</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div>
+      <h2 class="govuk-heading-m govuk-!-margin-bottom-2">Who did it</h2>
+      <dl class="govuk-summary-list govuk-summary-list--no-border audit-explorer-meta">
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Name</dt>
+          <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(Model.ChangedBy) ? "Unknown" : Model.ChangedBy)</dd>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Model.ChangedByEmail))
+        {
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Email</dt>
+            <dd class="govuk-summary-list__value audit-explorer-meta__wrap">@Model.ChangedByEmail</dd>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.IpAddress))
+        {
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">IP address</dt>
+            <dd class="govuk-summary-list__value audit-explorer-meta__wrap">@Model.IpAddress</dd>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.UserAgent))
+        {
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Device</dt>
+            <dd class="govuk-summary-list__value audit-explorer-meta__wrap">@Model.UserAgent</dd>
+          </div>
+        }
+      </dl>
+    </div>
+  </div>
+
+  <hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible" />
+
+  <h2 class="govuk-heading-m govuk-!-margin-bottom-2">Before and after</h2>
+  @if (Model.DiffFields.Count == 0)
+  {
+    <p class="govuk-body dfe-c-text-muted">No before/after values were recorded for this entry.</p>
+  }
+  else
+  {
+    if (!diffHasChanges)
+    {
+      <div class="govuk-inset-text">All recorded fields are unchanged. The entry was logged but no value differences were captured (this is normal for read-only workflow events such as "Edit started").</div>
+    }
+    <div class="dfe-f-table-wrapper audit-explorer__table" data-module="dfe-f-table">
+      <table class="govuk-table govuk-table--small-text-until-tablet audit-explorer-diff">
+        <caption class="govuk-visually-hidden">Field-by-field comparison of values before and after the change.</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header audit-explorer-diff__field">Field</th>
+            <th scope="col" class="govuk-table__header audit-explorer-diff__before">Before</th>
+            <th scope="col" class="govuk-table__header audit-explorer-diff__after">After</th>
+            <th scope="col" class="govuk-table__header audit-explorer-diff__status"><span class="govuk-visually-hidden">Status</span></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var diff in Model.DiffFields)
+          {
+            var rowCls = diff.Status switch
+            {
+              AuditDiffStatus.Added => "audit-explorer-diff__row audit-explorer-diff__row--added",
+              AuditDiffStatus.Removed => "audit-explorer-diff__row audit-explorer-diff__row--removed",
+              AuditDiffStatus.Changed => "audit-explorer-diff__row audit-explorer-diff__row--changed",
+              _ => "audit-explorer-diff__row audit-explorer-diff__row--unchanged",
+            };
+            <tr class="govuk-table__row @rowCls">
+              <td class="govuk-table__cell audit-explorer-diff__field">
+                <span class="govuk-!-font-weight-bold">@diff.FieldFriendly</span>
+              </td>
+              <td class="govuk-table__cell audit-explorer-diff__before">
+                @RenderValue(diff.Before, diff.Status == AuditDiffStatus.Added || diff.Status == AuditDiffStatus.Unchanged)
+              </td>
+              <td class="govuk-table__cell audit-explorer-diff__after">
+                @RenderValue(diff.After, diff.Status == AuditDiffStatus.Removed || diff.Status == AuditDiffStatus.Unchanged)
+              </td>
+              <td class="govuk-table__cell audit-explorer-diff__status">
+                <strong class="@TagFor(diff.Status)">@LabelFor(diff.Status)</strong>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

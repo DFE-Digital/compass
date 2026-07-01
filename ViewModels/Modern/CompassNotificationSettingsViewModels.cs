@@ -31,12 +31,16 @@ public sealed class CompassNotificationSettingRowViewModel
 
     public bool ShowFipsServiceOwner { get; set; }
     public bool ShowPrimaryWorkContact { get; set; }
+    public bool ShowPmoContact { get; set; }
+    public bool ShowWorkItemCreator { get; set; }
     public bool ShowCentralOps { get; set; }
     public bool ShowRiskIssueOwnerOrCreator { get; set; }
 
     public bool IsEnabled { get; set; }
     public bool SendToFipsServiceOwner { get; set; }
     public bool SendToPrimaryWorkContact { get; set; }
+    public bool SendToPmoContact { get; set; }
+    public bool SendToWorkItemCreator { get; set; }
     public bool SendToCentralOps { get; set; }
     public bool SendToRiskIssueOwnerOrCreator { get; set; }
 }

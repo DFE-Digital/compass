@@ -1,0 +1,151 @@
+@using Compass.ViewModels.Modern
+@{
+    var access = ViewBag.SubNavDataAccess as SubNavDataAccessOptions;
+    if (access is not { ShowToolbar: true })
+    {
+        return;
+    }
+
+    var export = access.Export;
+    var api = access.Api;
+    var suffix = Guid.NewGuid().ToString("N")[..8];
+}
+<div class="page-data-access" data-module="page-data-access">
+  <div class="page-data-access__actions">
+    @if (access.ShowApi && api != null)
+    {
+      var apiMenuId = $"page-data-api-{suffix}";
+      <div class="page-data-access__menu">
+        <button type="button"
+                class="page-data-access__btn page-data-access__btn--api"
+                aria-expanded="false"
+                aria-haspopup="true"
+                aria-controls="@apiMenuId"
+                aria-label="Get data">
+          <span class="page-data-access__btn-icon page-data-access__btn-icon--api" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor" focusable="false">
+              <path d="m480-400-80-80 80-80 80 80-80 80Zm-85-235L295-735l185-185 185 185-100 100-85-85-85 85ZM225-295 40-480l185-185 100 100-85 85 85 85-100 100Zm510 0L635-395l85-85-85-85 100-100 185 185-185 185ZM480-40 295-225l100-100 85 85 85-85 100 100L480-40Z"/>
+            </svg>
+          </span>
+          <span class="page-data-access__chevron" aria-hidden="true"></span>
+        </button>
+        <div id="@apiMenuId" class="page-data-access__popover page-data-access__popover--api" role="dialog" hidden>
+          <h2 class="page-data-access__popover-title">@(api.Title)</h2>
+          @if (!string.IsNullOrWhiteSpace(api.Intro))
+          {
+            <p class="govuk-body page-data-access__popover-lede">@api.Intro</p>
+          }
+          @if (api.ItemEndpoint != null)
+          {
+            <p class="page-data-access__endpoint-label">API endpoint</p>
+            <div class="page-data-access__endpoint-bar">
+              <span class="page-data-access__method">@api.ItemEndpoint.Method</span>
+              <input type="text"
+                     class="page-data-access__endpoint-url"
+                     readonly
+                     value="@api.ItemEndpoint.Url"
+                     aria-label="API endpoint URL" />
+              <button type="button" class="govuk-button page-data-access__copy-btn" data-copy-target>
+                <span class="material-symbols-sharp" aria-hidden="true">content_copy</span>
+                Copy
+              </button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(api.ItemEndpoint.Scope) || !string.IsNullOrWhiteSpace(api.ItemEndpoint.UpdatedAt))
+            {
+              <p class="page-data-access__endpoint-meta">
+                @if (!string.IsNullOrWhiteSpace(api.ItemEndpoint.Scope))
+                {
+                  <text>Scope <code>@api.ItemEndpoint.Scope</code></text>
+                }
+                @if (!string.IsNullOrWhiteSpace(api.ItemEndpoint.UpdatedAt))
+                {
+                  <text> · Updated @api.ItemEndpoint.UpdatedAt</text>
+                }
+              </p>
+            }
+          }
+          else if (api.HasEndpoints)
+          {
+            <ul class="govuk-list page-data-access__endpoint-list">
+              @foreach (var ep in api.Endpoints)
+              {
+                var fullUrl = (api.BaseUrl ?? "").TrimEnd('/') + ep.Path;
+                <li>
+                  <div class="page-data-access__endpoint-bar page-data-access__endpoint-bar--compact">
+                    <span class="page-data-access__method">@ep.Method</span>
+                    <input type="text" class="page-data-access__endpoint-url" readonly value="@fullUrl" aria-label="@ep.Label endpoint" />
+                    <button type="button" class="govuk-button page-data-access__copy-btn" data-copy-target>Copy</button>
+                  </div>
+                  <p class="govuk-body-s govuk-!-margin-top-1"><strong>@ep.Label</strong>@if (!string.IsNullOrWhiteSpace(ep.Scope)) { <text> — <code>@ep.Scope</code></text> }</p>
+                </li>
+              }
+            </ul>
+          }
+          <p class="page-data-access__popover-footer">
+            @if (!string.IsNullOrWhiteSpace(api.ApiTokensUrl))
+            {
+              <a class="govuk-link" href="@api.ApiTokensUrl">Request or manage API tokens</a>
+              <text> · </text>
+            }
+            @if (!string.IsNullOrWhiteSpace(api.DocsUrl))
+            {
+              <a class="govuk-link" href="@api.DocsUrl">API documentation</a>
+            }
+          </p>
+        </div>
+      </div>
+    }
+    @if (access.ShowExport && export != null)
+    {
+      var exportMenuId = $"page-data-export-{suffix}";
+      <div class="page-data-access__menu">
+        <button type="button"
+                class="page-data-access__btn page-data-access__btn--download"
+                aria-expanded="false"
+                aria-haspopup="true"
+                aria-controls="@exportMenuId"
+                aria-label="Download">
+          <span class="material-symbols-sharp page-data-access__btn-icon" aria-hidden="true">download</span>
+          <span class="page-data-access__chevron" aria-hidden="true"></span>
+        </button>
+        <div id="@exportMenuId" class="page-data-access__popover page-data-access__popover--download" role="menu" hidden>
+          <p class="page-data-access__menu-heading">@(access.IsItemView ? "Download this item" : export.Title)</p>
+          @if (!string.IsNullOrWhiteSpace(export.Intro))
+          {
+            <p class="govuk-body-s govuk-hint">@export.Intro</p>
+          }
+          <ul class="page-data-access__download-list">
+            @foreach (var link in export.Links)
+            {
+              var icon = link.Format switch
+              {
+                  "json" => "data_object",
+                  "csv" => "table",
+                  "pdf" => "picture_as_pdf",
+                  _ => "description"
+              };
+              <li>
+                <a class="page-data-access__download-link"
+                   role="menuitem"
+                   href="@link.Href"
+                   @if (link.UseDownloadModal)
+                   {
+                     <text>data-report-download data-generating-modal-title="@(link.DownloadModalTitle ?? "Generating export")" data-generating-modal-hint="Please wait — your download will start when the file is ready."</text>
+                   }>
+                  <span class="material-symbols-sharp page-data-access__download-icon" aria-hidden="true">@icon</span>
+                  <span class="page-data-access__download-text">
+                    <span class="page-data-access__download-label">@link.Label</span>
+                    @if (!string.IsNullOrWhiteSpace(link.Description))
+                    {
+                      <span class="page-data-access__download-desc">@link.Description</span>
+                    }
+                  </span>
+                </a>
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+  </div>
+</div>

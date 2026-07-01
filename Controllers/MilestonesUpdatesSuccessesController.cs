@@ -79,8 +79,7 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
-        // Redirect to Project/Details with monthlyupdates tab
-        return RedirectToAction("Details", "Project", new { id = projectId.Value, tab = "monthlyupdates" });
+        return RedirectToAction("Detail", "ModernWork", new { id = projectId.Value, tab = "updates" });
     }
 
     public async Task<IActionResult> Successes(int? projectId)
@@ -879,7 +878,7 @@ public class MilestonesUpdatesSuccessesController : Controller
 
         await _context.SaveChangesAsync();
 
-        return RedirectToAction("Details", "Project", new { id = projectId.Value, tab = "monthlyupdates" });
+        return RedirectToAction("Detail", "ModernWork", new { id = projectId.Value, tab = "updates" });
     }
 
     private async Task<bool> CanUserSubmitMonthlyUpdate(Project project)
@@ -1316,9 +1315,8 @@ public class MilestonesUpdatesSuccessesController : Controller
             return NotFound();
         }
 
-        // Redirect to the existing CreateSuccess action in ProjectController
-        // which uses ProjectSuccess model with IsReportedToSlt flag
-        return RedirectToAction("CreateSuccess", "Project", new { projectId = projectId.Value });
+        // Redirect to the modern work item updates tab.
+        return RedirectToAction("Detail", "ModernWork", new { id = projectId.Value, tab = "updates" });
     }
 
     public async Task<IActionResult> EditWeeklySuccess(int? projectId, int? id)

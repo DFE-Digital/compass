@@ -22,19 +22,22 @@ public class ModernDashboardController : Controller
     private readonly IWebHostEnvironment _environment;
     private readonly IHomeDashboardViewModelBuilder _dashboardBuilder;
     private readonly IGlobalFeatureToggleService _globalFeatureToggle;
+    private readonly IViewAsUserService _viewAsUser;
 
     public ModernDashboardController(
         ILogger<ModernDashboardController> logger,
         CompassDbContext context,
         IWebHostEnvironment environment,
         IHomeDashboardViewModelBuilder dashboardBuilder,
-        IGlobalFeatureToggleService globalFeatureToggle)
+        IGlobalFeatureToggleService globalFeatureToggle,
+        IViewAsUserService viewAsUser)
     {
         _logger = logger;
         _context = context;
         _environment = environment;
         _dashboardBuilder = dashboardBuilder;
         _globalFeatureToggle = globalFeatureToggle;
+        _viewAsUser = viewAsUser;
     }
 
     [HttpGet("dashboard")]
@@ -107,22 +110,8 @@ public class ModernDashboardController : Controller
                 return RedirectToAction(nameof(Index));
             }
 
-            User? effectiveUser = currentUser;
-            string effectiveUserEmail = userEmail;
-            if (_environment.IsDevelopment() && Request.Cookies.TryGetValue("TestDashboardUserId", out var testUserIdValue))
-            {
-                if (int.TryParse(testUserIdValue, out var testUserIdInt) && testUserIdInt > 0)
-                {
-                    var testUser = await _context.Users.FindAsync(testUserIdInt);
-                    if (testUser != null)
-                    {
-                        effectiveUser = testUser;
-                        effectiveUserEmail = testUser.Email;
-                        _logger.LogInformation("Modern dashboard: Using test user {TestEmail} ({Id}) instead of {Email}",
-                            testUser.Email, testUserIdInt, userEmail);
-                    }
-                }
-            }
+            var (effectiveUser, effectiveUserEmail) = await ResolveEffectiveDashboardUserAsync(
+                currentUser, userEmail);
 
             var preference = await _dashboardBuilder.GetOrCreateDashboardPreferenceAsync(effectiveUser);
             var viewModel = await _dashboardBuilder.BuildDashboardViewModelAsync(effectiveUser, effectiveUserEmail, preference, Url, HttpContext);
@@ -149,5 +138,47 @@ public class ModernDashboardController : Controller
             TempData["ErrorMessage"] = "An error occurred while loading the dashboard.";
             return View("~/Views/Modern/Dashboard/Index.cshtml", new HomeDashboardViewModel());
         }
+    }
+
+    /// <summary>View-as target when active; otherwise dev test cookie or signed-in user.</summary>
+    private async Task<(User User, string Email)> ResolveEffectiveDashboardUserAsync(
+        User signedInUser,
+        string signedInEmail)
+    {
+        if (_viewAsUser.IsActive(HttpContext))
+        {
+            var active = _viewAsUser.GetActive(HttpContext);
+            if (active != null)
+            {
+                var viewAsUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == active.UserId);
+                if (viewAsUser != null)
+                {
+                    _logger.LogInformation(
+                        "Modern dashboard: View-as active for {ViewAsEmail} ({Id})",
+                        viewAsUser.Email,
+                        viewAsUser.Id);
+                    return (viewAsUser, viewAsUser.Email);
+                }
+            }
+        }
+
+        if (_environment.IsDevelopment()
+            && Request.Cookies.TryGetValue("TestDashboardUserId", out var testUserIdValue)
+            && int.TryParse(testUserIdValue, out var testUserIdInt)
+            && testUserIdInt > 0)
+        {
+            var testUser = await _context.Users.FindAsync(testUserIdInt);
+            if (testUser != null)
+            {
+                _logger.LogInformation(
+                    "Modern dashboard: Using test user {TestEmail} ({Id}) instead of {Email}",
+                    testUser.Email,
+                    testUserIdInt,
+                    signedInEmail);
+                return (testUser, testUser.Email);
+            }
+        }
+
+        return (signedInUser, signedInEmail);
     }
 }

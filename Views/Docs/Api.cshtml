@@ -1,0 +1,181 @@
+@using Compass.Models.Docs
+@{
+    ViewData["Title"] = "API reference";
+    ViewData["DocsSection"] = "api";
+
+    // Endpoint catalogue is defined once in Models/Docs/ApiCatalogue.cs so
+    // the /docs/api-explorer page can render the same set of endpoints
+    // without us duplicating the source-of-truth here.
+    var sections = ApiCatalogue.Sections;
+    var apiExplorerUrl = Url.Action("ApiExplorer", "Docs");
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/docs-api.css" asp-append-version="true" />
+}
+
+<div class="developers-docs__intro govuk-!-margin-bottom-6">
+    <span class="govuk-caption-xl">Reference</span>
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">API reference</h1>
+    <p class="govuk-body-l govuk-!-margin-bottom-0">
+        REST endpoints for risks, issues, milestones, performance metrics,
+        service register and standards. Each endpoint has copy-ready code
+        snippets &mdash; try them live in the
+        <a class="govuk-link" href="@apiExplorerUrl">API explorer</a>.
+    </p>
+</div>
+
+<div class="govuk-inset-text govuk-!-margin-bottom-6">
+    <strong>Endpoint missing?</strong> If the data you need is not exposed
+    below, please
+    <a class="govuk-link" href="https://github.com/DFE-Digital/compass/issues" target="_blank" rel="noopener">raise an issue for a change in the repo</a>.
+    Endpoints are added on demand &mdash; we would rather expose what you
+    need than have you scrape the UI.
+</div>
+
+<section class="govuk-!-margin-bottom-6">
+    <h2 id="overview" class="govuk-heading-l">Overview</h2>
+    <p class="govuk-body">
+        All endpoints use bearer-token authentication. Request a key from the
+        <a class="govuk-link" href="@Url.Action("Index", "DocsDeveloperApi")">API keys developer portal</a>
+        (read-only access to all data is available to everyone; @@education.gov.uk accounts are auto-approved for read-only keys).
+        Pass your token as <code>Authorization: Bearer cps_...</code>. Tokens are scoped per resource — request only what your integration needs.
+        Delete access is not available through self-service; contact
+        <a class="govuk-link" href="mailto:design.ops@education.gov.uk">design.ops@education.gov.uk</a> if required.
+    </p>
+
+    <div class="api-base-urls">
+        <div>
+            <span class="api-base-label">Production</span>
+            <code class="api-base-value">https://compass.education.gov.uk</code>
+        </div>
+        <div>
+            <span class="api-base-label">Test</span>
+            <code class="api-base-value">https://s186d01-compass-g8g3bvheb2dsctey.westeurope-01.azurewebsites.net</code>
+        </div>
+    </div>
+
+    <div class="govuk-warning-text govuk-!-margin-top-4">
+        <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+        <strong class="govuk-warning-text__text">
+            <span class="govuk-warning-text__assistive">Warning</span>
+            Not yet available: there are no API endpoints for <strong>Assumptions</strong> or <strong>Dependencies</strong>. They exist as RAID features inside the modern UI but are not exposed over HTTP. The lookup keys <code>assumption-statuses</code>, <code>assumption-criticalities</code>, <code>dependency-criticalities</code> and <code>dependency-link-types</code> are <em>lookup catalogues</em> only &mdash; not the assumption / dependency records themselves.
+        </strong>
+    </div>
+
+    <div class="govuk-notification-banner govuk-!-margin-top-4" role="region" aria-labelledby="api-explorer-banner-title">
+        <div class="govuk-notification-banner__header">
+            <h2 class="govuk-notification-banner__title" id="api-explorer-banner-title">Try it interactively</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+            <p class="govuk-notification-banner__heading">
+                The <a class="govuk-notification-banner__link" href="@apiExplorerUrl">API explorer</a> is a full Postman-style workspace.
+            </p>
+            <p class="govuk-body">
+                Paste your bearer token once, pick any endpoint from the
+                collections panel, fill in path / query parameters and hit
+                Send. The response panel shows the status code, time and
+                size, with one-click Copy / JSON / CSV / Excel export.
+            </p>
+        </div>
+    </div>
+</section>
+
+@* ================= ENDPOINTS ================= *@
+@foreach (var group in sections)
+{
+    <section class="api-section" id="@group.Id">
+        <h2 class="govuk-heading-l">@group.Title</h2>
+        <p class="govuk-body">@group.Description</p>
+
+        @foreach (var ep in group.Endpoints)
+        {
+            @await Html.PartialAsync("_ApiEndpointCard", ep)
+        }
+    </section>
+}
+
+<section id="lookup-keys" class="govuk-!-margin-top-6">
+    <h2 class="govuk-heading-l">Admin lookup keys</h2>
+    <p class="govuk-body">Use any of these <code>{key}</code> values with <code>GET /api/v1/admin/lookups/{key}</code>:</p>
+    <ul class="govuk-list api-lookup-keys">
+        <li><code>business-areas</code></li>
+        <li><code>phases</code></li>
+        <li><code>directorates</code></li>
+        <li><code>activity-types</code></li>
+        <li><code>work-tagging</code></li>
+        <li><code>priorities</code></li>
+        <li><code>rag-defns</code></li>
+        <li><code>universal-barriers</code></li>
+        <li><code>mission-pillars</code></li>
+        <li><code>priority-outcomes</code></li>
+        <li><code>portfolios</code></li>
+        <li><code>departments</code></li>
+        <li><code>risk-tiers</code></li>
+        <li><code>risk-appetites</code></li>
+        <li><code>std-categories</code></li>
+        <li><code>std-subcategories</code></li>
+        <li><code>risk-statuses</code></li>
+        <li><code>risk-priorities</code></li>
+        <li><code>risk-likelihoods</code></li>
+        <li><code>risk-impact-levels</code></li>
+        <li><code>risk-proximities</code></li>
+        <li><code>risk-treatments</code></li>
+        <li><code>risk-categories</code></li>
+        <li><code>issue-statuses</code></li>
+        <li><code>issue-priorities</code></li>
+        <li><code>issue-severities</code></li>
+        <li><code>issue-categories</code></li>
+        <li><code>action-statuses</code></li>
+        <li><code>action-priorities</code></li>
+        <li><code>action-types</code></li>
+        <li><code>action-categories</code></li>
+        <li><code>action-impact-levels</code></li>
+        <li><code>action-reminder-frequencies</code></li>
+        <li><code>action-escalation-thresholds</code></li>
+        <li><code>decision-statuses</code></li>
+        <li><code>decision-priorities</code></li>
+        <li><code>decision-outcomes</code></li>
+        <li><code>decision-implementation-statuses</code></li>
+        <li><code>raid-evidence-types</code></li>
+        <li><code>governance-boards</code></li>
+        <li><code>demand-request-statuses</code></li>
+        <li><code>triage-outcome-stages</code></li>
+        <li><code>assumption-statuses</code></li>
+        <li><code>assumption-criticalities</code></li>
+        <li><code>dependency-criticalities</code></li>
+        <li><code>dependency-link-types</code></li>
+        <li><code>near-miss-types</code></li>
+        <li><code>near-miss-seriousness</code></li>
+        <li><code>near-miss-statuses</code></li>
+    </ul>
+</section>
+
+<section id="feedback" class="govuk-!-margin-top-6">
+    <h2 class="govuk-heading-l">Feedback &amp; missing endpoints</h2>
+    <div class="govuk-inset-text">
+        Need a new endpoint, an extra field, or a fix to an existing one?
+        <a class="govuk-link" href="https://github.com/DFE-Digital/compass/issues" target="_blank" rel="noopener">Raise an issue for a change in the repo</a>.
+        Endpoints are added on demand &mdash; we would rather expose what you
+        need than have you scrape the UI.
+    </div>
+</section>
+
+@section Aside {
+    <h2 class="docs-page-aside-heading">On this page</h2>
+    <ul class="docs-page-aside-nav">
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#overview">Overview</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Index", "DocsDeveloperApi")">Your API keys</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="@apiExplorerUrl">API explorer</a></li>
+        @foreach (var group in sections)
+        {
+            <li><a class="govuk-link govuk-link--no-visited-state" href="#@group.Id">@group.Title</a></li>
+        }
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#lookup-keys">Admin lookup keys</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#feedback">Feedback &amp; missing endpoints</a></li>
+    </ul>
+}
+
+@section Scripts {
+    <script src="~/js/docs-api.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+}

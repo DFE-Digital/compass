@@ -2,6 +2,7 @@ using Compass.Attributes;
 using Compass.Controllers;
 using Compass.Data;
 using Compass.Models;
+using Compass.Models.Fips;
 using Compass.Models.Modern.Work;
 using Compass.Services;
 using Compass.Services.Aiss;
@@ -23,12 +24,14 @@ public partial class ModernReportingController : Controller
     private readonly IMonthlyUpdateService _monthlyUpdateService;
     private readonly ModernMonthlyReportService _monthlyReportService;
     private readonly ModernRaidReviewProgressService _raidReviewProgressService;
+    private readonly ModernRaidRegisterCoverageReportService _raidRegisterCoverageReportService;
     private readonly ModernRaidReportingService _raidReportingService;
     private readonly ModernRaidReportService _raidReportService;
     private readonly CommissionReportingAnalyticsService _commissionReportingAnalytics;
     private readonly IServiceAssessmentApiService _serviceAssessmentApi;
     private readonly IAissSummaryService _aissSummary;
     private readonly IModernWorkService _modernWork;
+    private readonly IWorkScopedExcelExportService _workScopedExcelExport;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ModernReportingController> _logger;
 
@@ -37,12 +40,14 @@ public partial class ModernReportingController : Controller
         IMonthlyUpdateService monthlyUpdateService,
         ModernMonthlyReportService monthlyReportService,
         ModernRaidReviewProgressService raidReviewProgressService,
+        ModernRaidRegisterCoverageReportService raidRegisterCoverageReportService,
         ModernRaidReportingService raidReportingService,
         ModernRaidReportService raidReportService,
         CommissionReportingAnalyticsService commissionReportingAnalytics,
         IServiceAssessmentApiService serviceAssessmentApi,
         IAissSummaryService aissSummary,
         IModernWorkService modernWork,
+        IWorkScopedExcelExportService workScopedExcelExport,
         IConfiguration configuration,
         ILogger<ModernReportingController> logger)
     {
@@ -50,12 +55,14 @@ public partial class ModernReportingController : Controller
         _monthlyUpdateService = monthlyUpdateService;
         _monthlyReportService = monthlyReportService;
         _raidReviewProgressService = raidReviewProgressService;
+        _raidRegisterCoverageReportService = raidRegisterCoverageReportService;
         _raidReportingService = raidReportingService;
         _raidReportService = raidReportService;
         _commissionReportingAnalytics = commissionReportingAnalytics;
         _serviceAssessmentApi = serviceAssessmentApi;
         _aissSummary = aissSummary;
         _modernWork = modernWork;
+        _workScopedExcelExport = workScopedExcelExport;
         _configuration = configuration;
         _logger = logger;
     }
@@ -89,6 +96,7 @@ public partial class ModernReportingController : Controller
         SetNav("reporting-thematic");
 
         var summaryRows = await BuildThematicSummaryAsync(cancellationToken);
+        var dashboard = await _monthlyReportService.BuildThematicReportDashboardAsync(cancellationToken);
         var selectedRow = themeId.HasValue && themeId.Value > 0
             ? summaryRows.FirstOrDefault(r => r.TagId == themeId.Value)
             : null;
@@ -99,45 +107,17 @@ public partial class ModernReportingController : Controller
             _ => "active"
         };
 
-        WorkRegisterViewModel? register = null;
-        if (selectedRow != null)
-        {
-            var userEmail = User.Identity?.Name;
-            if (string.IsNullOrEmpty(userEmail))
-                return Unauthorized();
-
-            var currentUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email.ToLower() == userEmail.ToLower(), cancellationToken);
-            if (currentUser == null)
-                return Unauthorized();
-
-            var safePage = page < 1 ? 1 : page;
-            register = await _modernWork.BuildWorkRegisterAsync(
-                isMyWork: false,
-                search: null,
-                portfolioId: null,
-                directorateId: null,
-                phaseId: null,
-                ragId: null,
-                priorityId: null,
-                monthlyUpdate: null,
-                currentUser,
-                userEmail,
-                Url,
-                registerTab: activeTab,
-                registerPage: safePage,
-                registerPageSize: 20,
-                tagIds: new[] { selectedRow.TagId },
-                cancellationToken: cancellationToken);
-        }
-
         var model = new ModernThematicReportViewModel
         {
             SummaryRows = summaryRows,
+            DashboardRows = dashboard.Rows,
+            ScopeProjectItems = dashboard.ScopeProjectItems,
+            ReportYear = dashboard.ReportYear,
+            ReportMonth = dashboard.ReportMonth,
+            MonthName = dashboard.MonthName,
             SelectedThemeId = selectedRow?.TagId,
             SelectedThemeName = selectedRow?.Name,
             SelectedThemeDescription = selectedRow?.Description,
-            WorkRegister = register,
             ActiveTab = activeTab
         };
 
@@ -214,6 +194,82 @@ public partial class ModernReportingController : Controller
         }
     }
 
+    /// <summary>Resourcing report — FTE/MSP totals and configurable resourcing bands.</summary>
+    [HttpGet("resourcing")]
+    public async Task<IActionResult> Resourcing(
+        int? year,
+        int? month,
+        int? businessAreaId,
+        int? directorateId,
+        string? dimension,
+        int? groupId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _monthlyReportService.BuildResourcingReportAsync(
+                year,
+                month,
+                businessAreaId,
+                directorateId,
+                dimension,
+                groupId,
+                cancellationToken);
+            SetNav("reporting-resourcing");
+            return View("~/Views/Modern/Reporting/Resourcing.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading resourcing report");
+            TempData["ErrorMessage"] = "An error occurred while loading the resourcing report. Please try again.";
+            SetNav("reporting-resourcing");
+            return View("~/Views/Modern/Reporting/Resourcing.cshtml", new ModernResourcingReportViewModel
+            {
+                MinReportYear = 2026,
+                MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year),
+                MonthName = DateTime.UtcNow.ToString("MMMM yyyy")
+            });
+        }
+    }
+
+    /// <summary>RAID register coverage — work items and services not in any register scope.</summary>
+    [HttpGet("raid-registers")]
+    public async Task<IActionResult> RaidRegisters(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _raidRegisterCoverageReportService.BuildAsync(cancellationToken);
+            SetNav("reporting-raid-registers");
+            return View("~/Views/Modern/Reporting/RaidRegisters.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading RAID registers coverage report");
+            TempData["ErrorMessage"] = "An error occurred while loading the RAID registers report. Please try again.";
+            SetNav("reporting-raid-registers");
+            return View("~/Views/Modern/Reporting/RaidRegisters.cshtml", new ModernRaidRegisterCoverageReportViewModel());
+        }
+    }
+
+    /// <summary>Service register report — status, completion, and data-quality summaries for CMDB products.</summary>
+    [HttpGet("service-register")]
+    public async Task<IActionResult> ServiceRegister(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _monthlyReportService.BuildServiceRegisterReportAsync(cancellationToken);
+            SetNav("reporting-service-register");
+            return View("~/Views/Modern/Reporting/ServiceRegister.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading service register report");
+            TempData["ErrorMessage"] = "An error occurred while loading the service register report. Please try again.";
+            SetNav("reporting-service-register");
+            return View("~/Views/Modern/Reporting/ServiceRegister.cshtml", new ModernServiceRegisterReportViewModel());
+        }
+    }
+
     /// <summary>Monthly submission progress — chart and league tables for monthly return completion.</summary>
     [HttpGet("monthly-submission-progress")]
     public async Task<IActionResult> MonthlySubmissionProgress(int? year, int? month, int? businessAreaId, int? directorateId)
@@ -235,6 +291,23 @@ public partial class ModernReportingController : Controller
                 MaxReportYear = Math.Max(2026, DateTime.UtcNow.Year)
             });
         }
+    }
+
+    /// <summary>Excel export for monthly submission progress (work items with historical period submission status).</summary>
+    [HttpGet("monthly-submission-progress/export")]
+    public async Task<IActionResult> ExportMonthlySubmissionProgress(
+        int? year,
+        int? month,
+        int? businessAreaId,
+        int? directorateId,
+        CancellationToken cancellationToken = default)
+    {
+        var model = await _monthlyReportService.BuildSubmissionProgressAsync(
+            year, month, businessAreaId, directorateId, cancellationToken);
+        var bytes = MonthlySubmissionProgressExcelExport.BuildWorkbook(model);
+        var periodLabel = model.MonthName.Replace(" ", "-", StringComparison.Ordinal);
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"monthly-submission-progress-{periodLabel}-{DateTime.UtcNow:yyyyMMdd-HHmm}.xlsx");
     }
 
     /// <summary>RAID monthly review progress — chart and league tables for review completion.</summary>
@@ -444,6 +517,25 @@ public partial class ModernReportingController : Controller
         }
     }
 
+    /// <summary>Live performance submission progress — same in-scope products as commission workspace All products.</summary>
+    [HttpGet("performance-submission-progress")]
+    public async Task<IActionResult> PerformanceSubmissionProgress(int? commissionId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _commissionReportingAnalytics.BuildPerformanceSubmissionProgressPageAsync(commissionId, cancellationToken);
+            SetNav("reporting-performance-submission-progress");
+            return View("~/Views/Modern/Reporting/PerformanceSubmissionProgress.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading performance submission progress report");
+            TempData["ErrorMessage"] = "Could not load performance submission progress. Please try again.";
+            SetNav("reporting-performance-submission-progress");
+            return View("~/Views/Modern/Reporting/PerformanceSubmissionProgress.cshtml", new ModernReportingPerformanceSubmissionProgressViewModel());
+        }
+    }
+
     /// <summary>Published service assessments from SAS: portfolio summary, published list, and actions by standard.</summary>
     [HttpGet("assessments")]
     public async Task<IActionResult> Assessments(CancellationToken cancellationToken = default)
@@ -565,12 +657,14 @@ public partial class ModernReportingController : Controller
         await Task.WhenAll(summaryTask, trendsTask);
         var (summary, error) = await summaryTask;
         var (trends, trendsError) = await trendsTask;
+        var aissCfg = _configuration.GetSection("FipsSync:Aiss").Get<AissConfiguration>() ?? new AissConfiguration();
         var vm = new ModernOperationsAccessibilityViewModel
         {
             Summary = summary,
             Trends = trends,
             ErrorMessage = error,
-            TrendsError = trendsError
+            TrendsError = trendsError,
+            AissWebBaseUrl = aissCfg.ResolveWebBaseUrl()
         };
         return View("~/Views/Modern/Reporting/Accessibility.cshtml", vm);
     }

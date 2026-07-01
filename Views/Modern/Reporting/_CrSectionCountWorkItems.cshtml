@@ -1,0 +1,51 @@
+@model Compass.ViewModels.Modern.CustomReportViewViewModel
+@using Compass.Models.Modern.Work
+@{
+    var statusGroups = Model.WorkItems.GroupBy(w => w.Status ?? "Unknown").OrderByDescending(g => g.Count()).ToList();
+    var mwDetailPrefix = Url.Content("~/modern/work/detail/") ?? "/modern/work/detail/";
+}
+@if (Model.WorkItems.Count == 0)
+{
+<p class="govuk-body">No work items in scope.</p>
+}
+else
+{
+<div class="dfe-f-card-grid govuk-!-margin-bottom-4">
+    <div class="dfe-f-stat-card">
+        <p class="govuk-body-s dfe-f-stat-card__label">Total work items</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.WorkItems.Count</p>
+    </div>
+    @foreach (var g in statusGroups)
+    {
+    <div class="dfe-f-stat-card">
+        <p class="govuk-body-s dfe-f-stat-card__label">@g.Key</p>
+        <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@g.Count()</p>
+    </div>
+    }
+</div>
+<div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Work item</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">RAG</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Priority</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            @foreach (var w in Model.WorkItems)
+            {
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell"><a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@(mwDetailPrefix)@w.Id">@w.Title</a></td>
+                <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagCompactBadgeClass(w.Rag ?? "Not set")">@(w.Rag ?? "Not set")</span></td>
+                <td class="govuk-table__cell"><span class="@(WorkBadgeCss.PriorityDfeFrontendBadgeClass(w.Priority ?? "Not set") + " dfe-f-badge--small")">@(w.Priority ?? "Not set")</span></td>
+                <td class="govuk-table__cell">@(w.BusinessArea ?? "—")</td>
+                <td class="govuk-table__cell">@(w.Status ?? "—")</td>
+            </tr>
+            }
+        </tbody>
+    </table>
+</div>
+}

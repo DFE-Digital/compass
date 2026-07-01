@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Compass.Models;
 
 namespace Compass.Models.Fips;
 
@@ -45,12 +46,30 @@ public class CMDBProduct
     public PhaseLookup? Phase { get; set; }
 
     public ICollection<CMDBProductBusinessArea> BusinessAreas { get; set; } = new List<CMDBProductBusinessArea>();
+    public ICollection<CMDBProductDirectorate> Directorates { get; set; } = new List<CMDBProductDirectorate>();
     public ICollection<CMDBProductChannel> Channels { get; set; } = new List<CMDBProductChannel>();
     public ICollection<CMDBProductUserGroup> UserGroups { get; set; } = new List<CMDBProductUserGroup>();
     public ICollection<CMDBProductType> Types { get; set; } = new List<CMDBProductType>();
     public ICollection<CMDBProductFipsCategorisationItem> CategorisationItems { get; set; } =
         new List<CMDBProductFipsCategorisationItem>();
     public ICollection<CMDBProductContact> Contacts { get; set; } = new List<CMDBProductContact>();
+
+    /// <summary>JSON array of <see cref="GovernmentDepartment"/> IDs for multi-dept cooperation.</summary>
+    public string? OtherDepartments { get; set; }
+
+    public bool IsMultiDepartmentProduct { get; set; }
+
+    public bool? IsSubjectToSpendControl { get; set; }
+
+    public int? RiskAppetiteLookupId { get; set; }
+
+    public RiskAppetiteLookup? RiskAppetiteLookup { get; set; }
+
+    public ICollection<CMDBProductObjective> Objectives { get; set; } = new List<CMDBProductObjective>();
+
+    public ICollection<CMDBProductMission> Missions { get; set; } = new List<CMDBProductMission>();
+
+    public ICollection<CMDBProductWorkItemTag> WorkItemTags { get; set; } = new List<CMDBProductWorkItemTag>();
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string? CreatedBy { get; set; }
@@ -66,6 +85,16 @@ public class CMDBProductBusinessArea
     public CMDBProduct CMDBProduct { get; set; } = null!;
     public int FipsBusinessAreaId { get; set; }
     public FipsBusinessArea FipsBusinessArea { get; set; } = null!;
+}
+
+public class CMDBProductDirectorate
+{
+    [Key]
+    public int Id { get; set; }
+    public Guid CMDBProductId { get; set; }
+    public CMDBProduct CMDBProduct { get; set; } = null!;
+    public int FipsDirectorateId { get; set; }
+    public FipsDirectorate FipsDirectorate { get; set; } = null!;
 }
 
 public class CMDBProductChannel
@@ -124,4 +153,50 @@ public class CMDBProductContact
     public string? UserName { get; set; }
 
     public bool CanManage { get; set; }
+}
+
+public class CMDBProductObjective
+{
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+
+    public Guid CMDBProductId { get; set; }
+
+    public CMDBProduct CMDBProduct { get; set; } = null!;
+
+    public int ObjectiveId { get; set; }
+
+    public Objective Objective { get; set; } = null!;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class CMDBProductMission
+{
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+
+    public Guid CMDBProductId { get; set; }
+
+    public CMDBProduct CMDBProduct { get; set; } = null!;
+
+    public int MissionId { get; set; }
+
+    public Mission Mission { get; set; } = null!;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>Junction: <see cref="CMDBProduct"/> ↔ <see cref="WorkItemTagLookup"/>.</summary>
+public class CMDBProductWorkItemTag
+{
+    public Guid CMDBProductId { get; set; }
+
+    public CMDBProduct CMDBProduct { get; set; } = null!;
+
+    public int WorkItemTagLookupId { get; set; }
+
+    public WorkItemTagLookup WorkItemTagLookup { get; set; } = null!;
 }

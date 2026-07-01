@@ -4,6 +4,8 @@ using Compass.Data;
 using Compass.Models;
 using Compass.Models.DemandTriage;
 using Compass.Services;
+using Compass.Services.Modern;
+using Compass.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,11 +18,16 @@ public class ExportsController : Controller
 {
     private readonly CompassDbContext _db;
     private readonly IGlobalFeatureToggleService _features;
+    private readonly IMonthlyUpdateService _monthlyUpdateService;
 
-    public ExportsController(CompassDbContext db, IGlobalFeatureToggleService features)
+    public ExportsController(
+        CompassDbContext db,
+        IGlobalFeatureToggleService features,
+        IMonthlyUpdateService monthlyUpdateService)
     {
         _db = db;
         _features = features;
+        _monthlyUpdateService = monthlyUpdateService;
     }
 
     private bool IsDemandGloballyActive()
@@ -97,6 +104,27 @@ public class ExportsController : Controller
             .Where(m => projectIds.Contains(m.ProjectId))
             .OrderByDescending(m => m.Year).ThenByDescending(m => m.Month)
             .ToListAsync(cancellationToken);
+        var monthlyByProjectId = monthlyAll
+            .GroupBy(m => m.ProjectId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        foreach (var project in projects)
+        {
+            project.MonthlyUpdates = monthlyByProjectId.TryGetValue(project.Id, out var updates)
+                ? updates
+                : new List<ProjectMonthlyUpdate>();
+        }
+
+        var (reportYear, reportMonth) = _monthlyUpdateService.ResolveDashboardReportingPeriod(DateTime.UtcNow);
+        var periodColumns = await WorkRegisterMonthlySubmissionExportHelper.LoadPeriodColumnsAsync(
+            _db,
+            reportYear,
+            reportMonth,
+            WorkRegisterMonthlySubmissionExportHelper.DefaultMinReportYear,
+            cancellationToken);
+        var periodStatusesByProject = WorkRegisterMonthlySubmissionExportHelper.BuildPeriodStatusesByProject(
+            projects,
+            periodColumns);
+
         var latestMuByProject = monthlyAll
             .GroupBy(m => m.ProjectId)
             .ToDictionary(g => g.Key, g => g.First());
@@ -241,14 +269,17 @@ public class ExportsController : Controller
             openRiskDict,
             openIssueDict,
             asmDict,
-            msDict);
+            msDict,
+            periodColumns,
+            periodStatusesByProject);
 
         var milestones = await _db.Milestones.AsNoTracking()
             .Where(m => m.ProjectId != null && !m.IsDeleted && projectIds.Contains(m.ProjectId.Value))
             .OrderBy(m => m.ProjectId).ThenBy(m => m.DueDate)
             .ToListAsync(cancellationToken);
+        var workItemTitles = projects.ToDictionary(p => p.Id, p => p.Title);
         var wsMilestones = wb.AddWorksheet("Milestones");
-        WriteProjectMilestones(wsMilestones, milestones);
+        WorkRegisterExcelExport.WriteMilestonesSheet(wsMilestones, milestones, workItemTitles);
 
         var monthlyDetailed = await _db.ProjectMonthlyUpdates.AsNoTracking()
             .Include(m => m.DraftRagStatusLookup)
@@ -383,9 +414,11 @@ public class ExportsController : Controller
         IReadOnlyDictionary<int, int> openRiskDict,
         IReadOnlyDictionary<int, int> openIssueDict,
         IReadOnlyDictionary<int, int> asmDict,
-        IReadOnlyDictionary<int, int> msDict)
+        IReadOnlyDictionary<int, int> msDict,
+        IReadOnlyList<SubmissionTrendMonthColumn> periodColumns,
+        IReadOnlyDictionary<int, List<string>> periodStatusesByProject)
     {
-        var headers = new[]
+        var headers = new List<string>
         {
             "WorkItemId", "ProjectCode", "Title", "Aim", "StrategicObjectives", "MissionPillars",
             "StartDate", "TargetDeliveryDate", "ActualDeliveryDate",
@@ -416,8 +449,9 @@ public class ExportsController : Controller
             "LatestMonthly_CreatedAt", "LatestMonthly_UpdatedAt",
             "LatestMonthly_CreatedByName", "LatestMonthly_CreatedByEmail"
         };
+        headers.AddRange(periodColumns.Select(c => c.Label));
 
-        for (var c = 0; c < headers.Length; c++)
+        for (var c = 0; c < headers.Count; c++)
             ws.Cell(1, c + 1).Value = headers[c];
         ws.Row(1).Style.Font.Bold = true;
 
@@ -531,11 +565,27 @@ public class ExportsController : Controller
             SetCell(ws, row, ref col, mu?.UpdatedAt);
             SetCell(ws, row, ref col, mu?.CreatedByName);
             SetCell(ws, row, ref col, mu?.CreatedByEmail);
+
+            if (periodColumns.Count > 0
+                && periodStatusesByProject.TryGetValue(p.Id, out var periodStatuses))
+            {
+                for (var i = 0; i < periodColumns.Count; i++)
+                {
+                    var status = i < periodStatuses.Count ? periodStatuses[i] : "—";
+                    SetCell(ws, row, ref col, status);
+                }
+            }
+            else if (periodColumns.Count > 0)
+            {
+                for (var i = 0; i < periodColumns.Count; i++)
+                    SetCell(ws, row, ref col, "—");
+            }
+
             row++;
         }
 
         ws.SheetView.FreezeRows(1);
-        ws.Columns(1, headers.Length).AdjustToContents();
+        ws.Columns(1, headers.Count).AdjustToContents();
     }
 
     private static void SetCell(IXLWorksheet ws, int row, ref int col, object? v)
@@ -615,28 +665,6 @@ public class ExportsController : Controller
 
         ws.SheetView.FreezeRows(1);
         ws.Columns(1, headers.Length).AdjustToContents();
-    }
-
-    private static void WriteProjectMilestones(IXLWorksheet ws, List<Milestone> list)
-    {
-        var headers = new[] { "Id", "ProjectId", "Name", "DueDate", "ActualDate", "Status", "CreatedAt" };
-        for (var c = 0; c < headers.Length; c++)
-            ws.Cell(1, c + 1).Value = headers[c];
-        ws.Row(1).Style.Font.Bold = true;
-        var row = 2;
-        foreach (var m in list)
-        {
-            ws.Cell(row, 1).Value = m.Id;
-            ws.Cell(row, 2).Value = m.ProjectId;
-            ws.Cell(row, 3).Value = m.Name;
-            ws.Cell(row, 4).Value = m.DueDate;
-            ws.Cell(row, 5).Value = m.ActualDate;
-            ws.Cell(row, 6).Value = m.Status;
-            ws.Cell(row, 7).Value = m.CreatedAt;
-            row++;
-        }
-        ws.SheetView.FreezeRows(1);
-        ws.Columns(1, 7).AdjustToContents();
     }
 
     private static void WriteBusinessCasesSheet(IXLWorksheet ws, List<BusinessCase> list)

@@ -78,7 +78,8 @@ public class DdtStandardsWorkflowService : IDdtStandardsWorkflowService
 
         var userId = GetCurrentUserId(user);
         var canEdit = standard.Stage == "Draft" && await CanEditStandardAsync(standard, userId, user, ct);
-        var isCreator = userId.HasValue && standard.CreatorUserId == userId;
+        var canUnpublishRole = await StandardsPermissionHelper.CanPublishStandardsAsync(_permissions, user);
+        var isInPlaceEditDraft = standard.Stage == "Draft" && standard.FirstPublished.HasValue;
 
         vm.Id = standard.Id;
         vm.Title = standard.Title;
@@ -126,6 +127,7 @@ public class DdtStandardsWorkflowService : IDdtStandardsWorkflowService
         vm.CanEdit = canEdit;
         vm.CanSubmit = canEdit;
         vm.CanDelete = canEdit;
+        vm.CanUnpublish = canUnpublishRole && isInPlaceEditDraft;
         vm.WorkflowStepIndex = GetWorkflowStepIndex(standard.Stage, standard.IsPublished);
 
         return vm;
@@ -150,6 +152,7 @@ public class DdtStandardsWorkflowService : IDdtStandardsWorkflowService
         var isDraft = standard.Stage == "Draft";
         var isForApproval = standard.Stage == "For Approval";
         var isAwaiting = standard.Stage == "Awaiting Publication";
+        var isPublished = standard.IsPublished && standard.Stage == "Published";
 
         var comments = await _context.DdtStandardComments.AsNoTracking()
             .Include(c => c.User)
@@ -169,6 +172,7 @@ public class DdtStandardsWorkflowService : IDdtStandardsWorkflowService
             CanApprove = isForApproval && canApprove,
             CanReject = isForApproval && canApprove,
             CanPublish = isAwaiting && (canPublishRole || isOwner),
+            CanUnpublish = isPublished && canPublishRole,
             ForumComments = comments.Select(c => new DdtStandardForumCommentRow
             {
                 Title = c.Title,
@@ -192,6 +196,7 @@ public class DdtStandardsWorkflowService : IDdtStandardsWorkflowService
 
         var userId = GetCurrentUserId(user);
         var canOpenEdit = await CanEditStandardAsync(standard, userId, user, ct);
+        var canUnpublishRole = await StandardsPermissionHelper.CanPublishStandardsAsync(_permissions, user);
 
         var ownerDisplay = standard.Owners.Select(o => o.User?.Name).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
             ?? standard.Contacts.Select(c => c.User?.Name).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
@@ -223,6 +228,7 @@ public class DdtStandardsWorkflowService : IDdtStandardsWorkflowService
             CanOpenEdit = canOpenEdit,
             DraftEditId = draftEditId,
             NeedsDraftFromPublished = canOpenEdit && standard.IsPublished && standard.Stage == "Published" && !draftEditId.HasValue,
+            CanUnpublish = canUnpublishRole && standard.IsPublished && standard.Stage == "Published",
             OwnerContactDisplay = ownerDisplay,
             HasVersionHistory = versionRecordCount > 0 || publishedInLineage > 1
         };
@@ -602,6 +608,52 @@ public class DdtStandardsWorkflowService : IDdtStandardsWorkflowService
         await _context.SaveChangesAsync(ct);
 
         return WorkflowOperationResult.Ok(standard.Id, "Standard published successfully.");
+    }
+
+    public async Task<WorkflowOperationResult> UnpublishAsync(int id, string reason, ClaimsPrincipal user, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            return WorkflowOperationResult.Fail("A reason for unpublishing is required.");
+
+        if (!await StandardsPermissionHelper.CanPublishStandardsAsync(_permissions, user))
+            return WorkflowOperationResult.Fail("You do not have permission to unpublish standards. Only Standard Publishers can unpublish.");
+
+        var standard = await _context.DdtStandards
+            .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted, ct);
+
+        if (standard == null)
+            return WorkflowOperationResult.Fail("Standard not found.");
+
+        var isCurrentlyPublished = standard.IsPublished && standard.Stage == "Published";
+        var isInPlaceEditDraft = standard.Stage == "Draft" && standard.FirstPublished.HasValue;
+
+        if (!isCurrentlyPublished && !isInPlaceEditDraft)
+            return WorkflowOperationResult.Fail("Only published standards, or standards being edited after publication, can be unpublished.");
+
+        var userId = GetCurrentUserId(user);
+        var now = DateTime.UtcNow;
+        var versionAtUnpublish = isCurrentlyPublished
+            ? standard.Version
+            : (standard.PreviousVersion ?? standard.Version);
+
+        _context.DdtStandardUnpublishAudits.Add(new DdtStandardUnpublishAudit
+        {
+            DdtStandardId = standard.Id,
+            Version = versionAtUnpublish,
+            Reason = reason.Trim(),
+            UnpublishedByUserId = userId ?? 0,
+            UnpublishedAt = now
+        });
+
+        standard.Stage = "Unpublished";
+        standard.IsPublished = false;
+        standard.UpdatedAt = now;
+
+        await CreateAuditLogAsync(standard.Id, "Unpublished",
+            $"Standard unpublished. Reason: {reason.Trim()}", user, ct);
+        await _context.SaveChangesAsync(ct);
+
+        return WorkflowOperationResult.Ok(standard.Id, $"Standard '{standard.Title}' unpublished successfully.");
     }
 
     public async Task<WorkflowOperationResult> DeleteDraftAsync(int id, ClaimsPrincipal user, CancellationToken ct = default)

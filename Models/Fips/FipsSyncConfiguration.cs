@@ -41,4 +41,24 @@ public class AissConfiguration
 {
     public string Endpoint { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>AISS web app origin for UI links (no path), e.g. http://localhost:5418.</summary>
+    public string WebBaseUrl { get; set; } = string.Empty;
+
+    public string ResolveWebBaseUrl()
+    {
+        if (!string.IsNullOrWhiteSpace(WebBaseUrl))
+            return WebBaseUrl.Trim().TrimEnd('/');
+
+        var endpoint = Endpoint?.Trim();
+        if (string.IsNullOrEmpty(endpoint))
+            return "https://accessibility-statements.education.gov.uk";
+
+        if (endpoint.EndsWith("/api/", StringComparison.OrdinalIgnoreCase))
+            endpoint = endpoint[..^5];
+        else if (endpoint.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            endpoint = endpoint[..^4];
+
+        return endpoint.TrimEnd('/');
+    }
 }

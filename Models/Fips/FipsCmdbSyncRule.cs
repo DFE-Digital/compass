@@ -16,10 +16,12 @@ public static class FipsCmdbSyncRuleScopes
     public const string RawJson = "RawJson";
     /// <summary><c>service_classification</c> from the CMDB JSON (string or ServiceNow reference object).</summary>
     public const string ServiceClassification = "ServiceClassification";
+    /// <summary><c>operational_status</c> from the CMDB JSON (string/number/reference object).</summary>
+    public const string OperationalStatus = "OperationalStatus";
 
     public static readonly IReadOnlyList<string> All =
     [
-        Title, Description, ParentName, UserDescription, MappedText, RawJson, ServiceClassification
+        Title, Description, ParentName, UserDescription, MappedText, RawJson, ServiceClassification, OperationalStatus
     ];
 }
 

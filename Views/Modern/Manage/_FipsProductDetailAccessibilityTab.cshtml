@@ -1,94 +1,280 @@
 @model FipsProductDetailViewModel
+@using Compass.Services.Aiss
 @{
-  var acc = Model.LinkedProductAccessibility;
+  var aiss = Model.AissAccessibility;
+  string StatusLabel(string? status) => status?.Trim() switch
+  {
+    "in_progress" => "In progress",
+    "open" => "Open",
+    "under_review" => "Under review",
+    "resolved" => "Resolved",
+    "closed" => "Closed",
+    _ => string.IsNullOrWhiteSpace(status) ? "—" : status.Replace('_', ' ')
+  };
+  string StatusBadgeModifier(string? status) => status?.Trim().ToLowerInvariant() switch
+  {
+    "in_progress" => "blue",
+    "open" => "orange",
+    "under_review" => "purple",
+    "resolved" => "green",
+    "closed" => "grey",
+    _ => "grey"
+  };
+  string WcagLevelBadgeModifier(string level) => level.ToUpperInvariant() switch
+  {
+    "A" => "red",
+    "AA" => "orange",
+    "AAA" => "purple",
+    _ => "grey"
+  };
+  string? FormatDate(string? value)
+  {
+    if (string.IsNullOrWhiteSpace(value))
+      return null;
+    return DateTime.TryParse(value, out var dt) ? dt.ToString("dd MMM yyyy") : value;
+  }
+  List<string> WcagLevels(AissServiceIssueDto issue)
+  {
+    var order = new[] { "A", "AA", "AAA" };
+    var criteria = issue.WcagCriteria ?? new List<AissServiceIssueWcagDto>();
+    return criteria
+      .Where(c => !string.IsNullOrWhiteSpace(c.Level))
+      .Select(c => c.Level!.Trim())
+      .Distinct(StringComparer.OrdinalIgnoreCase)
+      .OrderBy(l =>
+      {
+        var i = Array.FindIndex(order, x => string.Equals(x, l, StringComparison.OrdinalIgnoreCase));
+        return i >= 0 ? i : 99;
+      })
+      .ToList();
+  }
 }
 
 <div id="d-fips-accessibility" class="tab-pane @(Model.ActiveDetailTab == "accessibility" ? "on" : "")" role="tabpanel">
   <h2 class="govuk-heading-m govuk-!-margin-top-0">Accessibility</h2>
-  <p class="govuk-body govuk-!-margin-bottom-6">Accessibility statement and issue tracking for this product.</p>
 
-  @if (acc == null)
+  @if (aiss == null)
   {
-    <p class="govuk-body govuk-!-margin-bottom-0">No accessibility enrolment matched this catalogue entry (by CMS document id or FIPS product code).</p>
+    <p class="govuk-body govuk-!-margin-bottom-0">Loading accessibility data is only available when this tab is open. Refresh the page if content is missing.</p>
+  }
+  else if (!string.IsNullOrWhiteSpace(aiss.ErrorMessage) && aiss.Service == null)
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+      <h3 class="govuk-error-summary__title">Could not load AISS data</h3>
+      <p class="govuk-body govuk-!-margin-bottom-0">@aiss.ErrorMessage</p>
+    </div>
+  }
+  else if (aiss.NotFound || aiss.Service == null)
+  {
+    var onboardUrl = aiss.OnboardPageUrl(Model.Product.Id, Model.Product.UniqueID);
+    <div class="govuk-notification-banner govuk-!-margin-bottom-6" role="region" aria-labelledby="aiss-not-onboarded-title">
+      <div class="govuk-notification-banner__header">
+        <h3 class="govuk-notification-banner__title" id="aiss-not-onboarded-title">Service not onboarded</h3>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-body govuk-!-margin-bottom-4">
+          This service is not onboarded to Accessibility Issues and Statement Service. In order to meet the accessibility standard, it must be onboarded.
+        </p>
+        @if (!string.IsNullOrEmpty(onboardUrl))
+        {
+          <a class="govuk-button" href="@onboardUrl" target="_blank" rel="noopener noreferrer" data-module="govuk-button">
+            Onboard this service<span class="govuk-visually-hidden"> in Accessibility Issues and Statement Service (opens in new tab)</span>
+          </a>
+        }
+        else
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0">Onboarding is not available — AISS is not configured.</p>
+        }
+      </div>
+    </div>
   }
   else
   {
+    var svc = aiss.Service;
+    var summary = aiss.Summary;
+    <p class="govuk-body govuk-!-margin-bottom-6">
+      Live accessibility statement and issue data from
+      <a class="govuk-link govuk-link--no-visited-state" href="@aiss.AissWebBaseUrl" target="_blank" rel="noopener noreferrer">AISS<span class="govuk-visually-hidden"> (opens in new tab)</span></a>.
+    </p>
+    @if (!string.IsNullOrWhiteSpace(aiss.ErrorMessage))
+    {
+      <div class="govuk-inset-text govuk-!-margin-bottom-4" role="status">@aiss.ErrorMessage</div>
+    }
+
     <div class="govuk-summary-card govuk-!-margin-bottom-6">
       <div class="govuk-summary-card__title-wrapper">
-        <h3 class="govuk-summary-card__title">Accessibility profile</h3>
+        <h3 class="govuk-summary-card__title">AISS service</h3>
+        <div class="govuk-summary-card__actions">
+          <ul class="govuk-summary-card__action-list">
+            @if (!string.IsNullOrEmpty(aiss.ServicePageUrl))
+            {
+              <li class="govuk-summary-card__action">
+                <a class="govuk-link govuk-link--no-visited-state" href="@aiss.ServicePageUrl" target="_blank" rel="noopener noreferrer">
+                  View in AISS<span class="govuk-visually-hidden"> (opens in new tab)</span>
+                </a>
+              </li>
+            }
+          </ul>
+        </div>
       </div>
       <div class="govuk-summary-card__content">
         <dl class="govuk-summary-list govuk-!-margin-bottom-0">
           <div class="govuk-summary-list__row">
-            <dt class="govuk-summary-list__key">WCAG target</dt>
-            <dd class="govuk-summary-list__value">@acc.WcagVersion @acc.WcagLevel</dd>
+            <dt class="govuk-summary-list__key">Service register ID</dt>
+            <dd class="govuk-summary-list__value"><code>@Model.Product.UniqueID</code></dd>
           </div>
           <div class="govuk-summary-list__row">
-            <dt class="govuk-summary-list__key">Statement URL</dt>
+            <dt class="govuk-summary-list__key">AISS service ID</dt>
+            <dd class="govuk-summary-list__value">@(svc?.Id.ToString() ?? "—")</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Service name</dt>
+            <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(svc?.Name) ? "—" : svc.Name)</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Product URL</dt>
             <dd class="govuk-summary-list__value">
-              @if (!string.IsNullOrWhiteSpace(acc.StatementUrl))
+              @if (!string.IsNullOrWhiteSpace(svc.Url))
               {
-                <a class="govuk-link govuk-link--no-visited-state" href="@acc.StatementUrl" target="_blank" rel="noopener noreferrer">@acc.StatementUrl</a>
+                <a class="govuk-link govuk-link--no-visited-state" href="@svc.Url" target="_blank" rel="noopener noreferrer">@svc.Url</a>
               }
               else
               {
                 <span>—</span>
+              }
+            </dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Public statement</dt>
+            <dd class="govuk-summary-list__value">
+              @if (!string.IsNullOrWhiteSpace(aiss.PublicStatementUrl))
+              {
+                <a class="govuk-link govuk-link--no-visited-state" href="@aiss.PublicStatementUrl" target="_blank" rel="noopener noreferrer">
+                  View statement<span class="govuk-visually-hidden"> (opens in new tab)</span>
+                </a>
+              }
+              else
+              {
+                <span>Not live</span>
               }
             </dd>
           </div>
           <div class="govuk-summary-list__row">
             <dt class="govuk-summary-list__key">Statement installed</dt>
-            <dd class="govuk-summary-list__value">@(acc.StatementInstalled ? "Yes" : "No")</dd>
+            <dd class="govuk-summary-list__value">@(svc.StatementInstalled ? "Yes" : "No")</dd>
           </div>
+          @if (!string.IsNullOrWhiteSpace(svc.LastReviewedDate))
+          {
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Last reviewed</dt>
+              <dd class="govuk-summary-list__value">@svc.LastReviewedDate</dd>
+            </div>
+          }
           <div class="govuk-summary-list__row">
-            <dt class="govuk-summary-list__key">Verified</dt>
+            <dt class="govuk-summary-list__key">Open issues</dt>
             <dd class="govuk-summary-list__value">
-              @if (acc.VerifiedAt.HasValue)
+              @if ((summary?.OpenCount ?? 0) + (summary?.InProgressCount ?? 0) > 0 && !string.IsNullOrEmpty(aiss.OpenIssuesPageUrl))
               {
-                @acc.VerifiedAt.Value.ToString("d MMM yyyy")@(!string.IsNullOrWhiteSpace(acc.VerifiedBy) ? $" — {acc.VerifiedBy}" : "")
+                var openTotal = (summary?.OpenCount ?? 0) + (summary?.InProgressCount ?? 0);
+                <a class="govuk-link govuk-link--no-visited-state" href="@aiss.OpenIssuesPageUrl" target="_blank" rel="noopener noreferrer">
+                  @openTotal<span class="govuk-visually-hidden"> open issues in AISS (opens in new tab)</span>
+                </a>
               }
               else
               {
-                <span>—</span>
+                @((summary?.OpenCount ?? 0) + (summary?.InProgressCount ?? 0))
               }
             </dd>
           </div>
           <div class="govuk-summary-list__row">
-            <dt class="govuk-summary-list__key">Open issues</dt>
-            <dd class="govuk-summary-list__value">@(acc.Issues.Count(i => !string.Equals(i.Status, "resolved", StringComparison.OrdinalIgnoreCase) && !string.Equals(i.Status, "wont_fix", StringComparison.OrdinalIgnoreCase)))</dd>
+            <dt class="govuk-summary-list__key">Overdue</dt>
+            <dd class="govuk-summary-list__value">@(summary?.OverdueCount.ToString() ?? "—")</dd>
           </div>
         </dl>
       </div>
     </div>
 
-    var issueRows = acc.Issues.OrderByDescending(i => i.IdentifiedDate).Take(40).ToList();
-    @if (issueRows.Count > 0)
+    @if (aiss.OpenIssues.Count > 0)
     {
-      <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Recorded issues</h3>
+      <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Open issues</h3>
+      <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-2">
+        Showing up to 40 open issues. Manage and update issues in
+        <a class="govuk-link govuk-link--no-visited-state" href="@aiss.OpenIssuesPageUrl" target="_blank" rel="noopener noreferrer">AISS<span class="govuk-visually-hidden"> (opens in new tab)</span></a>.
+      </p>
       <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
         <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
         <table class="govuk-table govuk-!-margin-bottom-0">
           <thead class="govuk-table__head">
             <tr class="govuk-table__row">
-              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Summary</button></th>
-              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Type</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Issue</button></th>
               <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
-              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Identified</button></th>
+              <th scope="col" class="govuk-table__header govuk-!-font-tabular-numbers" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Date raised</button></th>
+              <th scope="col" class="govuk-table__header govuk-!-font-tabular-numbers" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Due date</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Level</button></th>
             </tr>
           </thead>
           <tbody class="govuk-table__body">
-            @foreach (var iss in issueRows)
+            @foreach (var iss in aiss.OpenIssues)
             {
+              var issueUrl = aiss.IssuePageUrl(iss.Id);
+              var wcagLevels = WcagLevels(iss);
               <tr class="govuk-table__row">
-                <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(iss.IssueTitle) ? "—" : iss.IssueTitle)</td>
-                <td class="govuk-table__cell">@iss.IssueType</td>
-                <td class="govuk-table__cell">@iss.Status</td>
-                <td class="govuk-table__cell">@iss.IdentifiedDate.ToString("d MMM yyyy")</td>
+                <th scope="row" class="govuk-table__header">
+                  @if (!string.IsNullOrEmpty(issueUrl))
+                  {
+                    <a class="govuk-link govuk-link--no-visited-state" href="@issueUrl" target="_blank" rel="noopener noreferrer">
+                      @(string.IsNullOrWhiteSpace(iss.Title) ? "—" : iss.Title)
+                      <span class="govuk-visually-hidden"> (view in AISS, opens in new tab)</span>
+                    </a>
+                  }
+                  else
+                  {
+                    @(string.IsNullOrWhiteSpace(iss.Title) ? "—" : iss.Title)
+                  }
+                </th>
+                <td class="govuk-table__cell">
+                  <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--@StatusBadgeModifier(iss.Status)">@StatusLabel(iss.Status)</span>
+                  @if (iss.IsOverdue)
+                  {
+                    <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--red govuk-!-margin-left-1">Overdue</span>
+                  }
+                </td>
+                <td class="govuk-table__cell govuk-!-font-tabular-numbers">@(FormatDate(iss.CreatedAt) ?? "—")</td>
+                <td class="govuk-table__cell govuk-!-font-tabular-numbers">@(FormatDate(iss.PlannedFixDate) ?? "—")</td>
+                <td class="govuk-table__cell">
+                  @if (wcagLevels.Count > 0)
+                  {
+                    @foreach (var lvl in wcagLevels)
+                    {
+                      <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--@WcagLevelBadgeModifier(lvl) govuk-!-margin-right-1 govuk-!-display-inline-block">@lvl</span>
+                    }
+                  }
+                  else if (string.Equals(iss.IssueType, "best_practice_issue", StringComparison.OrdinalIgnoreCase))
+                  {
+                    <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">BP</span>
+                  }
+                  else if (string.Equals(iss.IssueType, "usability_issue", StringComparison.OrdinalIgnoreCase))
+                  {
+                    <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">Usability</span>
+                  }
+                  else if (string.Equals(iss.IssueType, "wcag_criteria_not_known", StringComparison.OrdinalIgnoreCase))
+                  {
+                    <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Not known</span>
+                  }
+                  else
+                  {
+                    <span>—</span>
+                  }
+                </td>
               </tr>
             }
           </tbody>
         </table>
       </div>
+    }
+    else
+    {
+      <p class="govuk-body govuk-!-margin-bottom-0">No open issues in AISS for this service.</p>
     }
   }
 </div>

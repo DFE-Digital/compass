@@ -61,6 +61,9 @@ public partial class ModernWorkService
             .Include(x => x.ProjectMissions).ThenInclude(pm => pm.Mission)
             .Include(x => x.ProjectObjectives).ThenInclude(po => po.Objective)
             .Include(x => x.ProjectContacts).ThenInclude(pc => pc.User)
+            .Include(x => x.SeniorResponsibleOfficers).ThenInclude(sro => sro.User)
+            .Include(x => x.ServiceOwners).ThenInclude(so => so.User)
+            .Include(x => x.PmoContacts).ThenInclude(pmo => pmo.User)
             .Include(x => x.BudgetOwners).ThenInclude(bo => bo.BusinessAreaLookup)
             .Include(x => x.ProjectWorkItemTags).ThenInclude(t => t.WorkItemTagLookup)
             .FirstOrDefaultAsync(cancellationToken);
@@ -155,27 +158,7 @@ public partial class ModernWorkService
             }
         }
 
-        var standardRoleToId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["SRO"] = 1,
-            ["Service Owner"] = 2,
-            ["PMO Contact"] = 3,
-            ["Reporting contact"] = 4
-        };
-        work.Contacts.Clear();
-        foreach (var pc in p.ProjectContacts)
-        {
-            int? roleId = standardRoleToId.TryGetValue(pc.Role, out var rid) ? rid : 5;
-            work.Contacts.Add(new WorkItemContact
-            {
-                Id = pc.Id,
-                WorkItemId = p.Id,
-                ContactRoleTypeId = roleId,
-                RoleName = roleId == 5 ? pc.Role : null,
-                DisplayName = pc.Name ?? "",
-                AppUser = pc.User
-            });
-        }
+        ProjectGovernanceContacts.PopulateWorkItemContacts(work, p);
 
         work.RiskOrIssues.Clear();
         foreach (var r in p.Risks.Where(x => !x.IsDeleted))
@@ -379,22 +362,7 @@ public partial class ModernWorkService
             });
         }
 
-        var assignedCanEdit = await WhereAssignedToUser(
-                _db.Projects.Where(proj => proj.Id == projectId && !proj.IsDeleted),
-                emailLower,
-                currentUser.Id)
-            .AnyAsync(cancellationToken);
-        var opsFullAccess = await _permissionService.IsCentralOperationsAdminOrSuperAdminAsync(userEmail);
-        var baIds = BusinessAreaAdminHelper.GetBusinessAreaLookupIdsForProject(p);
-        var baAdmin = baIds.Count > 0
-                      && (await _businessAreaAdmins.IsUserAdminForAnyBusinessAreaAsync(
-                              currentUser.Id, baIds, cancellationToken)
-                          || await _businessAreaLeadership.IsUserLeaderForAnyBusinessAreaAsync(
-                              currentUser.Id, baIds, cancellationToken));
-        var divIds = p.Directorates?.Select(d => d.DivisionId).ToList() ?? new List<int>();
-        var dirLeader = await _directorateLeadership.IsUserDirectorateLeaderForProjectContextAsync(
-            currentUser.Id, divIds, baIds, cancellationToken);
-        var canEdit = assignedCanEdit || opsFullAccess || baAdmin || dirLeader;
+        var canEdit = await CanUserEditWorkItemAsync(projectId, userEmail, cancellationToken);
 
         var isWatching = await _db.ProjectWatchlists.AsNoTracking()
             .AnyAsync(w => w.UserId == currentUser.Id && w.ProjectId == projectId, cancellationToken);
@@ -422,8 +390,7 @@ public partial class ModernWorkService
             .ToListAsync(cancellationToken);
 
         var nowDate = DateTime.UtcNow.Date;
-        var reportY = nowDate.Year;
-        var reportM = nowDate.Month;
+        var (reportY, reportM) = _monthlyUpdateService.ResolveDashboardReportingPeriod(DateTime.UtcNow);
         var currentDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportY, reportM);
         var currentPeriodLabel = new DateTime(reportY, reportM, 1).ToString("MMMM yyyy", CultureInfo.GetCultureInfo("en-GB"));
 
@@ -490,7 +457,7 @@ public partial class ModernWorkService
         var periodDueByKey = new Dictionary<string, (DateTime DueDate, string Label)>();
         var updatesByYearMonth = p.MonthlyUpdates
             .ToLookup(mu => (mu.Year, mu.Month));
-        var currentMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+        var currentMonth = new DateTime(reportY, reportM, 1);
         for (var i = -18; i <= 1; i++)
         {
             var dt = new DateTime(reportY, reportM, 1).AddMonths(i);
@@ -503,10 +470,14 @@ public partial class ModernWorkService
 
             var hasUpdate = updatesByYearMonth[(y, m)].Any();
             var isCurrentOrFuture = dt >= currentMonth;
-            if (!hasUpdate && !isCurrentOrFuture)
-                continue;
-
             var explicitPeriod = _monthlyUpdateService.TryGetActiveExplicitReportingPeriod(y, m);
+            if (!hasUpdate && !isCurrentOrFuture)
+            {
+                var graceEditingAllowed = explicitPeriod != null
+                    && _monthlyUpdateService.IsMonthlyReportEditingAllowed(y, m);
+                if (!graceEditingAllowed)
+                    continue;
+            }
             var muForPeriod = updatesByYearMonth[(y, m)].FirstOrDefault();
             var rollup = _monthlyUpdateService.CalculateUpdateStatus(y, m, muForPeriod?.SubmittedAt);
             reportingPeriods.Add(new ReportingCyclePeriod
@@ -546,10 +517,13 @@ public partial class ModernWorkService
             "risks" => "risks",
             "issues" => "issues",
             "contacts" => "contacts",
+            "serviceregister" => "serviceregister",
+            "service-register" => "serviceregister",
             "governance" => "strategicalignment", // legacy tab param
             "strategicalignment" => "strategicalignment",
             "dependencies" => "dependencies",
             "assumptions" => "assumptions",
+            "history" => "history",
             "links" => "dependencies",
             _ => "overview"
         };
@@ -560,7 +534,12 @@ public partial class ModernWorkService
             _ => "inprogress"
         };
 
-        var budgetOwnerName = p.BudgetOwners?.FirstOrDefault()?.BusinessAreaLookup?.Name ?? "—";
+        var budgetOwnerNames = p.BudgetOwners?
+            .Where(bo => bo.BusinessAreaLookup != null)
+            .Select(bo => bo.BusinessAreaLookup!.Name)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? new List<string>();
+        var budgetOwnerName = budgetOwnerNames.Count > 0 ? string.Join(", ", budgetOwnerNames) : "—";
 
         controller.ViewBag.MainNavSection = "work";
         controller.ViewBag.SubNavItem = "work-allwork";
@@ -572,6 +551,8 @@ public partial class ModernWorkService
         controller.ViewBag.RiskAppetiteOptions = riskAppetiteOpts;
         controller.ViewBag.PrimaryContactName = p.PrimaryContactUser?.Name ?? p.PrimaryContactUser?.Email ?? "—";
         controller.ViewBag.BudgetOwnerName = budgetOwnerName;
+        controller.ViewBag.BudgetOwnerNames = budgetOwnerNames;
+        controller.ViewBag.BusinessCaseApproval = string.IsNullOrWhiteSpace(p.BusinessCaseApproval) ? null : p.BusinessCaseApproval.Trim();
         DemandRequest? linkedDemandVm = null;
         if (p.PipelineDemandRequestId.HasValue)
         {
@@ -606,22 +587,17 @@ public partial class ModernWorkService
         controller.ViewBag.BudgetOwnerUser = (User?)null;
         var keyPeople = new List<(string Key, string Label)>
         {
-            ("PrimaryContact", "Primary contact"),
-            ("BudgetOwner", "Budget owner"),
-            ("ContactRoleType:1", "SRO"),
-            ("ContactRoleType:2", "Service Owner"),
-            ("ContactRoleType:3", "PMO Contact"),
-            ("ContactRoleType:4", "Reporting contact")
-        };
-        var standardRoleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "SRO", "Service Owner", "PMO Contact", "Reporting contact"
+            ("ContactRoleType:1", "Senior Responsible Officer(s)"),
+            ("ContactRoleType:2", "Service Owner(s)"),
+            ("PrimaryContact", "Primary Contact"),
+            ("ContactRoleType:3", "PMO Contacts"),
+            ("Directorates", "Directorate(s)"),
+            ("BudgetOwner", "Budget Owner(s)")
         };
         var customKeys = new List<(string Key, string Label)>();
-        foreach (var pc in p.ProjectContacts)
+        foreach (var pc in p.ProjectContacts
+                     .Where(pc => string.Equals(pc.TeamStatus, ProjectGovernanceContacts.GovernanceTeamStatus, StringComparison.OrdinalIgnoreCase)))
         {
-            if (standardRoleNames.Contains(pc.Role))
-                continue;
             var k = "CustomRole:" + Uri.EscapeDataString(pc.Role);
             if (customKeys.All(x => x.Key != k))
                 customKeys.Add((k, pc.Role));
@@ -662,6 +638,83 @@ public partial class ModernWorkService
         controller.ViewBag.CurrentRagCssClass = currentRag.CssClass;
         controller.ViewBag.WorkIdShort = work.Id.ToString("D8", CultureInfo.InvariantCulture);
 
+        var riskCount = work.RiskOrIssues.Count(r =>
+            string.Equals(r.Type, "Risk", StringComparison.OrdinalIgnoreCase));
+        var issueCount = work.RiskOrIssues.Count(r =>
+            string.Equals(r.Type, "Issue", StringComparison.OrdinalIgnoreCase));
+        var strategicAlignmentCount =
+            work.PriorityOutcomes.Count +
+            work.MissionPillars.Count +
+            work.Tags.Count +
+            work.GovernmentDepartments.Count;
+        var contactsCount =
+            work.Contacts.Count +
+            (p.PrimaryContactUserId.HasValue ? 1 : 0) +
+            budgetOwnerNames.Count +
+            work.Directorates.Count;
+
+        controller.ViewBag.WorkSideNavMilestoneCount = work.Milestones.Count(m => !m.IsDeleted);
+        controller.ViewBag.WorkSideNavMonthlyUpdatesCount =
+            (work.Status == "Active" || work.Status == "Paused")
+                ? reportingPeriods.Count(p =>
+                    string.Equals(p.UpdateStatus, nameof(UpdateSubmissionStatus.Due), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(p.UpdateStatus, nameof(UpdateSubmissionStatus.Late), StringComparison.OrdinalIgnoreCase))
+                : 0;
+        controller.ViewBag.WorkSideNavRisksCount = riskCount;
+        controller.ViewBag.WorkSideNavIssuesCount = issueCount;
+        controller.ViewBag.WorkSideNavAssumptionsCount = work.Assumptions.Count;
+        controller.ViewBag.WorkSideNavDependenciesCount = work.Dependencies.Count;
+        controller.ViewBag.WorkSideNavContactsCount = contactsCount;
+        controller.ViewBag.WorkSideNavStrategicAlignmentCount = strategicAlignmentCount;
+
+        var trackingRegisters = await LoadRaidRegistersTrackingWorkItemAsync(
+            projectId,
+            controller,
+            cancellationToken);
+        controller.ViewBag.WorkRaidTrackingRegisters = trackingRegisters;
+
         return work;
+    }
+
+    private async Task<List<WorkRaidRegisterTrackingVm>> LoadRaidRegistersTrackingWorkItemAsync(
+        int projectId,
+        Controller controller,
+        CancellationToken cancellationToken)
+    {
+        var registerIds = await _db.RaidRegisterWorkItems.AsNoTracking()
+            .Where(w => w.ProjectId == projectId && !w.RaidRegister.IsDeleted)
+            .Select(w => w.RaidRegisterId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (registerIds.Count == 0)
+            return new List<WorkRaidRegisterTrackingVm>();
+
+        var registers = await _db.RaidRegisters.AsNoTracking()
+            .Where(r => registerIds.Contains(r.Id))
+            .Include(r => r.Users).ThenInclude(u => u.User)
+            .Include(r => r.CreatedByUser)
+            .OrderBy(r => r.Name)
+            .ToListAsync(cancellationToken);
+
+        return registers.Select(r => new WorkRaidRegisterTrackingVm
+        {
+            RegisterId = r.Id,
+            Name = r.Name,
+            OwnerName = ResolveRaidRegisterOwnerName(r),
+            DetailUrl = controller.Url.Action("RegisterDetail", "ModernRaid", new { id = r.Id }) ?? "#"
+        }).ToList();
+    }
+
+    private static string ResolveRaidRegisterOwnerName(RaidRegister register)
+    {
+        var ownerUser = register.Users
+            .FirstOrDefault(u => u.Role == RaidRegisterRole.Owner)?.User;
+        if (ownerUser != null)
+            return ownerUser.Name ?? ownerUser.Email ?? "Unknown";
+
+        return register.CreatedByUser?.Name
+            ?? register.CreatedByUser?.Email
+            ?? "Unknown";
     }
 }

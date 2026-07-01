@@ -160,10 +160,11 @@ public sealed class FipsCompletionBulkImportService : IFipsCompletionBulkImportS
                             cmdbProduct.Channels.Select(c => c.FipsChannelId).ToArray(),
                             cmdbProduct.UserGroups.Select(u => u.FipsUserGroupId).ToArray(),
                             cmdbProduct.Types.Select(t => t.FipsTypeId).ToArray(),
-                            cmdbProduct.CategorisationItems.Select(c => c.FipsCategorisationItemId).ToArray(),
+                            directorateIds: null,
+                            categorisationItemIds: cmdbProduct.CategorisationItems.Select(c => c.FipsCategorisationItemId).ToArray(),
                             reportingContactUserId: null,
                             isEnterpriseService: null,
-                            cancellationToken);
+                            cancellationToken: cancellationToken);
 
                         if (outcome.NotFound || outcome.Forbidden)
                         {

@@ -1,0 +1,67 @@
+@model Compass.ViewModels.Modern.RaidRegisterDetailViewModel
+
+<div class="raid-spreadsheet-toolbar govuk-!-margin-bottom-3">
+  <div class="raid-ss-toolbar-actions">
+    <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" id="btn-add-assumption-top" data-entity-type="assumption">+ Add assumption</button>
+  </div>
+  <div class="raid-ss-toolbar-actions">
+    @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_ToolbarIcons.cshtml", Model.Id)
+    <button type="button" class="govuk-button govuk-!-margin-bottom-0 raid-ss-fullscreen-btn" data-module="govuk-button">
+      <span class="btn-fs-expand">Expand table</span>
+      <span class="btn-fs-collapse" style="display:none">Exit full width</span>
+    </button>
+  </div>
+</div>
+
+<div class="raid-spreadsheet-wrap" id="assumptions-spreadsheet">
+  <div class="raid-spreadsheet-scroll">
+    <table class="govuk-table govuk-table--small-text-until-tablet raid-spreadsheet-table" id="tbl-assumptions" data-entity-type="assumption">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row raid-ss-header-row">
+          <th class="govuk-table__header raid-ss-sticky-col raid-ss-sortable raid-ss-filter-text" data-col="ref">Ref</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filter-text" data-col="description">Description</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="status">Status</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="criticality">Criticality</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="relation">Relation</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="owner">Owner</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="createdDate">Created date</th>
+          <th class="govuk-table__header raid-ss-sortable raid-ss-filterable" data-col="lastEdited">Last edited</th>
+        </tr>
+        <tr class="govuk-table__row raid-ss-filter-row" style="display:none"></tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var assumption in Model.Assumptions)
+        {
+          <tr class="govuk-table__row raid-ss-row" data-entity="assumption" data-id="@assumption.Id">
+            <td class="govuk-table__cell raid-ss-sticky-col">
+              <div class="raid-ss-ref-cell">
+                <a class="govuk-link govuk-link--no-visited-state raid-ss-ref-link" href="#" data-href="@Url.Action("AssumptionDetail", "ModernRaid", new { id = assumption.Id })">@assumption.Reference</a>
+                @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Spreadsheet_CommentToggle.cshtml", ("assumption", assumption.Id, assumption.CommentCount))
+              </div>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="description" data-type="modal" data-label="Description">
+              <span class="raid-ss-val">@assumption.Description</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="assumptionStatusId" data-type="select" data-lookup="assumptionStatuses" data-current="@assumption.StatusId">
+              <span class="raid-ss-val">@(assumption.Status ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell raid-ss-editable" data-field="assumptionCriticalityId" data-type="select" data-lookup="assumptionCriticalities" data-current="@assumption.CriticalityId">
+              <span class="raid-ss-val">@(assumption.Criticality ?? "—")</span>
+            </td>
+            @await Html.PartialAsync("~/Views/Modern/Raid/_RaidRegisterRelationCell.cshtml", assumption.ToRelationParts("assumptions"))
+            <td class="govuk-table__cell raid-ss-editable" data-field="ownerUserId" data-type="userlookup" data-current="@assumption.OwnerUserId" data-label="Owner">
+              <span class="raid-ss-val">@(assumption.Owner ?? "—")</span>
+            </td>
+            <td class="govuk-table__cell">
+              @assumption.CreatedAt.ToString("dd MMM yy")
+            </td>
+            <td class="govuk-table__cell raid-ss-last-edited" data-updated="@assumption.UpdatedAt.ToString("o")">
+              <span class="raid-ss-val">@assumption.UpdatedAt.ToString("dd MMM yy HH:mm")</span>
+            </td>
+          </tr>
+        }
+      </tbody>
+      <tfoot></tfoot>
+    </table>
+  </div>
+</div>

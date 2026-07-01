@@ -465,7 +465,7 @@ public partial class ModernRaidController
             if (n.PostMitigationRagStatusLookupId is int ragId && rags.TryGetValue(ragId, out var rag))
             {
                 ragName = rag.Name;
-                ragCss = rag.CssClass != null ? $"dfe-f-badge dfe-f-badge--small dfe-c-tag--{rag.CssClass}" : null;
+                ragCss = WorkBadgeCss.RagCompactBadgeClass(rag.Name);
             }
 
             return new ModernRaidNearMissRow(

@@ -35,6 +35,12 @@ public class AdminLookupEditorViewModel
     /// <summary>Risk tier / action source summary line.</summary>
     public string? DetailSummary { get; set; }
 
+    /// <summary>Resource band minimum (inclusive) FTE.</summary>
+    public decimal? MinFte { get; set; }
+
+    /// <summary>Resource band maximum (inclusive) FTE. Null means open ended.</summary>
+    public decimal? MaxFte { get; set; }
+
     /// <summary>Organizational group parent (directorate) for portfolios.</summary>
     public int? ParentGroupId { get; set; }
 
@@ -111,6 +117,7 @@ public enum AdminLookupEditorKind
     RiskTierLike,
     ActivityType,
     WorkItemTag,
+    ResourceBand,
     MissionPillar,
     PriorityOutcome,
     Portfolio,

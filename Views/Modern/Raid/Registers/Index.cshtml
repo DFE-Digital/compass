@@ -1,0 +1,136 @@
+@model Compass.ViewModels.Modern.RaidRegisterDashboardViewModel
+@{
+  ViewData["Title"] = "RAID registers";
+  var hasAny = Model.YourRegisters.Any() || Model.AllRegisters.Any();
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">RAID registers</li>
+}
+
+<div class="modern-work-page govuk-!-padding-bottom-6">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new Compass.ViewModels.Modern.ModernPageHeaderViewModel
+  {
+    Title = "RAID registers",
+    Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body-s govuk-!-margin-bottom-0\">Manage registers you belong to and browse all registers in the organisation.</p>"),
+    Actions = new Microsoft.AspNetCore.Html.HtmlString($"<a href=\"{Url.Action("RegisterCreate", "ModernRaid")}\" class=\"govuk-button\" data-module=\"govuk-button\">Create register</a>")
+  })
+
+  @if (TempData["SuccessMessage"] is string successMsg)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" data-module="govuk-notification-banner">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title">Success</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-body">@successMsg</p>
+      </div>
+    </div>
+  }
+
+  @if (!hasAny)
+  {
+    <div class="govuk-!-margin-top-6">
+      <p class="govuk-body">There are no RAID registers yet.</p>
+      <p class="govuk-body">
+        <a href="@Url.Action("RegisterCreate", "ModernRaid")" class="govuk-link">Create your first RAID register</a>
+        to start managing risks, issues, assumptions, dependencies and near misses.
+      </p>
+    </div>
+  }
+  else
+  {
+    <nav class="dfe-f-sub-navigation govuk-!-margin-top-4 govuk-!-margin-bottom-0" aria-label="Register lists" id="raid-registers-tabs">
+      <ul class="dfe-f-sub-navigation__list">
+        <li class="dfe-f-sub-navigation__item dfe-f-sub-navigation__item--current" id="raid-reg-tab-yours">
+          <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="#your-registers" data-reg-tab="your-registers" aria-current="page">
+            Your registers <span class="dfe-c-fw-regular">(@Model.YourRegisters.Count)</span>
+          </a>
+        </li>
+        <li class="dfe-f-sub-navigation__item" id="raid-reg-tab-all">
+          <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="#all-registers" data-reg-tab="all-registers">
+            All registers <span class="dfe-c-fw-regular">(@Model.AllRegisters.Count)</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <div id="panel-your-registers" class="raid-registers-tab-panel raid-registers-tab-active">
+      <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0" style="color:#505a5f;">
+        Registers you created or where you are listed as owner, manager or viewer (A–Z).
+      </p>
+      @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_RegisterListTable.cshtml", Model.YourRegisters, new ViewDataDictionary(ViewData)
+      {
+        { "TableId", "tbl-your-registers" },
+        { "TableCaption", "Your RAID registers" },
+        { "EmptyMessage", "You do not own or belong to any registers yet. Create a register to get started." }
+      })
+    </div>
+
+    <div id="panel-all-registers" class="raid-registers-tab-panel">
+      <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0" style="color:#505a5f;">
+        Every register in the organisation (A–Z). Registers you are not listed on are read-only.
+      </p>
+      @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_RegisterListTable.cshtml", Model.AllRegisters, new ViewDataDictionary(ViewData)
+      {
+        { "TableId", "tbl-all-registers" },
+        { "TableCaption", "All RAID registers" },
+        { "EmptyMessage", "No registers have been created yet." }
+      })
+    </div>
+  }
+</div>
+
+@section Styles {
+  <style nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+    .raid-registers-tab-panel { display: none; }
+    .raid-registers-tab-panel.raid-registers-tab-active { display: block; }
+    .raid-registers-table__register-col {
+      min-width: 18rem;
+      width: 28%;
+    }
+  </style>
+}
+
+@section Scripts {
+  <script nonce="@Context.Items["Nonce"]">
+  (function () {
+    var panels = document.querySelectorAll('.raid-registers-tab-panel');
+    var navItems = document.querySelectorAll('#raid-registers-tabs .dfe-f-sub-navigation__item');
+
+    function activateTab(tabId) {
+      var panelId = 'panel-' + tabId;
+      panels.forEach(function (p) {
+        p.classList.toggle('raid-registers-tab-active', p.id === panelId);
+      });
+      navItems.forEach(function (li) {
+        var link = li.querySelector('a');
+        var isCurrent = link && link.getAttribute('data-reg-tab') === tabId;
+        li.classList.toggle('dfe-f-sub-navigation__item--current', isCurrent);
+        if (link) link.toggleAttribute('aria-current', isCurrent);
+      });
+    }
+
+    document.querySelectorAll('#raid-registers-tabs a[data-reg-tab]').forEach(function (link) {
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        var tab = link.getAttribute('data-reg-tab');
+        history.pushState(null, '', '#' + tab);
+        activateTab(tab);
+      });
+    });
+
+    var defaultTab = @Model.YourRegisters.Any().ToString().ToLower() === 'true' ? 'your-registers' : 'all-registers';
+    var hash = (window.location.hash || '').replace('#', '');
+    if (hash !== 'all-registers' && hash !== 'your-registers') {
+      hash = defaultTab;
+    }
+    activateTab(hash);
+    window.addEventListener('hashchange', function () {
+      var h = (window.location.hash || '#your-registers').replace('#', '');
+      activateTab(h === 'all-registers' ? 'all-registers' : 'your-registers');
+    });
+  })();
+  </script>
+}

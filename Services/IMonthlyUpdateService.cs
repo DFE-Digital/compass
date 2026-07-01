@@ -18,7 +18,8 @@ public interface IMonthlyUpdateService
 
     /// <summary>
     /// Whether the monthly report form may be edited for this reporting month (submission window).
-    /// When no explicit period exists, returns true so legacy deadline rules continue to apply.
+    /// When explicit periods are configured, only those configured windows are editable.
+    /// When none are configured, legacy deadline rules apply and this returns true.
     /// </summary>
     bool IsMonthlyReportEditingAllowed(int reportingYear, int reportingMonth);
 
@@ -29,8 +30,8 @@ public interface IMonthlyUpdateService
     DateTime GetSubmissionWindowCloses(int reportingYear, int reportingMonth);
 
     /// <summary>
-    /// Reporting period for home / work dashboards: prefers the calendar month when its submission window is open,
-    /// then the previous month if still open, otherwise the legacy applicable-period heuristic.
+    /// Reporting period for home / work dashboards: prefers the explicit period whose
+    /// submission window contains today, otherwise falls back to the legacy applicable-period heuristic.
     /// </summary>
     (int Year, int Month) ResolveDashboardReportingPeriod(DateTime utcNow);
 }

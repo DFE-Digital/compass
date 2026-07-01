@@ -15,15 +15,18 @@ public sealed class CommissionReportingAnalyticsService
 {
     private readonly CompassDbContext _context;
     private readonly IProductsApiService _productsApi;
+    private readonly IPerformanceReportingEligibilityService _eligibilityService;
     private readonly ILogger<CommissionReportingAnalyticsService> _logger;
 
     public CommissionReportingAnalyticsService(
         CompassDbContext context,
         IProductsApiService productsApi,
+        IPerformanceReportingEligibilityService eligibilityService,
         ILogger<CommissionReportingAnalyticsService> logger)
     {
         _context = context;
         _productsApi = productsApi;
+        _eligibilityService = eligibilityService;
         _logger = logger;
     }
 
@@ -249,6 +252,173 @@ public sealed class CommissionReportingAnalyticsService
         return page;
     }
 
+    /// <summary>
+    /// Reporting hub — live submission progress for active commission rounds (same product scope as commission workspace All products).
+    /// </summary>
+    public async Task<ModernReportingPerformanceSubmissionProgressViewModel> BuildPerformanceSubmissionProgressPageAsync(
+        int? commissionId,
+        CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var activeCommissions = await _context.Commissions.AsNoTracking()
+            .Where(c => c.IsActive && now >= c.OpenDate)
+            .OrderByDescending(c => c.DueDate)
+            .ToListAsync(cancellationToken);
+
+        var commissionOptions = activeCommissions.Select(c => new CommissionPickerOption
+        {
+            Id = c.Id,
+            Name = c.Name,
+            DueDate = c.DueDate,
+            IsActive = c.IsActive
+        }).ToList();
+
+        if (commissionOptions.Count == 0)
+        {
+            return new ModernReportingPerformanceSubmissionProgressViewModel
+            {
+                CommissionOptions = commissionOptions
+            };
+        }
+
+        var defaultId = activeCommissions.FirstOrDefault(c => IsOpenForSubmissionWindow(c, now))?.Id
+            ?? activeCommissions[0].Id;
+
+        var selectedId = commissionId ?? defaultId;
+        if (activeCommissions.All(c => c.Id != selectedId))
+            selectedId = defaultId;
+
+        var commission = activeCommissions.First(c => c.Id == selectedId);
+
+        List<ProductDto> scopeProducts;
+        try
+        {
+            scopeProducts = await GetCommissionScopeProductsForReportingAsync(commission, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Performance submission progress: failed to load product catalogue for commission {Id}", selectedId);
+            return new ModernReportingPerformanceSubmissionProgressViewModel
+            {
+                CommissionOptions = commissionOptions,
+                SelectedCommissionId = selectedId,
+                Commission = MapCommissionSummary(commission),
+                HasCommission = true,
+                SubmissionWindowPhase = ResolveSubmissionWindowPhase(commission, now),
+                LoadError = "Could not load the product catalogue. Try again shortly."
+            };
+        }
+
+        var submissions = await _context.CommissionSubmissions.AsNoTracking()
+            .Include(cs => cs.MetricValues)
+            .Where(cs => cs.CommissionId == commission.Id)
+            .ToListAsync(cancellationToken);
+
+        var submissionsDict = submissions.ToDictionary(cs => cs.ProductDocumentId, cs => cs, StringComparer.OrdinalIgnoreCase);
+        var metricsForPeriod =
+            await CommissionReportingMetricsHelper.LoadEnabledMetricsForCommissionPeriodAsync(
+                _context, commission, cancellationToken);
+
+        var perProduct = await BuildPerProductStatsForScopeAsync(commission, scopeProducts, submissions, cancellationToken);
+        var submitted = perProduct.Count(x => x.Status == CommissionSubmissionStatus.Submitted);
+        var late = perProduct.Count(x => x.Status == CommissionSubmissionStatus.Late);
+        var inProgress = perProduct.Count(x => x.Status == CommissionSubmissionStatus.InProgress);
+        var notStarted = perProduct.Count(x => x.Status == CommissionSubmissionStatus.NotStarted);
+        var total = perProduct.Count;
+        var returned = submitted + late;
+        var returnRate = total == 0 ? 0 : Math.Round(100m * returned / total, 1);
+
+        var metNum = perProduct.Sum(x => x.CompletedMetrics);
+        var metDen = perProduct.Sum(x => x.TotalMetrics);
+        var metPct = metDen == 0 ? 0 : Math.Round(100m * metNum / metDen, 1);
+
+        var businessAreas = BuildBusinessAreaRows(perProduct);
+        var metricRows = BuildMetricRows(commission, scopeProducts, submissionsDict, metricsForPeriod);
+        var windowPhase = ResolveSubmissionWindowPhase(commission, now);
+        var daysUntilDue = (int)(commission.DueDate.Date - now.Date).TotalDays;
+
+        return new ModernReportingPerformanceSubmissionProgressViewModel
+        {
+            CommissionOptions = commissionOptions,
+            SelectedCommissionId = commission.Id,
+            Commission = MapCommissionSummary(commission),
+            ProductsInScope = total,
+            NotStarted = notStarted,
+            InProgress = inProgress,
+            Submitted = submitted,
+            Late = late,
+            ReturnRatePercent = returnRate,
+            MetricCompletionPercent = metPct,
+            CompletedMetricCells = metNum,
+            ApplicableMetricCells = metDen,
+            SubmissionWindowPhase = windowPhase,
+            DaysUntilDue = daysUntilDue,
+            BusinessAreas = businessAreas,
+            MetricRows = metricRows,
+            HasCommission = true
+        };
+    }
+
+    private async Task<List<ProductDto>> GetCommissionScopeProductsForReportingAsync(
+        Commission commission,
+        CancellationToken cancellationToken)
+    {
+        var allCatalog = await _productsApi.GetAllProductsAsync(null);
+        var catalogue = CommissionReportingProductScope.GetAllActivePublishedEligible(allCatalog);
+        var scope = catalogue
+            .Where(p => CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commission, p))
+            .ToList();
+
+        var eligibilityCache = await _eligibilityService.LoadEligibilityCacheAsync();
+        return scope
+            .Where(p => !_eligibilityService.IsProductExcludedForCommission(p, commission, eligibilityCache))
+            .ToList();
+    }
+
+    private static List<ModernReportingPerformanceBusinessAreaRow> BuildBusinessAreaRows(
+        List<ProductCommissionStats> perProduct)
+    {
+        return perProduct
+            .GroupBy(p => p.BusinessArea ?? "Not assigned", StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var rowTotal = g.Count();
+                var ns = g.Count(x => x.Status == CommissionSubmissionStatus.NotStarted);
+                var ip = g.Count(x => x.Status == CommissionSubmissionStatus.InProgress);
+                var sub = g.Count(x => x.Status == CommissionSubmissionStatus.Submitted);
+                var late = g.Count(x => x.Status == CommissionSubmissionStatus.Late);
+                var returned = sub + late;
+                var rate = rowTotal == 0 ? 0 : Math.Round(100m * returned / rowTotal, 1);
+
+                var metNum = 0;
+                var metDen = 0;
+                foreach (var x in g)
+                {
+                    if (x.TotalMetrics > 0)
+                    {
+                        metDen += x.TotalMetrics;
+                        metNum += x.CompletedMetrics;
+                    }
+                }
+
+                var metPct = metDen == 0 ? 0 : Math.Round(100m * metNum / metDen, 1);
+                return new ModernReportingPerformanceBusinessAreaRow
+                {
+                    BusinessArea = g.Key,
+                    Total = rowTotal,
+                    NotStarted = ns,
+                    InProgress = ip,
+                    Submitted = sub,
+                    Late = late,
+                    ReturnRatePercent = rate,
+                    MetricCompletionPercent = metPct
+                };
+            })
+            .ToList();
+    }
+
     /// <summary>Operations console — live commission dashboard (any commission, includes metric completion).</summary>
     public async Task<OperationsManagePerformanceViewModel> BuildOperationsManagePerformanceAsync(
         int? commissionId,
@@ -290,10 +460,7 @@ public sealed class CommissionReportingAnalyticsService
         List<ProductDto> eligibleProducts;
         try
         {
-            var allProducts = await _productsApi.GetAllProductsAsync();
-            eligibleProducts = CommissionReportingProductScope.GetAllActivePublishedEligible(allProducts)
-                .Where(p => CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commissionEntity, p))
-                .ToList();
+            eligibleProducts = await GetCommissionScopeProductsForReportingAsync(commissionEntity, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -318,7 +485,7 @@ public sealed class CommissionReportingAnalyticsService
             await CommissionReportingMetricsHelper.LoadEnabledMetricsForCommissionPeriodAsync(
                 _context, commissionEntity, cancellationToken);
 
-        var perProduct = await BuildPerProductStatsAsync(commissionEntity, eligibleProducts, submissions, cancellationToken);
+        var perProduct = await BuildPerProductStatsForScopeAsync(commissionEntity, eligibleProducts, submissions, cancellationToken);
         var submitted = perProduct.Count(x => x.Status == CommissionSubmissionStatus.Submitted);
         var late = perProduct.Count(x => x.Status == CommissionSubmissionStatus.Late);
         var inProgress = perProduct.Count(x => x.Status == CommissionSubmissionStatus.InProgress);
@@ -634,6 +801,15 @@ public sealed class CommissionReportingAnalyticsService
             .Where(p => CommissionReportingProductScope.ProductMatchesCommissionInScopeRules(commission, p))
             .ToList();
 
+        return await BuildPerProductStatsForScopeAsync(commission, scopeProducts, submissions, cancellationToken);
+    }
+
+    private async Task<List<ProductCommissionStats>> BuildPerProductStatsForScopeAsync(
+        Commission commission,
+        List<ProductDto> scopeProducts,
+        List<CommissionSubmission> submissions,
+        CancellationToken cancellationToken)
+    {
         var submissionsDict = submissions.ToDictionary(cs => cs.ProductDocumentId, cs => cs, StringComparer.OrdinalIgnoreCase);
 
         var metricsForPeriod =

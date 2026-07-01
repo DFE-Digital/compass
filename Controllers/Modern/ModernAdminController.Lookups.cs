@@ -12,7 +12,7 @@ public partial class ModernAdminController
     private static readonly HashSet<string> LookupEditorPanels = new(StringComparer.OrdinalIgnoreCase)
     {
         "business-areas", "phases", "directorates", "universal-barriers", "priorities", "rag-defns",
-        "activity-types", "work-tagging", "mission-pillars", "priority-outcomes", "portfolios",
+        "activity-types", "work-tagging", "resource-bands", "mission-pillars", "priority-outcomes", "portfolios",
         "risk-tiers", "risk-categories", "issue-categories", "departments",
         "std-categories", "std-subcategories",
         "risk-statuses", "risk-priorities", "risk-likelihoods", "risk-impact-levels", "risk-proximities", "risk-treatments", "risk-appetites",
@@ -65,6 +65,7 @@ public partial class ModernAdminController
         "rag-defns" => "RAG status",
         "activity-types" => "activity type",
         "work-tagging" => "work tag",
+        "resource-bands" => "resource band",
         "mission-pillars" => "mission pillar",
         "priority-outcomes" => "priority outcome",
         "portfolios" => "portfolio",
@@ -200,6 +201,32 @@ public partial class ModernAdminController
                 {
                     Panel = p, EditorKind = AdminLookupEditorKind.WorkItemTag, Id = wt.Id, Name = wt.Name, Description = wt.Description,
                     SortOrder = wt.SortOrder, IsActive = wt.IsActive
+                };
+
+            case "resource-bands":
+                if (id is null)
+                    return new AdminLookupEditorViewModel
+                    {
+                        Panel = p,
+                        EditorKind = AdminLookupEditorKind.ResourceBand,
+                        SortOrder = 0,
+                        IsActive = true,
+                        MinFte = 0.01m
+                    };
+                var rb = await _context.ResourceBandLookups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+                if (rb == null) return null;
+                return new AdminLookupEditorViewModel
+                {
+                    Panel = p,
+                    EditorKind = AdminLookupEditorKind.ResourceBand,
+                    Id = rb.Id,
+                    Name = rb.Name,
+                    Description = rb.Description,
+                    MinFte = rb.MinFte,
+                    MaxFte = rb.MaxFte,
+                    CssClass = rb.CssClass,
+                    SortOrder = rb.SortOrder,
+                    IsActive = rb.IsActive
                 };
 
             case "mission-pillars":
@@ -432,6 +459,94 @@ public partial class ModernAdminController
         await _context.SaveChangesAsync();
         TempData["AdminMessage"] = $"\"{entity.Name}\" is now {(entity.IsActive ? "active" : "inactive")}.";
         return RedirectToAction(nameof(LookupEdit), new { panel = "activity-types", id });
+    }
+
+    // ── Resource bands ──
+
+    [HttpPost("resource-band/create")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResourceBandCreate(string name, string? description, decimal minFte, decimal? maxFte, string? cssClass, int sortOrder)
+    {
+        name = (name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["AdminMessage"] = "Name is required.";
+            return RedirectToAction(nameof(LookupCreate), new { panel = "resource-bands" });
+        }
+        if (minFte < 0)
+        {
+            TempData["AdminMessage"] = "Minimum FTE must be zero or greater.";
+            return RedirectToAction(nameof(LookupCreate), new { panel = "resource-bands" });
+        }
+        if (maxFte.HasValue && maxFte.Value < minFte)
+        {
+            TempData["AdminMessage"] = "Maximum FTE must be greater than or equal to minimum FTE.";
+            return RedirectToAction(nameof(LookupCreate), new { panel = "resource-bands" });
+        }
+
+        var entity = new ResourceBandLookup
+        {
+            Name = name,
+            Description = description?.Trim(),
+            MinFte = Math.Round(minFte, 2),
+            MaxFte = maxFte.HasValue ? Math.Round(maxFte.Value, 2) : null,
+            CssClass = string.IsNullOrWhiteSpace(cssClass) ? null : cssClass.Trim(),
+            SortOrder = sortOrder
+        };
+        _context.ResourceBandLookups.Add(entity);
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Resource band \"{name}\" added.";
+        return RedirectToAction(nameof(LookupEdit), new { panel = "resource-bands", id = entity.Id });
+    }
+
+    [HttpPost("resource-band/{id:int}/edit")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResourceBandEdit(int id, string name, string? description, decimal minFte, decimal? maxFte, string? cssClass, int sortOrder)
+    {
+        var entity = await _context.ResourceBandLookups.FindAsync(id);
+        if (entity == null) return NotFound();
+
+        name = (name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["AdminMessage"] = "Name is required.";
+            return RedirectToAction(nameof(LookupEdit), new { panel = "resource-bands", id });
+        }
+        if (minFte < 0)
+        {
+            TempData["AdminMessage"] = "Minimum FTE must be zero or greater.";
+            return RedirectToAction(nameof(LookupEdit), new { panel = "resource-bands", id });
+        }
+        if (maxFte.HasValue && maxFte.Value < minFte)
+        {
+            TempData["AdminMessage"] = "Maximum FTE must be greater than or equal to minimum FTE.";
+            return RedirectToAction(nameof(LookupEdit), new { panel = "resource-bands", id });
+        }
+
+        entity.Name = name;
+        entity.Description = description?.Trim();
+        entity.MinFte = Math.Round(minFte, 2);
+        entity.MaxFte = maxFte.HasValue ? Math.Round(maxFte.Value, 2) : null;
+        entity.CssClass = string.IsNullOrWhiteSpace(cssClass) ? null : cssClass.Trim();
+        entity.SortOrder = sortOrder;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Resource band \"{name}\" updated.";
+        return RedirectToAction(nameof(Index), new { panel = "resource-bands" });
+    }
+
+    [HttpPost("resource-band/{id:int}/toggle")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResourceBandToggle(int id)
+    {
+        var entity = await _context.ResourceBandLookups.FindAsync(id);
+        if (entity == null) return NotFound();
+        entity.IsActive = !entity.IsActive;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"\"{entity.Name}\" is now {(entity.IsActive ? "active" : "inactive")}.";
+        return RedirectToAction(nameof(LookupEdit), new { panel = "resource-bands", id });
     }
 
     // ── Risk appetites ──

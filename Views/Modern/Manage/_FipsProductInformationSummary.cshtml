@@ -1,0 +1,125 @@
+@model FipsProductDetailViewModel
+@using Compass.Services.Fips
+@{
+  var p = Model.Product;
+  var nc = ViewBag.FipsNavContext as string;
+  var canEditFields = Model.CanEditInformation || (Model.IsOperationsServiceRegisterProduct && Model.CanManage);
+  var editBaseUrl = Url.Action("FipsProductEditInformation", "ModernManage", new { id = p.Id, nc }) ?? "#";
+  string FieldEditUrl(string fieldKey) => editBaseUrl + "#" + FipsProductInformationFieldKeys.HashForField(fieldKey);
+  string CatEditUrl(int groupId) => editBaseUrl + "#" + FipsProductInformationFieldKeys.CategorisationElementId(groupId);
+
+  var readOnlyFields = new (string Label, string? Value, bool IsUrl, string FieldKey, string ChangeVisuallyHidden)[]
+  {
+    ("Description", p.UserDescription, false, FipsProductInformationFieldKeys.Description, "description"),
+    ("Phase", p.Phase?.Name, false, FipsProductInformationFieldKeys.Phase, "phase"),
+    ("Directorate", Model.DirectoratesDisplay, false, FipsProductInformationFieldKeys.Directorate, "directorate"),
+    ("Business area", Model.BusinessAreasDisplay, false, FipsProductInformationFieldKeys.BusinessArea, "business area"),
+    ("Channel", Model.ChannelsDisplay, false, FipsProductInformationFieldKeys.Channel, "channel"),
+    ("User group", Model.UserGroupsDisplay, false, FipsProductInformationFieldKeys.UserGroup, "user group"),
+    ("Type", Model.TypesDisplay, false, FipsProductInformationFieldKeys.Type, "type"),
+    ("Enterprise service", p.IsEnterpriseService ? "Yes" : "No", false, FipsProductInformationFieldKeys.EnterpriseService, "enterprise service"),
+    ("Product URL", p.ProductURL, true, FipsProductInformationFieldKeys.ProductUrl, "product URL")
+  };
+}
+
+<div class="govuk-summary-card fips-product-detail__card govuk-!-margin-bottom-6">
+  <div class="govuk-summary-card__title-wrapper">
+    <h2 class="govuk-summary-card__title">Product details</h2>
+  </div>
+  <div class="govuk-summary-card__content">
+    <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+      @if (Model.IsOperationsServiceRegisterProduct)
+      {
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">CMDB description</dt>
+          <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(p.CMDBDescription) ? "—" : p.CMDBDescription)</dd>
+        </div>
+      }
+      @foreach (var f in readOnlyFields)
+      {
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">@f.Label</dt>
+          <dd class="govuk-summary-list__value">
+            @if (f.IsUrl && !string.IsNullOrWhiteSpace(f.Value))
+            {
+              <a href="@f.Value" class="govuk-link" target="_blank" rel="noopener">@f.Value</a>
+            }
+            else
+            {
+              @(string.IsNullOrWhiteSpace(f.Value) ? "—" : f.Value)
+            }
+          </dd>
+          @if (canEditFields)
+          {
+            <dd class="govuk-summary-list__actions">
+              <a class="govuk-link fips-detail-edit-modal-open" href="@FieldEditUrl(f.FieldKey)" data-fips-modal-title="@FipsProductInformationFieldKeys.TitleForField(f.FieldKey)">Change<span class="govuk-visually-hidden"> @f.ChangeVisuallyHidden</span></a>
+            </dd>
+          }
+        </div>
+      }
+      @foreach (var cat in Model.CategorisationSummaryLines)
+      {
+        var catField = FipsProductInformationFieldKeys.Categorisation(cat.GroupId);
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">@cat.GroupName</dt>
+          <dd class="govuk-summary-list__value">@cat.ItemsDisplay</dd>
+          @if (canEditFields)
+          {
+            <dd class="govuk-summary-list__actions">
+              <a class="govuk-link fips-detail-edit-modal-open" href="@CatEditUrl(cat.GroupId)" data-fips-modal-title="@FipsProductInformationFieldKeys.TitleForField(catField, cat.GroupName)">Change<span class="govuk-visually-hidden"> @cat.GroupName</span></a>
+            </dd>
+          }
+        </div>
+      }
+    </dl>
+  </div>
+</div>
+
+<div class="govuk-summary-card fips-product-detail__card">
+  <div class="govuk-summary-card__title-wrapper">
+    <h2 class="govuk-summary-card__title">People</h2>
+  </div>
+  <div class="govuk-summary-card__content">
+    @if (p.Contacts.Count == 0)
+    {
+      <p class="govuk-body govuk-!-margin-bottom-0">No contacts assigned.</p>
+    }
+    else
+    {
+      <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+        @foreach (var c in p.Contacts.OrderBy(c => c.FipsContactRole.DisplayOrder))
+        {
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">@c.FipsContactRole.Name</dt>
+            <dd class="govuk-summary-list__value">
+              @{
+                var emRo = c.UserEmail?.Trim();
+                var nmRo = c.UserName?.Trim();
+                var hasEmRo = !string.IsNullOrEmpty(emRo);
+                var hasNmRo = !string.IsNullOrEmpty(nmRo);
+              }
+              @if (hasEmRo && hasNmRo)
+              {
+                <a href="mailto:@emRo" class="govuk-link govuk-link--no-visited-state">@nmRo</a>
+              }
+              else if (hasEmRo)
+              {
+                <a href="mailto:@emRo" class="govuk-link govuk-link--no-visited-state">@emRo</a>
+              }
+              else if (hasNmRo)
+              {
+                @nmRo
+              }
+              else
+              {
+                <span>—</span>
+              }
+            </dd>
+          </div>
+        }
+      </dl>
+    }
+  </div>
+</div>
+
+@await Html.PartialAsync("~/Views/Modern/Shared/_FipsProductInformationEditModal.cshtml")

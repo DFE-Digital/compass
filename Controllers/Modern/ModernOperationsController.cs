@@ -42,7 +42,9 @@ public class ModernOperationsController : Controller
     private readonly IModernWorkService _modernWork;
     private readonly IProductsApiService _productsApi;
     private readonly IFipsBusinessAreaLookupSyncService _fipsBusinessAreaLookupSync;
+    private readonly IFipsDirectorateLookupSyncService _fipsDirectorateLookupSync;
     private readonly IFipsCompletionBulkImportService _fipsCompletionBulkImport;
+    private readonly IFipsStrapiLegacyImportService _fipsStrapiLegacyImport;
     private readonly IOperationsRiskEditService _operationsRiskEdit;
     private readonly INotificationService _notificationService;
     private readonly IConfiguration _configuration;
@@ -57,7 +59,9 @@ public class ModernOperationsController : Controller
         IModernWorkService modernWork,
         IProductsApiService productsApi,
         IFipsBusinessAreaLookupSyncService fipsBusinessAreaLookupSync,
+        IFipsDirectorateLookupSyncService fipsDirectorateLookupSync,
         IFipsCompletionBulkImportService fipsCompletionBulkImport,
+        IFipsStrapiLegacyImportService fipsStrapiLegacyImport,
         IOperationsRiskEditService operationsRiskEdit,
         INotificationService notificationService,
         IConfiguration configuration,
@@ -71,7 +75,9 @@ public class ModernOperationsController : Controller
         _modernWork = modernWork;
         _productsApi = productsApi;
         _fipsBusinessAreaLookupSync = fipsBusinessAreaLookupSync;
+        _fipsDirectorateLookupSync = fipsDirectorateLookupSync;
         _fipsCompletionBulkImport = fipsCompletionBulkImport;
+        _fipsStrapiLegacyImport = fipsStrapiLegacyImport;
         _operationsRiskEdit = operationsRiskEdit;
         _notificationService = notificationService;
         _configuration = configuration;
@@ -215,7 +221,7 @@ public class ModernOperationsController : Controller
         if (fipsEnabled)
         {
             serviceRegisterActive = await _db.CMDBProducts.AsNoTracking()
-                .CountAsync(p => p.Status == CMDBProductStatus.Active, ct);
+                .CountAsync(p => p.Status == CMDBProductStatus.Active && !p.IsEnterpriseService, ct);
         }
 
         var activeCommissions = await _db.Commissions.AsNoTracking()
@@ -541,22 +547,11 @@ public class ModernOperationsController : Controller
                 + linkText
                 + "\n\nIf you have any problems, reply to this email, or contact design.ops@education.gov.uk";
 
-            var cmsTemplateId = _configuration["GovUkNotify:CmsAccessRequestTemplateId"]?.Trim();
-            var templateOverride = string.IsNullOrWhiteSpace(cmsTemplateId) ? null : cmsTemplateId;
-            var notifyExtras = new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                ["cms_name"] = entity.CmsName ?? "",
-                ["registration_link"] = linkText,
-                ["requestor_first_name"] = entity.RequestorFirstName ?? ""
-            };
-
             var send = await _notificationService.SendEmailAsync(
                 entity.RequestorEmail,
                 subject,
                 body,
                 triggerCode: "cms_access_request",
-                notifyTemplateId: templateOverride,
-                notifyPersonalisationExtras: notifyExtras,
                 cancellationToken: ct);
 
             if (!send.Success)
@@ -819,6 +814,53 @@ public class ModernOperationsController : Controller
         var vm = await RaidEscalationManagementViewModelBuilder.BuildAsync(_db, tab, ct);
 
         return View("~/Views/Modern/Operations/RaidEscalations.cshtml", vm);
+    }
+
+    [HttpPost("raid/soft-delete")]
+    [ValidateAntiForgeryToken]
+    [ServiceFilter(typeof(Compass.Filters.RaidFeatureGateFilter))]
+    public async Task<IActionResult> RaidSoftDelete(
+        [FromForm] string entityType,
+        [FromForm] int entityId,
+        CancellationToken ct)
+    {
+        var userEmail = CurrentUserEmail;
+        if (entityType == "Risk")
+        {
+            var risk = await _db.Risks.FirstOrDefaultAsync(r => r.Id == entityId && !r.IsDeleted, ct);
+            if (risk == null)
+            {
+                TempData["ErrorMessage"] = $"Risk R-{entityId:D4} not found or already deleted.";
+                return RedirectToAction(nameof(RaidEscalations), new { tab = "active" });
+            }
+            risk.IsDeleted = true;
+            risk.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Risk {RiskId} soft-deleted by operations user {Email}", entityId, userEmail);
+            TempData["SuccessMessage"] = $"Risk R-{entityId:D4} \"{risk.Title}\" has been deleted.";
+        }
+        else if (entityType == "Issue")
+        {
+            var issue = await _db.Issues.FirstOrDefaultAsync(i => i.Id == entityId && !i.IsDeleted, ct);
+            if (issue == null)
+            {
+                TempData["ErrorMessage"] = $"Issue I-{entityId:D4} not found or already deleted.";
+                return RedirectToAction(nameof(RaidEscalations), new { tab = "active" });
+            }
+            issue.IsDeleted = true;
+            issue.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Issue {IssueId} soft-deleted by operations user {Email}", entityId, userEmail);
+            TempData["SuccessMessage"] = $"Issue I-{entityId:D4} \"{issue.Title}\" has been deleted.";
+        }
+        else
+        {
+            TempData["ErrorMessage"] = "Invalid entity type for deletion.";
+        }
+
+        return RedirectToAction(nameof(RaidEscalations), new { tab = "active" });
     }
 
     [HttpGet("raid/risks/{id:int}/edit")]
@@ -1279,9 +1321,9 @@ public class ModernOperationsController : Controller
             : f.BulkEnterpriseAction;
         var applyEnterprise = TryParseBulkEnterpriseAction(bulkEnterpriseAction, out var bulkEnterpriseValue);
 
-        if (!f.ApplyStatus && !f.ApplyPhase && !f.ApplyBusinessArea && !f.ApplyChannel && !f.ApplyType && !applyEnterprise)
+        if (!f.ApplyStatus && !f.ApplyPhase && !f.ApplyBusinessArea && !f.ApplyDirectorate && !f.ApplyChannel && !f.ApplyType && !applyEnterprise)
         {
-            TempData["Error"] = "Select at least one action (status, phase, enterprise, business area, channels, or types).";
+            TempData["Error"] = "Select at least one action (status, phase, enterprise, directorate, business area, channels, or types).";
             return RedirectBack();
         }
 
@@ -1304,10 +1346,18 @@ public class ModernOperationsController : Controller
                 f.BusinessAreaLookupIds ?? Array.Empty<int>(), ct);
         }
 
+        int[]? resolvedDirsFromLookups = null;
+        if (f.ApplyDirectorate)
+        {
+            resolvedDirsFromLookups = await _fipsDirectorateLookupSync.ResolveToFipsDirectorateIdsAsync(
+                f.DirectorateLookupIds ?? Array.Empty<int>(), ct);
+        }
+
         var isNewTabOnly = string.Equals(f.SourceTab, "new", StringComparison.OrdinalIgnoreCase);
         var productsQ = _db.CMDBProducts
             .AsNoTracking()
             .Include(p => p.BusinessAreas)
+            .Include(p => p.Directorates)
             .Include(p => p.Channels)
             .Include(p => p.UserGroups)
             .Include(p => p.Types)
@@ -1332,12 +1382,15 @@ public class ModernOperationsController : Controller
         {
             try
             {
-                if (f.ApplyPhase || f.ApplyBusinessArea || f.ApplyChannel || f.ApplyType || applyEnterprise)
+                if (f.ApplyPhase || f.ApplyBusinessArea || f.ApplyDirectorate || f.ApplyChannel || f.ApplyType || applyEnterprise)
                 {
                     var phase = f.ApplyPhase ? f.BulkPhaseId : p.PhaseId;
                     var bas = f.ApplyBusinessArea
                         ? (resolvedBasFromLookups ?? Array.Empty<int>())
                         : p.BusinessAreas.Select(b => b.FipsBusinessAreaId).ToArray();
+                    var dirs = f.ApplyDirectorate
+                        ? (resolvedDirsFromLookups ?? Array.Empty<int>())
+                        : p.Directorates.Select(d => d.FipsDirectorateId).ToArray();
                     var ch = f.ApplyChannel
                         ? (f.BulkChannelIds ?? Array.Empty<int>())
                         : p.Channels.Select(c => c.FipsChannelId).ToArray();
@@ -1360,6 +1413,7 @@ public class ModernOperationsController : Controller
                         ch,
                         ug,
                         ty,
+                        dirs,
                         cat,
                         null,
                         isEnterprise,
@@ -1541,6 +1595,7 @@ public class ModernOperationsController : Controller
         var product = await _db.CMDBProducts
             .Include(p => p.Phase)
             .Include(p => p.BusinessAreas).ThenInclude(ba => ba.FipsBusinessArea)
+            .Include(p => p.Directorates).ThenInclude(d => d.FipsDirectorate).ThenInclude(fd => fd.DirectorateLookup)
             .Include(p => p.Channels).ThenInclude(c => c.FipsChannel)
             .Include(p => p.UserGroups).ThenInclude(ug => ug.FipsUserGroup)
             .Include(p => p.Types).ThenInclude(t => t.FipsType)
@@ -1554,6 +1609,8 @@ public class ModernOperationsController : Controller
         var detailTab = NormalizeServiceRegisterProductTab(tab);
         if (detailTab == "cmdb")
             edit = false;
+        if (edit && detailTab == "information")
+            return RedirectToAction("FipsProductEditInformation", "ModernManage", new { id, nc = "operations" });
 
         var email = CurrentUserEmail;
         var productIdStr = product.Id.ToString();
@@ -1571,12 +1628,13 @@ public class ModernOperationsController : Controller
             })
             .ToListAsync(ct);
 
-        var editMode = edit && detailTab == "information";
+        var editMode = false;
 
         var vm = new FipsProductDetailViewModel
         {
             Product = product,
             CanManage = true,
+            CanEditInformation = true,
             CurrentUserEmail = email,
             AuditHistory = auditHistory,
             NavContext = null,
@@ -1585,23 +1643,6 @@ public class ModernOperationsController : Controller
             EditMode = editMode,
             ActiveDetailTab = detailTab,
         };
-
-        if (editMode)
-        {
-            await _fipsBusinessAreaLookupSync.SyncFromBusinessAreaLookupsAsync(ct);
-            vm.PhaseOptions = await _db.PhaseLookups
-                .Where(x => x.IsActive).OrderBy(x => x.SortOrder).ToListAsync(ct);
-            vm.BusinessAreaLookupOptions =
-                await FipsBusinessAreaLookupUiHelper.LoadBusinessAreaLookupOptionsForEditAsync(_db, product, ct);
-            vm.SelectedBusinessAreaLookupIds =
-                FipsBusinessAreaLookupUiHelper.GetSelectedBusinessAreaLookupIds(product, vm.BusinessAreaLookupOptions);
-            vm.ChannelOptions = await _db.FipsChannels
-                .Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
-            vm.UserGroupOptions = await _db.FipsUserGroups
-                .Where(x => x.Active && x.ParentId == null).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
-            vm.TypeOptions = await _db.FipsTypes
-                .Where(x => x.Active).OrderBy(x => x.DisplayOrder).ToListAsync(ct);
-        }
 
         await FipsProductCategorisationPresentation.PopulateAsync(_db, vm, editMode, ct);
 
@@ -1616,7 +1657,7 @@ public class ModernOperationsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ServiceRegisterProductUpdate(Guid id, string? userDescription,
         int? phaseId, string? productURL,
-        int[]? businessAreaLookupIds, int[]? channelIds, int[]? userGroupIds, int[]? typeIds,
+        int[]? directorateLookupIds, int[]? businessAreaLookupIds, int[]? channelIds, int[]? userGroupIds, int[]? typeIds,
         int[]? categorisationItemIds,
         int? reportingContactUserId,
         bool isEnterpriseService,
@@ -1626,6 +1667,8 @@ public class ModernOperationsController : Controller
         if (blocked != null)
             return blocked;
 
+        var resolvedDirectorateIds =
+            await _fipsDirectorateLookupSync.ResolveToFipsDirectorateIdsAsync(directorateLookupIds ?? Array.Empty<int>(), ct);
         var resolvedBusinessAreaIds =
             await _fipsBusinessAreaLookupSync.ResolveToFipsBusinessAreaIdsAsync(businessAreaLookupIds ?? Array.Empty<int>(), ct);
 
@@ -1643,6 +1686,7 @@ public class ModernOperationsController : Controller
             channelIds,
             userGroupIds,
             typeIds,
+            resolvedDirectorateIds,
             categorisationItemIds,
             reportingContactUserId,
             isEnterpriseService: isEnterpriseService,
@@ -1810,6 +1854,80 @@ public class ModernOperationsController : Controller
         return View("~/Views/Modern/Operations/ServiceRegisterSyncSettings.cshtml", vm);
     }
 
+    [HttpPost("service-register/sync-settings/import-strapi-json")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ServiceRegisterImportStrapiJson(IFormFile? file, bool dryRun, CancellationToken ct)
+    {
+        var blocked = await FipsDatabaseDisabledRedirectAsync();
+        if (blocked != null)
+            return blocked;
+
+        SetNav("operations-service-register");
+        await EnsureDefaultCmdbSyncRulesAsync(ct);
+
+        FipsCompletionImportResult? importResult = null;
+
+        if (file == null || file.Length == 0)
+        {
+            TempData["Error"] = "Choose a JSON file to upload (legacy Strapi/CMS export with a data array).";
+        }
+        else
+        {
+            var ext = Path.GetExtension(file.FileName ?? "").ToLowerInvariant();
+            if (ext is not ".json")
+            {
+                TempData["Error"] = "Upload a JSON file (.json) exported from the legacy FIPS CMS.";
+            }
+            else
+            {
+                try
+                {
+                    await using var stream = file.OpenReadStream();
+                    var email = CurrentUserEmail;
+                    var auditName = User.Identity?.Name ?? email;
+                    importResult = await _fipsStrapiLegacyImport.ImportAsync(stream, email, auditName, dryRun, ct);
+                    if (importResult.UpdatedCount > 0)
+                    {
+                        TempData["Success"] = dryRun
+                            ? $"Dry run: {importResult.UpdatedCount} row(s) would update. Skipped {importResult.SkippedCount}, failed {importResult.FailedCount}."
+                            : $"Imported {importResult.UpdatedCount} row(s). Skipped {importResult.SkippedCount}, failed {importResult.FailedCount}.";
+                    }
+                    else if (importResult.FailedCount > 0)
+                        TempData["Error"] = $"Import failed for all {importResult.FailedCount} row(s). See details below.";
+                    else
+                        TempData["Success"] = dryRun
+                            ? "Dry run: no changes would be applied."
+                            : "No changes were needed — values already match.";
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogWarning(ex, "Strapi legacy JSON import parse failed");
+                    TempData["Error"] = "Could not read the JSON file. Ensure it is a valid Strapi export with a top-level data array.";
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Strapi legacy JSON import failed");
+                    TempData["Error"] = "Import failed. Check the file format and try again.";
+                }
+            }
+        }
+
+        var rules = await _db.FipsCmdbSyncRules.AsNoTracking()
+            .OrderBy(r => r.SortOrder)
+            .ThenBy(r => r.Id)
+            .ToListAsync(ct);
+        var subNav = await FipsProductListingHelper.BuildSubNavModelAsync(
+            _db, "sync", CurrentUserEmail, ct);
+        var vm = new ServiceRegisterSyncSettingsViewModel
+        {
+            Rules = rules,
+            SubNav = subNav,
+            CanSyncFromCmdb = true,
+            LastStrapiImportResult = importResult
+        };
+        return View("~/Views/Modern/Operations/ServiceRegisterSyncSettings.cshtml", vm);
+    }
+
     [HttpPost("service-register/sync-settings/add")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ServiceRegisterSyncSettingsAdd(
@@ -1857,10 +1975,11 @@ public class ModernOperationsController : Controller
             return RedirectToAction(nameof(ServiceRegisterSyncSettings));
         }
         if (string.Equals(ruleAction, FipsCmdbSyncRuleActions.SetStatus, StringComparison.OrdinalIgnoreCase)
+            && targetStatus != CMDBProductStatus.Active
             && targetStatus != CMDBProductStatus.Rejected
             && targetStatus != CMDBProductStatus.Inactive)
         {
-            TempData["Error"] = "Status rules may only set status to Rejected or Retired (inactive).";
+            TempData["Error"] = "Status rules may only set status to Active, Rejected, or Retired (inactive).";
             return RedirectToAction(nameof(ServiceRegisterSyncSettings));
         }
 

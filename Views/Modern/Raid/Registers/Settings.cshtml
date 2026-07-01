@@ -1,0 +1,260 @@
+@model Compass.ViewModels.Modern.RaidRegisterOnboardingViewModel
+@{
+  ViewData["Title"] = $"Settings — {Model.Name}";
+  var settingsUrl = $"/modern/raid/registers/{Model.RegisterId}/settings";
+  var detailUrl = $"/modern/raid/registers/{Model.RegisterId}";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="/modern/raid/registers">RAID Registers</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@detailUrl">@Model.Name</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Settings</li>
+}
+
+<h1 class="govuk-heading-l govuk-!-margin-bottom-2">@Model.Name</h1>
+<p class="govuk-body-l govuk-!-margin-bottom-6">
+  Manage register settings, scope and users.
+  @if (Model.IsRegisterOwner)
+  {
+    <text> As the owner, you can transfer ownership or delete this register.</text>
+  }
+</p>
+
+@if (TempData["SuccessMessage"] is string successMsg && !string.IsNullOrWhiteSpace(successMsg))
+{
+  <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region" aria-labelledby="rs-success-title">
+    <div class="govuk-notification-banner__header">
+      <h2 class="govuk-notification-banner__title" id="rs-success-title">Success</h2>
+    </div>
+    <div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@successMsg</p></div>
+  </div>
+}
+
+@await Html.PartialAsync("~/Views/Modern/Raid/Registers/_RaidScopeConflictPanel.cshtml")
+
+@if (TempData["ErrorMessage"] is string errorMsg && !string.IsNullOrWhiteSpace(errorMsg))
+{
+  <div class="govuk-error-summary govuk-!-margin-bottom-4" data-module="govuk-error-summary">
+    <div role="alert">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body"><p class="govuk-body">@errorMsg</p></div>
+    </div>
+  </div>
+}
+
+<div class="govuk-grid-row modern-work-detail-layout govuk-!-margin-top-4">
+  <div class="govuk-grid-column-one-quarter-from-desktop modern-work-detail-layout__nav">
+    <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 modern-work-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
+      <nav class="dfe-f-side-navigation" aria-label="Register settings sections" data-module="dfe-f-side-navigation">
+        <button type="button" class="dfe-f-side-navigation__toggle" aria-controls="rs-side-nav-list" aria-expanded="false">
+          Sections
+        </button>
+        <ul id="rs-side-nav-list" class="dfe-f-side-navigation__list" hidden>
+          <li class="dfe-f-side-navigation__item dfe-f-side-navigation__item--current">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+               href="#rs-details" id="rs-tab-details">Details</a>
+          </li>
+          <li class="dfe-f-side-navigation__item">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+               href="#rs-scope" id="rs-tab-scope">Scope</a>
+          </li>
+          <li class="dfe-f-side-navigation__item">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+               href="#rs-workitems" id="rs-tab-workitems">Work items</a>
+          </li>
+          <li class="dfe-f-side-navigation__item">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+               href="#rs-services" id="rs-tab-services">Services</a>
+          </li>
+          <li class="dfe-f-side-navigation__item">
+            <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+               href="#rs-users" id="rs-tab-users">Users</a>
+          </li>
+          @if (Model.IsRegisterOwner)
+          {
+            <li class="dfe-f-side-navigation__item">
+              <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+                 href="#rs-owner" id="rs-tab-owner">Owner</a>
+            </li>
+            <li class="dfe-f-side-navigation__item">
+              <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+                 href="#rs-delete" id="rs-tab-delete">Delete register</a>
+            </li>
+          }
+        </ul>
+      </nav>
+    </div>
+  </div>
+
+  <div class="govuk-grid-column-three-quarters-from-desktop modern-work-detail-main">
+
+    <!-- DETAILS -->
+    <div id="rs-details" class="tab-pane">
+      <div class="govuk-summary-card govuk-!-margin-top-0">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Register details</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <form method="post" action="@settingsUrl">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="section" value="details" />
+            @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Settings_Details.cshtml", Model)
+            <button type="submit" class="govuk-button govuk-!-margin-top-4" data-module="govuk-button">Save details</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCOPE -->
+    <div id="rs-scope" class="tab-pane">
+      <div class="govuk-summary-card govuk-!-margin-top-0">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Directorate and portfolio</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <form method="post" action="@settingsUrl">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="section" value="scope" />
+            @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Settings_Scope.cshtml", Model)
+            <button type="submit" class="govuk-button govuk-!-margin-top-4" data-module="govuk-button">Save scope</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORK ITEMS -->
+    <div id="rs-workitems" class="tab-pane">
+      <div class="govuk-summary-card govuk-!-margin-top-0">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Work items</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <form method="post" action="@settingsUrl">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="section" value="workitems" />
+            @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Settings_WorkItems.cshtml", Model)
+            <button type="submit" class="govuk-button govuk-!-margin-top-4" data-module="govuk-button">Save work items</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- SERVICES -->
+    <div id="rs-services" class="tab-pane">
+      <div class="govuk-summary-card govuk-!-margin-top-0">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Service register entries</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <form method="post" action="@settingsUrl">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="section" value="services" />
+            @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Settings_Services.cshtml", Model)
+            <button type="submit" class="govuk-button govuk-!-margin-top-4" data-module="govuk-button">Save services</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div id="rs-users" class="tab-pane">
+      <div class="govuk-summary-card govuk-!-margin-top-0">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Manage users</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          <form method="post" action="@settingsUrl">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="section" value="users" />
+            @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Settings_Users.cshtml", Model)
+            <button type="submit" class="govuk-button govuk-!-margin-top-4" data-module="govuk-button">Save users</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    @if (Model.IsRegisterOwner)
+    {
+      <!-- OWNER (owner only) -->
+      <div id="rs-owner" class="tab-pane">
+        <div class="govuk-summary-card govuk-!-margin-top-0">
+          <div class="govuk-summary-card__title-wrapper">
+            <h2 class="govuk-summary-card__title">Transfer ownership</h2>
+          </div>
+          <div class="govuk-summary-card__content">
+            <form method="post" action="@settingsUrl">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="section" value="owner" />
+              @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Settings_Owner.cshtml", Model)
+              <button type="submit" class="govuk-button govuk-!-margin-top-4" data-module="govuk-button">Save owner</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- DELETE (owner only) -->
+      <div id="rs-delete" class="tab-pane">
+        <div class="govuk-summary-card govuk-!-margin-top-0">
+          <div class="govuk-summary-card__title-wrapper">
+            <h2 class="govuk-summary-card__title">Delete register</h2>
+          </div>
+          <div class="govuk-summary-card__content">
+            @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_Settings_Delete.cshtml", Model)
+            <form method="post" action="@settingsUrl" class="govuk-!-margin-top-4"
+                  data-confirm-title="Delete RAID register"
+                  data-confirm-message="Delete &quot;@Model.Name&quot;? Risks, issues and other RAID records will not be deleted — only this register.">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="section" value="delete" />
+              <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button">Delete register</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    }
+
+  </div>
+</div>
+
+<script src="~/js/raid-register-scope.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
+
+<script nonce="@Context.Items["Nonce"]">
+(function () {
+  var panes = document.querySelectorAll('.modern-work-detail-main > .tab-pane');
+  var navItems = document.querySelectorAll('#rs-side-nav-list .dfe-f-side-navigation__item');
+
+  function activate(hash) {
+    var target = hash ? document.getElementById(hash.replace('#', '')) : null;
+    var found = false;
+    panes.forEach(function (p) {
+      if (p === target) { p.classList.add('on'); found = true; }
+      else { p.classList.remove('on'); }
+    });
+    if (!found && panes.length) panes[0].classList.add('on');
+
+    navItems.forEach(function (li) {
+      var link = li.querySelector('a');
+      if (link && link.getAttribute('href') === '#' + (target ? target.id : (panes[0] ? panes[0].id : ''))) {
+        li.classList.add('dfe-f-side-navigation__item--current');
+      } else {
+        li.classList.remove('dfe-f-side-navigation__item--current');
+      }
+    });
+  }
+
+  activate(window.location.hash);
+  window.addEventListener('hashchange', function () { activate(window.location.hash); });
+
+  navItems.forEach(function (li) {
+    var link = li.querySelector('a');
+    if (link) {
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        var href = link.getAttribute('href');
+        history.pushState(null, '', href);
+        activate(href);
+      });
+    }
+  });
+})();
+</script>

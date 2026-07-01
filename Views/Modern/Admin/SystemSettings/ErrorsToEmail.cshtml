@@ -1,0 +1,101 @@
+@model Compass.ViewModels.Modern.HttpErrorEmailSettingsViewModel
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Errors to email";
+  bool HasError(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+  string? ErrorMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Errors to email</li>
+}
+
+<div class="admin-hub">
+  @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new ModernPageHeaderViewModel {
+    Caption = "System settings",
+    Title = "Errors to email",
+    Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">When enabled, HTTP 405 and 500 responses are emailed via GOV.UK Notify using the configured contact address. The same errors are also logged to Application Insights with stack traces when available.</p>")
+  })
+
+  @if (ViewBag.AdminError != null)
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1.5rem;">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body"><p class="govuk-body">@ViewBag.AdminError</p></div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="errors-email-msg-title">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="errors-email-msg-title">Success</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-one-quarter-from-desktop">
+      @await Html.PartialAsync("~/Views/Modern/Shared/_AdminSystemSettingsSidebar.cshtml")
+    </div>
+    <div class="govuk-grid-column-three-quarters-from-desktop">
+      <form method="post" asp-action="ErrorsToEmail" novalidate>
+        @Html.AntiForgeryToken()
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+          <div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="govuk-error-summary">
+            <h2 class="govuk-error-summary__title" id="error-summary-title">There is a problem</h2>
+            <div class="govuk-error-summary__body">
+              <ul class="govuk-list govuk-error-summary__list">
+                @foreach (var key in ViewData.ModelState.Keys.Where(k => ViewData.ModelState[k]?.Errors?.Count > 0))
+                {
+                  <li><a href="#@key">@ErrorMsg(key)</a></li>
+                }
+              </ul>
+            </div>
+          </div>
+        }
+
+        <div class="govuk-form-group">
+          <fieldset class="govuk-fieldset">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Enable/disable setting</legend>
+            <div class="govuk-radios" data-module="govuk-radios">
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" type="radio" name="IsEnabled" id="IsEnabled-true" value="true" @(Model.IsEnabled ? "checked" : null) />
+                <label class="govuk-label govuk-radios__label" for="IsEnabled-true">Enabled</label>
+              </div>
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" type="radio" name="IsEnabled" id="IsEnabled-false" value="false" @(!Model.IsEnabled ? "checked" : null) />
+                <label class="govuk-label govuk-radios__label" for="IsEnabled-false">Disabled</label>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="govuk-form-group @(HasError(nameof(Model.ContactEmail)) ? "govuk-form-group--error" : "")">
+          <label class="govuk-label" for="ContactEmail">Contact email to send to</label>
+          <div class="govuk-hint">Alerts for HTTP 405 and 500 are sent to this address. Duplicate alerts for the same path are limited to once every 15 minutes.</div>
+          @if (HasError(nameof(Model.ContactEmail)))
+          {
+            <p class="govuk-error-message" id="ContactEmail-error"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.ContactEmail))</p>
+          }
+          <input class="govuk-input govuk-!-width-two-thirds @(HasError(nameof(Model.ContactEmail)) ? "govuk-input--error" : "")"
+                 type="email"
+                 id="ContactEmail"
+                 name="ContactEmail"
+                 value="@Model.ContactEmail"
+                 maxlength="256"
+                 autocomplete="email"
+                 @(HasError(nameof(Model.ContactEmail)) ? "aria-describedby=ContactEmail-error" : null) />
+        </div>
+
+        <button type="submit" class="govuk-button" data-module="govuk-button">Save settings</button>
+      </form>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,108 @@
+@using Compass.Models.Fips
+@model FipsProductDetailViewModel
+@{
+  var panel = Model.WorkItemsPanel;
+  if (panel == null)
+  {
+    return;
+  }
+  var links = panel.Links ?? Array.Empty<Compass.ViewModels.Modern.ServiceRegisterWorkLinkRow>();
+  var pickId = "fips-wrk-pick-" + panel.ProductId.ToString("N");
+}
+
+<div id="d-fips-work" class="tab-pane @(Model.ActiveDetailTab == "work" ? "on" : "")" role="tabpanel">
+  <div class="govuk-summary-card govuk-!-margin-top-0">
+    <div class="govuk-summary-card__title-wrapper">
+      <h2 class="govuk-summary-card__title">Work items</h2>
+    </div>
+    <div class="govuk-summary-card__content">
+      <p class="govuk-body">
+        Delivery work linked to this service register entry. Use this to trace work that created, changed, or depends on the service.
+      </p>
+
+      @if (links.Count == 0)
+      {
+        <p class="govuk-body dfe-c-text-muted govuk-!-margin-bottom-0">No work items are linked yet.</p>
+      }
+      else
+      {
+        <div class="dfe-f-table-wrapper govuk-!-margin-bottom-4" data-module="dfe-f-table">
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Linked work items</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Work item</th>
+                <th scope="col" class="govuk-table__header">Work item no.</th>
+                <th scope="col" class="govuk-table__header">Status</th>
+                <th scope="col" class="govuk-table__header">Linked</th>
+                @if (panel.CanLink)
+                {
+                  <th scope="col" class="govuk-table__header govuk-!-width-one-quarter govuk-!-text-align-right">Action</th>
+                }
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var link in links)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@link.DetailUrl">@link.Title</a>
+                  </td>
+                  <td class="govuk-table__cell">@link.WorkCode</td>
+                  <td class="govuk-table__cell">@(link.Status ?? "—")</td>
+                  <td class="govuk-table__cell">@link.LinkedAt.ToString("d MMM yyyy")</td>
+                  @if (panel.CanLink)
+                  {
+                    <td class="govuk-table__cell govuk-!-text-align-right">
+                      <form method="post"
+                            class="govuk-!-margin-bottom-0"
+                            action="@Url.Action("FipsProductUnlinkWork", "ModernManage", new { id = panel.ProductId, projectProductId = link.ProjectProductId })"
+                            data-confirm-title="Remove link?"
+                            data-confirm-message="This service register entry will no longer be linked to @link.Title.">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" data-module="govuk-button">Remove</button>
+                      </form>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (panel.CanLink)
+      {
+        <h3 class="govuk-heading-s">Link a work item</h3>
+        <p class="govuk-hint govuk-!-margin-bottom-2">Search by title or work item number (for example WI-00000001), then link the work item to this service.</p>
+        <div class="js-service-line-pick service-line-pick govuk-!-margin-bottom-0"
+             data-sl-search-url="@panel.PickWorkUrl"
+             data-sl-field-name="projectId"
+             data-sl-id-kind="int"
+             data-sl-single-submit="true"
+             data-sl-link-url="@panel.LinkUrl"
+             data-sl-pick-root-id="@pickId">
+          <div class="govuk-form-group govuk-!-margin-bottom-2">
+            <label class="govuk-label" for="@(pickId)-search">Search work register</label>
+            <div class="service-line-pick__combo">
+              <input class="govuk-input js-sl-search" id="@(pickId)-search" type="search" autocomplete="off" aria-autocomplete="list" aria-controls="@(pickId)-results" />
+              <div class="js-sl-results service-line-pick__results" id="@(pickId)-results" hidden></div>
+            </div>
+          </div>
+          <div class="js-sl-selected-preview govuk-inset-text govuk-!-margin-bottom-3" hidden role="status" aria-live="polite">
+            <p class="govuk-body govuk-!-margin-bottom-1">
+              <strong>Selected work item</strong>
+            </p>
+            <p class="govuk-body govuk-!-margin-bottom-1 js-sl-selected-title"></p>
+            <p class="govuk-body-s govuk-!-margin-bottom-0 dfe-c-text-muted js-sl-selected-meta"></p>
+          </div>
+          <form method="post" class="js-sl-link-form" action="@panel.LinkUrl" hidden>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="projectId" class="js-sl-link-id" value="" />
+            <button type="submit" class="govuk-button govuk-!-margin-bottom-0" data-module="govuk-button">Link work item</button>
+          </form>
+        </div>
+      }
+    </div>
+  </div>
+</div>

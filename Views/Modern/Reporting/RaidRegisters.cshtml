@@ -1,0 +1,147 @@
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@model ModernRaidRegisterCoverageReportViewModel
+@{
+  ViewData["Title"] = "RAID registers report";
+  var m = Model ?? new ModernRaidRegisterCoverageReportViewModel();
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">RAID registers</li>
+}
+
+<div class="mr-dash">
+  @{
+    var lede = await Html.PartialAsync("_GovukBodyParagraph",
+      "Shows delivery work items and active service register products that are not in the scope of any RAID register.");
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
+  {
+    Caption = "Reporting",
+    Title = "RAID registers",
+    Lede = lede
+  })
+
+  @if (TempData["ErrorMessage"] is string errorMsg && !string.IsNullOrWhiteSpace(errorMsg))
+  {
+    <div class="govuk-error-summary govuk-!-margin-bottom-4" data-module="govuk-error-summary">
+      <div role="alert">
+        <h2 class="govuk-error-summary__title">There is a problem</h2>
+        <div class="govuk-error-summary__body"><p class="govuk-body">@errorMsg</p></div>
+      </div>
+    </div>
+  }
+
+  <section class="mr-section govuk-!-margin-bottom-6" aria-labelledby="rr-summary-heading">
+    <h2 id="rr-summary-heading" class="govuk-heading-m govuk-!-margin-bottom-3">Summary</h2>
+    <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">RAID registers</dt>
+        <dd class="govuk-summary-list__value"><strong>@m.RegisterCount</strong></dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Active work items (not completed or cancelled)</dt>
+        <dd class="govuk-summary-list__value">
+          <strong>@m.InScopeWorkItemCount</strong>
+          · <span class="@WorkBadgeCss.ToggleCountBadgeClass(m.UntrackedWorkItemCount, highlightWhenPositive: true)">@m.UntrackedWorkItemCount not tracked</span>
+        </dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Active service register products</dt>
+        <dd class="govuk-summary-list__value">
+          <strong>@m.InScopeServiceCount</strong>
+          · <span class="@WorkBadgeCss.ToggleCountBadgeClass(m.UntrackedServiceCount, highlightWhenPositive: true)">@m.UntrackedServiceCount not tracked</span>
+        </dd>
+      </div>
+    </dl>
+    <p class="govuk-body-s govuk-hint govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+      An item is tracked when it appears in the scope of at least one non-deleted RAID register.
+      <a href="@Url.Action("Registers", "ModernRaid")" class="govuk-link govuk-link--no-visited-state">View RAID registers</a>.
+    </p>
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-6" aria-labelledby="rr-work-heading">
+    <h2 id="rr-work-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Work items not tracked</h2>
+    @if (!m.UntrackedWorkItems.Any())
+    {
+      <p class="govuk-body govuk-!-margin-bottom-0">All active work items are in scope of at least one RAID register.</p>
+    }
+    else
+    {
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed" id="rr-untracked-work-table">
+          <caption class="govuk-table__caption govuk-visually-hidden">Work items not in any RAID register scope</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Work item</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in m.UntrackedWorkItems)
+            {
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">
+                  <a href="@row.DetailUrl" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@row.Title</a>
+                </td>
+                <td class="govuk-table__cell">
+                  <span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(row.Status) dfe-f-badge--small">@row.Status.ToUpperInvariant()</span>
+                </td>
+                <td class="govuk-table__cell">@row.BusinessAreaName</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-6" aria-labelledby="rr-services-heading">
+    <h2 id="rr-services-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Service register products not tracked</h2>
+    @if (!m.UntrackedServices.Any())
+    {
+      <p class="govuk-body govuk-!-margin-bottom-0">All active service register products are in scope of at least one RAID register.</p>
+    }
+    else
+    {
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed" id="rr-untracked-services-table">
+          <caption class="govuk-table__caption govuk-visually-hidden">Service register products not in any RAID register scope</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Service</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">CMDB ID</button></th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in m.UntrackedServices)
+            {
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">
+                  @if (!string.IsNullOrEmpty(row.DetailUrl))
+                  {
+                    <a href="@row.DetailUrl" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@row.Name</a>
+                  }
+                  else
+                  {
+                    @row.Name
+                  }
+                </td>
+                <td class="govuk-table__cell">@(row.CmdbId ?? "—")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</div>
+
+@section Styles {
+  @await Html.PartialAsync("_MrReportCoreStyles")
+}

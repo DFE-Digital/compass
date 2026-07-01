@@ -49,6 +49,7 @@ public interface IModernWorkService
         int? businessAreaId = null,
         int? primaryContactUserId = null,
         int[]? tagIds = null,
+        int[]? projectIds = null,
         string? registerSort = null,
         bool registerSortDesc = false,
         CancellationToken cancellationToken = default);

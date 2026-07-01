@@ -1,0 +1,287 @@
+@*
+    /docs/powerbi — practical guide for PowerBI developers connecting to the
+    Modern COMPASS JSON API.
+*@
+
+<div class="developers-docs__intro govuk-!-margin-bottom-6">
+    <span class="govuk-caption-xl">Integrations</span>
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">PowerBI developer guide</h1>
+    <p class="govuk-body-l govuk-!-margin-bottom-0">
+        How to pull Modern COMPASS data into PowerBI &mdash; token-based
+        authentication, endpoint catalogue and refresh patterns designed
+        to keep refresh times low and reports consistent.
+    </p>
+</div>
+
+<h2 class="govuk-heading-l" id="overview">Overview</h2>
+<p class="govuk-body">
+    The Modern UI under <code>/modern</code> is backed by a versioned JSON API
+    at <code>/api/v1/</code>. Every endpoint that the Modern app reads from
+    list views is also exposed for external consumers. PowerBI is a first-class
+    consumer &mdash; every read endpoint paginates, returns flat JSON suitable
+    for <code>Json.Document</code>, and uses stable identifiers
+    (<code>ProductDocumentId</code>, <code>Project.Id</code>, lookup ids) so
+    PowerBI models built today will still work after schema additions.
+</p>
+
+<div class="govuk-inset-text">
+    Use the API, not the database directly. Direct SQL access bypasses soft
+    deletes, RBAC and audit logging. The API does all three for you, and gives
+    you a stable contract.
+</div>
+
+<h3 class="govuk-heading-m">Quick contract</h3>
+<ul class="govuk-list govuk-list--bullet">
+    <li><strong>Base URL:</strong> <code>https://compass.education.gov.uk/api/v1</code> (production) or <code>https://compass-test.education.gov.uk/api/v1</code> (test).</li>
+    <li><strong>Auth:</strong> <code>Authorization: Bearer cps_&hellip;</code>.</li>
+    <li><strong>Paging:</strong> <code>?page=1&amp;pageSize=100</code> (page size is capped, typically at 100).</li>
+    <li><strong>Response:</strong> JSON, UTC timestamps as ISO-8601 strings, decimals as JSON numbers.</li>
+    <li><strong>Errors:</strong> standard HTTP codes; body is <code>{ error: { code, message } }</code>.</li>
+</ul>
+
+<hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="getting-a-token">Get an API token</h2>
+<ol class="govuk-list govuk-list--number">
+    <li>Request a read-only key from the <a class="govuk-link" href="@Url.Action("Request", "DocsDeveloperApi")">API keys developer portal</a> (choose environment DEV, TEST or PROD and a short project name — keys are named like <code>PROD-RO-powerbi-raid</code>).</li>
+    <li>Or ask a COMPASS administrator to create a token at <code>/modern/admin/api-tokens</code> if you need custom permissions reviewed manually.</li>
+    <li>Grant only the scopes you need. For most PowerBI workloads this is <code>read</code> on <code>Risks</code>, <code>Actions</code>, <code>Issues</code>, <code>Milestones</code>, <code>PerformanceMetrics</code>, <code>EnterpriseMetrics</code> and <code>AdminLookups</code>.</li>
+    <li>Copy the token immediately &mdash; it cannot be retrieved later.</li>
+    <li>Store it in a secret manager (Azure Key Vault, the PowerBI service workspace's secrets, or your organisation's secrets store). Do not paste it into <code>.pbix</code> files committed to source control.</li>
+</ol>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="authenticating">Authenticating from PowerBI</h2>
+<p class="govuk-body">
+    The API uses bearer-token auth, which PowerBI supports via a <strong>Web</strong>
+    data source with custom headers.
+</p>
+
+<h3 class="govuk-heading-m">Power Query M (single-page test call)</h3>
+<pre class="developers-code-block"><code>let
+    BaseUrl  = "https://compass.education.gov.uk/api/v1",
+    ApiToken = "cps_replace_with_your_token",
+    Source   = Json.Document(Web.Contents(
+        BaseUrl,
+        [
+            RelativePath = "risks",
+            Query        = [ page = "1", pageSize = "100" ],
+            Headers      = [
+                Authorization = "Bearer " &amp; ApiToken,
+                Accept        = "application/json"
+            ]
+        ]
+    )),
+    Items = Source[items]
+in
+    Items
+</code></pre>
+
+<div class="govuk-warning-text">
+    <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+    <strong class="govuk-warning-text__text">
+        <span class="govuk-visually-hidden">Warning</span>
+        The PowerBI service refreshes datasets without a logged-in user, so
+        static headers like the Bearer token must be supplied at refresh time.
+        Use a <code>Web.Contents</code> data source (not
+        <code>Web.BrowserContents</code>) and bind the token from
+        <strong>Anonymous</strong> credentials + a parameter, or use a Personal
+        / on-prem gateway with a stored credential. See
+        <a class="govuk-link" href="#refresh">Scheduled refresh</a> below.
+    </strong>
+</div>
+
+<h3 class="govuk-heading-m">Parameterising the base URL and token</h3>
+<p class="govuk-body">
+    Create two PowerBI parameters so you can switch between environments and
+    rotate the token without editing every query:
+</p>
+<ul class="govuk-list govuk-list--bullet">
+    <li><code>compassBaseUrl</code> &mdash; for example <code>https://compass.education.gov.uk/api/v1</code>.</li>
+    <li><code>compassApiToken</code> &mdash; the bearer token.</li>
+</ul>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="endpoints">Recommended endpoints</h2>
+<p class="govuk-body">The endpoints below are the ones most useful for analytics. Full reference is on the <a class="govuk-link" href="@Url.Action("Api", "Docs")">API reference</a> page.</p>
+
+<div class="developers-data-models">
+<table class="govuk-table">
+    <caption class="govuk-table__caption govuk-visually-hidden">Recommended PowerBI endpoints</caption>
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Resource</th>
+            <th scope="col" class="govuk-table__header">Path</th>
+            <th scope="col" class="govuk-table__header">Notes</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Risks</th><td class="govuk-table__cell"><code>GET /risks</code></td><td class="govuk-table__cell">Filter: <code>fipsId</code>, <code>status</code>, <code>minScore</code>. Paginated.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Issues</th><td class="govuk-table__cell"><code>GET /issues</code></td><td class="govuk-table__cell">Filter: <code>fipsId</code>, <code>status</code>, <code>severity</code>. Paginated.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Actions</th><td class="govuk-table__cell"><code>GET /actions</code></td><td class="govuk-table__cell">Filter: <code>status</code>, <code>ownerEmail</code>, <code>projectId</code>. Paginated.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Milestones</th><td class="govuk-table__cell"><code>GET /milestones</code></td><td class="govuk-table__cell">Filter: <code>projectId</code>, <code>productDocumentId</code>, <code>status</code>. Paginated.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Performance metrics</th><td class="govuk-table__cell"><code>GET /performance-metrics</code></td><td class="govuk-table__cell">Returns metric catalogue with units / frequency.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Performance returns</th><td class="govuk-table__cell"><code>GET /performance-metrics/returns</code></td><td class="govuk-table__cell">Product return submissions; filter by <code>period</code>.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Enterprise metrics</th><td class="govuk-table__cell"><code>GET /enterprise-metrics</code></td><td class="govuk-table__cell">Department / business-area level metrics.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Functional standards</th><td class="govuk-table__cell"><code>GET /functional-standards</code></td><td class="govuk-table__cell">Standards taxonomy + assessment summaries.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Service register</th><td class="govuk-table__cell"><code>GET /service-register</code></td><td class="govuk-table__cell">Authoritative product / service list (use as the dimension table).</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Admin lookups</th><td class="govuk-table__cell"><code>GET /admin/lookups/{type}</code></td><td class="govuk-table__cell">Resolve enum-style fields (business areas, RAG, phases, &hellip;).</td></tr>
+    </tbody>
+</table>
+</div>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="paging">Handling paging</h2>
+<p class="govuk-body">Every list endpoint returns an envelope of the form:</p>
+<pre class="developers-code-block"><code>{
+  "items":       [ { ... }, { ... } ],
+  "page":        1,
+  "pageSize":    100,
+  "totalRecords": 2473,
+  "totalPages":  25
+}
+</code></pre>
+
+<p class="govuk-body">A reusable Power Query function to walk every page:</p>
+
+<pre class="developers-code-block"><code>// fnCompassGetAll: pulls every page of a paginated COMPASS endpoint.
+(resource as text, optional query as record) as table =&gt;
+let
+    PageSize = 100,
+    GetPage  = (page as number) as record =&gt;
+        Json.Document(Web.Contents(
+            compassBaseUrl,
+            [
+                RelativePath = resource,
+                Query        = Record.Combine({
+                                   query ?? [],
+                                   [ page = Number.ToText(page),
+                                     pageSize = Number.ToText(PageSize) ]
+                               }),
+                Headers      = [
+                    Authorization = "Bearer " &amp; compassApiToken,
+                    Accept        = "application/json"
+                ]
+            ]
+        )),
+    FirstPage  = GetPage(1),
+    TotalPages = FirstPage[totalPages],
+    AllPages   = List.Generate(
+                     () =&gt; [ p = 1, data = FirstPage ],
+                     each [p] &lt;= TotalPages,
+                     each [ p = [p] + 1, data = GetPage([p] + 1) ],
+                     each [data][items]
+                 ),
+    Combined   = List.Combine(AllPages),
+    Table      = Table.FromList(Combined, Splitter.SplitByNothing(), {"row"}),
+    Expanded   = Table.ExpandRecordColumn(Table, "row", Record.FieldNames(Combined{0}))
+in
+    Expanded
+</code></pre>
+
+<p class="govuk-body">Use it for any endpoint:</p>
+<pre class="developers-code-block"><code>Risks    = fnCompassGetAll("risks",    [ status = "open" ]),
+Actions  = fnCompassGetAll("actions",  [ status = "open" ]),
+Services = fnCompassGetAll("service-register", null)
+</code></pre>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="refresh">Scheduled refresh &amp; incremental loads</h2>
+
+<h3 class="govuk-heading-m">Service credentials</h3>
+<p class="govuk-body">When publishing to the PowerBI service:</p>
+<ol class="govuk-list govuk-list--number">
+    <li>Edit the dataset's <strong>Data source credentials</strong> and set the COMPASS source to <strong>Anonymous</strong> &mdash; auth is being supplied via the bearer header, not basic / OAuth.</li>
+    <li>Promote <code>compassApiToken</code> to a dataset parameter and bind it from a secret in your gateway / Key Vault if possible.</li>
+    <li>Schedule a refresh outside business hours. 04:00 UK time is a good slot &mdash; backups have completed and weekly cycle windows are closed.</li>
+</ol>
+
+<h3 class="govuk-heading-m">Incremental refresh</h3>
+<p class="govuk-body">
+    Most COMPASS list endpoints return <code>CreatedAt</code> /
+    <code>UpdatedAt</code> in ISO-8601 UTC. Configure PowerBI incremental
+    refresh by:
+</p>
+<ol class="govuk-list govuk-list--number">
+    <li>Adding <code>RangeStart</code> and <code>RangeEnd</code> as Date/Time parameters.</li>
+    <li>Filtering the table on <code>UpdatedAt &gt;= RangeStart and UpdatedAt &lt; RangeEnd</code>.</li>
+    <li>Setting an incremental policy of for example "store rows in the last 5 years, refresh rows in the last 30 days".</li>
+</ol>
+
+<p class="govuk-body">
+    For full reloads (for example lookups), keep them on a daily full refresh
+    &mdash; they are small and the query-folding window has to traverse the
+    API regardless.
+</p>
+
+<h3 class="govuk-heading-m">Throttling</h3>
+<p class="govuk-body">
+    Page size is capped at 100 per request, and each token's traffic is logged
+    in <code>ApiRequestLog</code>. For a typical report (tens of thousands of
+    records across all entities) a refresh takes a few minutes. If you find
+    yourself making thousands of small requests, switch to <strong>incremental</strong>
+    refresh rather than running parallel queries.
+</p>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="conventions">Data conventions</h2>
+<ul class="govuk-list govuk-list--bullet">
+    <li><strong>Timestamps.</strong> Always UTC, ISO-8601 strings. Convert to local time in DAX or PowerBI, not in M.</li>
+    <li><strong>Decimals.</strong> Use <code>Decimal Number</code> in PowerBI &mdash; currency, FTE and percentages are stored at full precision.</li>
+    <li><strong>Soft deletes.</strong> The API already filters <code>IsDeleted = false</code>. You do not need to filter again.</li>
+    <li><strong>Status vocabularies.</strong> Lower-case, <code>snake_case</code> where multi-word (for example <code>in_progress</code>). Keep this in mind for slicers.</li>
+    <li><strong>Modern work-item <code>Status</code>.</strong> Different vocabulary: <code>Active</code>, <code>Paused</code>, <code>Completed</code>, <code>Cancelled</code> (PascalCase).</li>
+    <li><strong>Null vs empty.</strong> Optional string fields return <code>null</code> when unset, not empty string.</li>
+    <li><strong>Identifiers.</strong> <code>ProductDocumentId</code> is a string (CMS GUID-like); <code>Project.Id</code> is an integer. Do not cast across them.</li>
+</ul>
+
+<hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+
+<h2 class="govuk-heading-l" id="troubleshooting">Troubleshooting</h2>
+<div class="developers-data-models">
+<table class="govuk-table">
+    <caption class="govuk-table__caption govuk-visually-hidden">Common PowerBI / COMPASS integration issues</caption>
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Symptom</th>
+            <th scope="col" class="govuk-table__header">Likely cause</th>
+            <th scope="col" class="govuk-table__header">Fix</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>401 UNAUTHORIZED</code></th><td class="govuk-table__cell">Missing or malformed header.</td><td class="govuk-table__cell">Confirm header is <code>Authorization: Bearer cps_&hellip;</code>. Re-check token expiry at <code>/modern/admin/api-tokens</code>.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>403 FORBIDDEN</code></th><td class="govuk-table__cell">Token lacks scope for the endpoint.</td><td class="govuk-table__cell">Ask an admin to add <code>read</code> on the resource shown in the error message.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header"><code>404 NOT FOUND</code></th><td class="govuk-table__cell">Wrong base URL or unknown id.</td><td class="govuk-table__cell">Verify environment (<code>compass</code> vs <code>compass-test</code>) and resource name.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Empty <code>items</code></th><td class="govuk-table__cell">Filters too tight, or paged past <code>totalPages</code>.</td><td class="govuk-table__cell">Remove filters and re-run, or check <code>totalPages</code> in the envelope.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Refresh hangs in service</th><td class="govuk-table__cell">Token wired to Windows credential instead of Anonymous.</td><td class="govuk-table__cell">Re-edit credentials in the dataset, choose Anonymous, save.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">&ldquo;The credentials provided cannot be used for the Anonymous source&rdquo; on refresh</th><td class="govuk-table__cell">Power Query has dynamic <code>RelativePath</code> values PowerBI cannot validate.</td><td class="govuk-table__cell">Move all paths into <code>RelativePath</code> of a single <code>Web.Contents</code> call (as in the helper above), not into the base URL.</td></tr>
+        <tr class="govuk-table__row"><th scope="row" class="govuk-table__header">Schema drifted after a release</th><td class="govuk-table__cell">New nullable columns added.</td><td class="govuk-table__cell">Re-expand the record in Power Query; new columns are additive and never break existing reports.</td></tr>
+    </tbody>
+</table>
+</div>
+
+<div class="govuk-inset-text">
+    Need a new endpoint or extra fields?
+    <a class="govuk-link" href="https://github.com/DFE-Digital/compass/issues" target="_blank" rel="noopener">Raise an issue for a change in the repo</a>.
+    Endpoints are added on demand &mdash; we would rather expose what you need
+    than have you scrape the UI.
+</div>
+
+@section Aside {
+    <h2 class="docs-page-aside-heading">On this page</h2>
+    <ul class="docs-page-aside-nav">
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#overview">Overview</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#getting-a-token">Get an API token</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#authenticating">Authenticating from PowerBI</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#endpoints">Recommended endpoints</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#paging">Handling paging</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#refresh">Scheduled refresh &amp; incremental loads</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#conventions">Data conventions</a></li>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#troubleshooting">Troubleshooting</a></li>
+    </ul>
+}

@@ -65,16 +65,22 @@ public class CommentsApiController : ControllerBase
                 return Unauthorized(new { error = "User not found" });
             }
 
-            if (string.IsNullOrWhiteSpace(request.CommentText))
+            var commentText = request.CommentText.Trim();
+            if (string.IsNullOrWhiteSpace(commentText))
             {
                 return BadRequest(new { error = "Comment text is required" });
+            }
+
+            if (commentText.Length > Comment.TextMaxLength)
+            {
+                return BadRequest(new { error = $"Comment must be {Comment.TextMaxLength} characters or fewer." });
             }
 
             var comment = new Comment
             {
                 EntityType = request.EntityType,
                 EntityId = request.EntityId,
-                CommentText = request.CommentText,
+                CommentText = commentText,
                 CreatedByUserId = currentUser.Id,
                 CreatedAt = DateTime.UtcNow,
                 IsDeleted = false

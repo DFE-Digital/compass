@@ -1,8 +1,9 @@
 /**
- * Monthly report — section order (localStorage) and edit-view reorder UI.
+ * Monthly report — section order and toggle expanded state (localStorage), edit-view reorder UI.
  */
 (function () {
   var STORAGE_KEY = 'compass.mr.sectionOrder.v1';
+  var EXPANDED_STORAGE_KEY = 'compass.mr.sectionExpanded.v1';
   var DEFAULT_ORDER = [
     'submission',
     'intelligence',
@@ -71,6 +72,113 @@
       || 'Section';
   }
 
+  function setToggleExpandedFn() {
+    return window.DfeFrontend && typeof window.DfeFrontend.setToggleExpanded === 'function'
+      ? window.DfeFrontend.setToggleExpanded
+      : null;
+  }
+
+  function getToggleStorageKey(toggleEl) {
+    var sectionId = toggleEl.getAttribute('data-mr-section-id');
+    if (sectionId) return sectionId;
+    var btn = toggleEl.querySelector('.dfe-f-toggle__button');
+    if (btn && btn.id) return 'btn:' + btn.id;
+    return null;
+  }
+
+  function isToggleExpanded(toggleEl) {
+    var btn = toggleEl.querySelector('.dfe-f-toggle__button');
+    return btn && btn.getAttribute('aria-expanded') === 'true';
+  }
+
+  function readStoredExpanded() {
+    try {
+      var raw = localStorage.getItem(EXPANDED_STORAGE_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeStoredExpanded(state) {
+    try {
+      localStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { /* ignore quota errors */ }
+  }
+
+  function collectExpandedState(reportGroup) {
+    var state = {};
+    reportGroup.querySelectorAll('.dfe-f-toggle').forEach(function (el) {
+      var key = getToggleStorageKey(el);
+      if (key) state[key] = isToggleExpanded(el);
+    });
+    return state;
+  }
+
+  function persistExpandedState(reportGroup) {
+    writeStoredExpanded(collectExpandedState(reportGroup));
+  }
+
+  /** First visit: collapse all report sections except submission summary. */
+  function applyDefaultSectionExpandedState(reportGroup) {
+    if (!reportGroup) return;
+    var setExpanded = setToggleExpandedFn();
+    if (!setExpanded) return;
+    reportGroup.querySelectorAll('.dfe-f-toggle-group__items > .dfe-f-toggle[data-mr-section-id]').forEach(function (el) {
+      setExpanded(el, el.getAttribute('data-mr-section-id') === 'submission');
+    });
+  }
+
+  function applyStoredExpandedState(reportGroup, stored) {
+    if (!reportGroup || !stored) return;
+    var setExpanded = setToggleExpandedFn();
+    if (!setExpanded) return;
+    reportGroup.querySelectorAll('.dfe-f-toggle').forEach(function (el) {
+      var key = getToggleStorageKey(el);
+      if (!key || !Object.prototype.hasOwnProperty.call(stored, key)) return;
+      setExpanded(el, !!stored[key]);
+    });
+  }
+
+  function milestoneTogglesSetExpanded(reportGroup, expanded) {
+    var setExpanded = setToggleExpandedFn();
+    if (!setExpanded) return;
+    reportGroup.querySelectorAll('.mr-milestone-groups .dfe-f-toggle').forEach(function (el) {
+      setExpanded(el, expanded);
+    });
+  }
+
+  function bindExpandedPersistence(reportGroup) {
+    reportGroup.addEventListener('click', function (e) {
+      if (!e.target.closest('.dfe-f-toggle__button')) return;
+      persistExpandedState(reportGroup);
+    });
+
+    var expandAll = reportGroup.querySelector('[data-dfe-toggle-expand-all]');
+    var collapseAll = reportGroup.querySelector('[data-dfe-toggle-collapse-all]');
+
+    if (expandAll) {
+      expandAll.addEventListener('click', function () {
+        milestoneTogglesSetExpanded(reportGroup, true);
+        persistExpandedState(reportGroup);
+      });
+    }
+
+    if (collapseAll) {
+      collapseAll.addEventListener('click', function () {
+        milestoneTogglesSetExpanded(reportGroup, false);
+        var setExpanded = setToggleExpandedFn();
+        var submissionPanel = reportGroup.querySelector('[data-mr-section-id="submission"]');
+        if (submissionPanel && setExpanded) {
+          setExpanded(submissionPanel, true);
+        }
+        persistExpandedState(reportGroup);
+      });
+    }
+  }
+
   function init() {
     var layout = document.getElementById('mr-report-layout');
     var reportGroup = document.getElementById('mr-report-sections');
@@ -88,6 +196,14 @@
     var knownIds = Object.keys(panels);
     var currentOrder = normalizeOrder(readStoredOrder() || DEFAULT_ORDER, knownIds);
     applyOrderToDom(currentOrder);
+
+    var storedExpanded = readStoredExpanded();
+    if (storedExpanded) {
+      applyStoredExpandedState(reportGroup, storedExpanded);
+    } else {
+      applyDefaultSectionExpandedState(reportGroup);
+    }
+    bindExpandedPersistence(reportGroup);
 
     var draftOrder = currentOrder.slice();
     var editing = false;
@@ -173,7 +289,7 @@
       orderPanel.hidden = !on;
       if (editBtn) {
         editBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-        editBtn.textContent = on ? 'Done editing' : 'Edit view';
+        editBtn.textContent = on ? 'Done reordering' : 'Reorder sections';
       }
       if (on) {
         draftOrder = currentOrder.slice();

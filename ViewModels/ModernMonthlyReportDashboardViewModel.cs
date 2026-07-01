@@ -50,6 +50,9 @@ public class ModernMonthlyReportDashboardViewModel
     public Dictionary<string, int> RagDistribution { get; set; } = new();
     public Dictionary<string, int> PriorityDistribution { get; set; } = new();
 
+    /// <summary>Delivery priority distribution rows for the chart table (one row per active lookup).</summary>
+    public List<MonthlyReportPriorityDistributionRow> PriorityDistributionRows { get; set; } = new();
+
     public Dictionary<string, int> PrevMonthRagDistribution { get; set; } = new();
     public Dictionary<string, int> PrevMonthPriorityDistribution { get; set; } = new();
     public string PrevMonthName { get; set; } = "";
@@ -103,6 +106,26 @@ public class ModernMonthlyReportDashboardViewModel
 
     /// <summary>All work items in the current report scope (for matrix drill-down).</summary>
     public List<BusinessAreaProjectItem> ScopeProjectItems { get; set; } = new();
+
+    /// <summary>Month-to-month RAG transitions across the last six months (for Sankey chart).</summary>
+    /// <summary>Per work item RAG at each of the last six month ends, with trend classification.</summary>
+    public List<WorkItemRagSixMonthTrendRow> RagSixMonthTrendRows { get; set; } = new();
+}
+
+/// <summary>One work item's six-month RAG history and overall trend category.</summary>
+public class WorkItemRagSixMonthTrendRow
+{
+    public int ProjectId { get; set; }
+    public string Title { get; set; } = "";
+    public string? BusinessArea { get; set; }
+    public string TrendCategory { get; set; } = "";
+    public List<RagSixMonthSnapshot> Months { get; set; } = new();
+}
+
+public class RagSixMonthSnapshot
+{
+    public string Label { get; set; } = "";
+    public string Rag { get; set; } = "";
 }
 
 /// <summary>Metadata when the monthly report is shown as a priorities report.</summary>
@@ -197,8 +220,14 @@ public class BusinessAreaProjectItem
     public string? RagJustification { get; set; }
     /// <summary>Latest submitted monthly return narrative text.</summary>
     public string? LatestMonthlyUpdateNarrative { get; set; }
+    public string? BusinessArea { get; set; }
+    public string? Status { get; set; }
     public string Rag { get; set; } = "";
     public string Priority { get; set; } = "";
+    public decimal? PermFte { get; set; }
+    public decimal? MspFte { get; set; }
+    /// <summary>Plain-text summary of milestones (completed, due soon, late).</summary>
+    public string? MilestonesSummary { get; set; }
     public bool SubmittedUpdate { get; set; }
     public bool IsNew { get; set; }
 
@@ -217,6 +246,15 @@ public class RagPriorityMatrixCell
     public string Rag { get; set; } = "";
     public string Priority { get; set; } = "";
     public int Count { get; set; }
+}
+
+public class MonthlyReportPriorityDistributionRow
+{
+    public int? DeliveryPriorityId { get; set; }
+    public string FullName { get; set; } = "";
+    public string ShortLabel { get; set; } = "";
+    public int Count { get; set; }
+    public int PreviousCount { get; set; }
 }
 
 public class RagTrendMonthPoint

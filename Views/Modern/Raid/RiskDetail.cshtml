@@ -60,6 +60,14 @@
     .Where(x => !string.IsNullOrWhiteSpace(x))
     .ToList() ?? new List<string?>();
 
+  var trackingRegisters = ViewBag.RiskTrackingRegisters as IReadOnlyList<WorkRaidRegisterTrackingVm>
+      ?? Array.Empty<WorkRaidRegisterTrackingVm>();
+  var inherentScoreInt = Model.InherentScore.HasValue
+      ? (int)Math.Round(Model.InherentScore.Value, MidpointRounding.AwayFromZero)
+      : Model.RiskScore;
+  var currentScoreInt = Model.CurrentScore.HasValue
+      ? (int)Math.Round(Model.CurrentScore.Value, MidpointRounding.AwayFromZero)
+      : inherentScoreInt;
   var score = Model.RiskScore;
   var ratingLabel = ViewBag.RatingLabel as string ?? "—";
   var tierBadgeStep = ViewBag.TierBadgeStep is int ts ? ts : 2;
@@ -82,7 +90,8 @@
   var ownerForHeader = ViewBag.OwnerForDisplay as User ?? Model.OwnerUser;
   var ownerNameDisplay = UserDisplayNameOnly(ownerForHeader);
   var ownerEmailForLink = UserContactEmail(ownerForHeader, Model.OwnerEmail);
-  var sroDisplay = UserDisplayLine(Model.SroUser);
+  var sroNameDisplay = UserDisplayNameOnly(Model.SroUser);
+  var sroEmailForLink = UserContactEmail(Model.SroUser);
   var createdByDisplay = UserDisplayLine(Model.CreatedByUser);
 
   var riskStatusLabelForDisplay = (Model.RiskStatus?.Label ?? Model.Status ?? "").Trim();
@@ -159,8 +168,18 @@
   {
     var imp = r.ImpactLevel?.Label ?? $"Impact {r.ImpactRating}";
     var lik = r.Likelihood?.Label ?? $"Likelihood {r.LikelihoodRating}";
-    return $"{imp} × {lik}";
+    return $"{lik} × {imp}";
   }
+
+  private static string RatingLikelihoodImpactText(RiskLikelihood? likelihood, RiskImpactLevel? impact, int legacyLikelihood, int legacyImpact)
+  {
+    var lik = likelihood?.Label ?? (legacyLikelihood > 0 ? $"Likelihood {legacyLikelihood}" : "—");
+    var imp = impact?.Label ?? (legacyImpact > 0 ? $"Impact {legacyImpact}" : "—");
+    return $"{lik} × {imp}";
+  }
+
+  private static int? ScoreToBadgeInt(decimal? score, int fallback = 0) =>
+      score.HasValue ? (int)Math.Round(score.Value, MidpointRounding.AwayFromZero) : (fallback > 0 ? fallback : null);
 
   private static string MitigationNormalizeStored(string? raw)
   {
@@ -327,6 +346,7 @@
     color: #505a5f;
     font-size: 1rem;
     line-height: 1.45;
+    white-space: pre-wrap;
   }
   #sc-risk-view .raid-risk-history__footnote {
     color: #505a5f;
@@ -395,7 +415,8 @@
             <thead class="govuk-table__head">
               <tr class="govuk-table__row">
                 <th scope="col" class="govuk-table__header">Tier</th>
-                <th scope="col" class="govuk-table__header">Risk rating</th>
+                <th scope="col" class="govuk-table__header">Inherent score</th>
+                <th scope="col" class="govuk-table__header">Current score</th>
                 <th scope="col" class="govuk-table__header">Owner / Assigned to</th>
                 <th scope="col" class="govuk-table__header">Proximity</th>
                 <th scope="col" class="govuk-table__header">@riskDateColumnHeading</th>
@@ -414,7 +435,16 @@
                   }
                 </td>
                 <td class="govuk-table__cell">
-                  <span class="@WorkBadgeCss.RaidRiskScoreDfeFrontendBadgeClass(score) dfe-f-u-tabular-numbers" aria-label="@riskScoreSrLabel"><span aria-hidden="true">@score</span></span>
+                  @{
+                    var inherentSr = $"Inherent risk score {inherentScoreInt} out of {riskScoreMax}";
+                  }
+                  <span class="@WorkBadgeCss.RaidRiskScoreDfeFrontendBadgeClass(inherentScoreInt) dfe-f-u-tabular-numbers" aria-label="@inherentSr"><span aria-hidden="true">@inherentScoreInt</span></span>
+                </td>
+                <td class="govuk-table__cell">
+                  @{
+                    var currSr = $"Current risk score {currentScoreInt} out of {riskScoreMax}";
+                  }
+                  <span class="@WorkBadgeCss.RaidRiskScoreDfeFrontendBadgeClass(currentScoreInt) dfe-f-u-tabular-numbers" aria-label="@currSr"><span aria-hidden="true">@currentScoreInt</span></span>
                 </td>
                 <td class="govuk-table__cell">
                   @if (!string.IsNullOrWhiteSpace(ownerNameDisplay) && !string.IsNullOrWhiteSpace(ownerEmailForLink))
@@ -443,7 +473,6 @@
       </div>
     </div>
   </div>
-
   <div class="govuk-grid-row modern-work-detail-layout govuk-!-margin-top-4">
     <div class="govuk-grid-column-one-quarter-from-desktop modern-work-detail-layout__nav">
       <div class="dfe-f-u-sticky govuk-!-margin-bottom-4 modern-work-detail-layout__nav-inner" style="--dfe-f-sticky-top: 1rem;">
@@ -518,10 +547,6 @@
               </dd>
             </div>
             <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
-              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">SRO</dt>
-              <dd class="govuk-summary-list__value">@sroDisplay</dd>
-            </div>
-            <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
               <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Risk owner</dt>
               <dd class="govuk-summary-list__value">
                 @if (!string.IsNullOrWhiteSpace(ownerNameDisplay) && !string.IsNullOrWhiteSpace(ownerEmailForLink))
@@ -535,6 +560,27 @@
                 else if (!string.IsNullOrWhiteSpace(ownerEmailForLink))
                 {
                   <a href="mailto:@ownerEmailForLink" class="govuk-link govuk-link--no-visited-state">@ownerEmailForLink</a>
+                }
+                else
+                {
+                  @:—
+                }
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">SRO</dt>
+              <dd class="govuk-summary-list__value">
+                @if (!string.IsNullOrWhiteSpace(sroNameDisplay) && !string.IsNullOrWhiteSpace(sroEmailForLink))
+                {
+                  <a href="mailto:@sroEmailForLink" class="govuk-link govuk-link--no-visited-state">@sroNameDisplay</a>
+                }
+                else if (!string.IsNullOrWhiteSpace(sroNameDisplay))
+                {
+                  @sroNameDisplay
+                }
+                else if (!string.IsNullOrWhiteSpace(sroEmailForLink))
+                {
+                  <a href="mailto:@sroEmailForLink" class="govuk-link govuk-link--no-visited-state">@sroEmailForLink</a>
                 }
                 else
                 {
@@ -564,8 +610,30 @@
               </dd>
             </div>
             <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
-              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Impact type</dt>
-              <dd class="govuk-summary-list__value">@(riskCatLabels.FirstOrDefault() ?? Model.RiskCategory?.Label ?? "—")</dd>
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Categories</dt>
+              <dd class="govuk-summary-list__value">@(riskCatLabels.Count > 0 ? string.Join(", ", riskCatLabels!) : "—")</dd>
+            </div>
+            <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Priority</dt>
+              <dd class="govuk-summary-list__value">@(Model.RiskPriority?.Label ?? "—")</dd>
+            </div>
+            <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">RAID registers</dt>
+              <dd class="govuk-summary-list__value">
+                @if (trackingRegisters.Count == 0)
+                {
+                  <text>Not in any RAID register</text>
+                }
+                else
+                {
+                  <ul class="govuk-list govuk-!-margin-bottom-0">
+                    @foreach (var reg in trackingRegisters)
+                    {
+                      <li><a class="govuk-link govuk-link--no-visited-state" href="@reg.DetailUrl">@reg.Name</a> <span class="govuk-body-s" style="color:#505a5f;">(@reg.OwnerName)</span></li>
+                    }
+                  </ul>
+                }
+              </dd>
             </div>
             <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
               <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Divisions</dt>
@@ -588,6 +656,66 @@
       </div>
 
       <div id="risk-detail" class="tab-pane @(activeTab == "detail" ? "on" : "")" role="tabpanel" aria-labelledby="tab-risk-detail">
+        <div class="govuk-summary-card govuk-!-margin-top-4">
+          <div class="govuk-summary-card__title-wrapper">
+            <h2 class="govuk-summary-card__title">Risk ratings</h2>
+          </div>
+          <div class="govuk-summary-card__content">
+            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+              <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed govuk-!-margin-bottom-0">
+                <caption class="govuk-table__caption govuk-visually-hidden">Inherent, current, residual and tolerance risk ratings</caption>
+                <thead class="govuk-table__head">
+                  <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Rating</th>
+                    <th scope="col" class="govuk-table__header">Likelihood</th>
+                    <th scope="col" class="govuk-table__header">Impact</th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric">Score</th>
+                  </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                  @{
+                    decimal? originalScoreDisplay = Model.InherentScore ?? (Model.RiskScore > 0 ? Model.RiskScore : null);
+                    decimal? currentScoreDisplay = Model.CurrentScore ?? originalScoreDisplay;
+                  }
+                  <tr class="govuk-table__row">
+                    <th scope="row" class="govuk-table__header">Inherent</th>
+                    <td class="govuk-table__cell">@(Model.Likelihood?.Label ?? "—")</td>
+                    <td class="govuk-table__cell">@(Model.ImpactLevel?.Label ?? "—")</td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric">
+                      @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_SpreadsheetRiskScoreBadge.cshtml", originalScoreDisplay)
+                    </td>
+                  </tr>
+                  <tr class="govuk-table__row">
+                    <th scope="row" class="govuk-table__header">Current</th>
+                    <td class="govuk-table__cell">@(Model.CurrentLikelihood?.Label ?? Model.Likelihood?.Label ?? "—")</td>
+                    <td class="govuk-table__cell">@(Model.CurrentImpactLevel?.Label ?? Model.ImpactLevel?.Label ?? "—")</td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric">
+                      @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_SpreadsheetRiskScoreBadge.cshtml", currentScoreDisplay)
+                    </td>
+                  </tr>
+                  <tr class="govuk-table__row">
+                    <th scope="row" class="govuk-table__header">Residual</th>
+                    <td class="govuk-table__cell">@(Model.ResidualLikelihoodLevel?.Label ?? "—")</td>
+                    <td class="govuk-table__cell">@(Model.ResidualImpactLevel?.Label ?? "—")</td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric">
+                      @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_SpreadsheetRiskScoreBadge.cshtml", Model.ResidualScore)
+                    </td>
+                  </tr>
+                  <tr class="govuk-table__row">
+                    <th scope="row" class="govuk-table__header">Tolerance</th>
+                    <td class="govuk-table__cell">@(Model.ToleranceLikelihood?.Label ?? "—")</td>
+                    <td class="govuk-table__cell">@(Model.ToleranceImpactLevel?.Label ?? "—")</td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric">
+                      @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_SpreadsheetRiskScoreBadge.cshtml", Model.ToleranceScore)
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="govuk-body-s govuk-!-margin-top-3 govuk-!-margin-bottom-0" style="color:#505a5f;">Inherent rating is set when the risk is first recorded. Current, residual and tolerance ratings can be updated over time.</p>
+          </div>
+        </div>
+
         <div class="govuk-summary-card govuk-!-margin-top-4">
           <div class="govuk-summary-card__title-wrapper">
             <h2 class="govuk-summary-card__title">Risk detail</h2>
@@ -640,33 +768,62 @@
               </dd>
             </div>
             <div class="govuk-summary-list__row">
-              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Impact if realised</dt>
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Impact</dt>
               <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.ImpactIfRealised)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.ImpactIfRealised</span> }</dd>
               <dd class="govuk-summary-list__actions">
-                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-impact-realised")">Change<span class="govuk-visually-hidden"> impact if realised</span></a>
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-impact-realised")">Change<span class="govuk-visually-hidden"> impact</span></a>
               </dd>
             </div>
             <div class="govuk-summary-list__row">
-              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Treatment / mitigation</dt>
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Contingency</dt>
+              <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.Contingency)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.Contingency</span> }</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-contingency")">Change<span class="govuk-visually-hidden"> contingency</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Assurance</dt>
+              <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.Assurance)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.Assurance</span> }</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-assurance")">Change<span class="govuk-visually-hidden"> assurance</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Financial impact</dt>
+              <dd class="govuk-summary-list__value">@if (string.IsNullOrWhiteSpace(Model.FinancialImpact)) { <text>—</text> } else { <span class="govuk-body" style="white-space:pre-wrap;">@Model.FinancialImpact</span> }</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-financial-impact")">Change<span class="govuk-visually-hidden"> financial impact</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">How do you intend to mitigate this risk?</dt>
               <dd class="govuk-summary-list__value">
-                @if (string.IsNullOrWhiteSpace(Model.Response) && string.IsNullOrWhiteSpace(Model.ResponseStrategy) && string.IsNullOrWhiteSpace(Model.Notes))
+                @if (string.IsNullOrWhiteSpace(Model.ResponseStrategy))
                 {
                   <text>—</text>
                 }
                 else
                 {
-                  @if (!string.IsNullOrWhiteSpace(Model.Response))
-                  {
-                    <p class="govuk-body govuk-!-margin-bottom-1"><strong>Treatment:</strong> @Model.Response</p>
-                  }
-                  @if (!string.IsNullOrWhiteSpace(Model.ResponseStrategy) || !string.IsNullOrWhiteSpace(Model.Notes))
-                  {
-                    <p class="govuk-body govuk-!-margin-bottom-0" style="white-space:pre-wrap;"><strong>Mitigation:</strong> @(Model.ResponseStrategy ?? Model.Notes)</p>
-                  }
+                  <span class="govuk-body" style="white-space:pre-wrap;">@Model.ResponseStrategy</span>
                 }
+                <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@mitigationsTabUrl">View or add mitigation actions</a> on the Mitigations tab.</p>
               </dd>
               <dd class="govuk-summary-list__actions">
-                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-mitigation")">Change<span class="govuk-visually-hidden"> treatment or mitigation</span></a>
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-mitigation")">Change<span class="govuk-visually-hidden"> mitigation approach</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Treatment</dt>
+              <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(Model.Response) ? "—" : Model.Response)</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-treatment")">Change<span class="govuk-visually-hidden"> treatment</span></a>
+              </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key govuk-summary-list__key--width-one-third">Priority</dt>
+              <dd class="govuk-summary-list__value">@(Model.RiskPriority?.Label ?? "—")</dd>
+              <dd class="govuk-summary-list__actions">
+                <a class="govuk-link govuk-link--no-visited-state" href="@($"{riskEditUrl}#raid-risk-edit-priority")">Change<span class="govuk-visually-hidden"> priority</span></a>
               </dd>
             </div>
             <div class="govuk-summary-list__row">
@@ -714,9 +871,22 @@
               <textarea class="govuk-textarea govuk-!-width-full" id="raid-kri-desc" name="description" rows="4" aria-describedby="raid-kri-desc-hint"></textarea>
             </div>
             <div class="govuk-form-group">
-              <label class="govuk-label govuk-label--s" for="raid-kri-metric">Metric</label>
-              <div id="raid-kri-metric-hint" class="govuk-hint">What you measure, units, thresholds, or reporting frequency.</div>
-              <textarea class="govuk-textarea govuk-!-width-full" id="raid-kri-metric" name="metric" rows="3" maxlength="2000" aria-describedby="raid-kri-metric-hint"></textarea>
+              <div class="govuk-grid-row">
+                <div class="govuk-grid-column-one-half">
+                  <div class="govuk-form-group govuk-!-margin-bottom-3">
+                    <label class="govuk-label govuk-label--s" for="raid-kri-metric">Metric</label>
+                    <div id="raid-kri-metric-hint" class="govuk-hint">What you measure.</div>
+                    <input class="govuk-input govuk-!-width-full" id="raid-kri-metric" name="metric" type="text" maxlength="4000" aria-describedby="raid-kri-metric-hint" />
+                  </div>
+                </div>
+                <div class="govuk-grid-column-one-half">
+                  <div class="govuk-form-group govuk-!-margin-bottom-0">
+                    <label class="govuk-label govuk-label--s" for="raid-kri-threshold">Threshold</label>
+                    <div id="raid-kri-threshold-hint" class="govuk-hint">When the risk escalates or is reviewed.</div>
+                    <input class="govuk-input govuk-!-width-full" id="raid-kri-threshold" name="threshold" type="text" maxlength="4000" aria-describedby="raid-kri-threshold-hint" />
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="govuk-button-group">
               <button type="submit" class="govuk-button" data-module="govuk-button">Add</button>
@@ -744,6 +914,9 @@
                   <th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Metric</button>
         </th>
+                  <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Threshold</button>
+        </th>
                   <th></th>
                 </tr>
               </thead>
@@ -754,6 +927,7 @@
                   kriIdx++;
                   var descCell = string.IsNullOrWhiteSpace(k.Description) ? "—" : k.Description;
                   var metricCell = string.IsNullOrWhiteSpace(k.Metric) ? "—" : k.Metric;
+                  var thresholdCell = string.IsNullOrWhiteSpace(k.Threshold) ? "—" : k.Threshold;
                   <tr class="govuk-table__row">
                     <td class="govuk-table__cell">@kriIdx</td>
                     <td class="govuk-table__cell">
@@ -764,6 +938,9 @@
                     </td>
                     <td class="govuk-table__cell">
                       <div class="govuk-body-s" style="white-space:pre-wrap;max-width:24rem;">@metricCell</div>
+                    </td>
+                    <td class="govuk-table__cell">
+                      <div class="govuk-body-s" style="white-space:pre-wrap;max-width:24rem;">@thresholdCell</div>
                     </td>
                     <td class="govuk-table__cell">
                       <form method="post"
@@ -783,7 +960,7 @@
         }
         else
         {
-          <p class="govuk-body">No key risk indicators yet. Use <strong>Add KRI</strong> to record title, description, and metric.</p>
+          <p class="govuk-body">No key risk indicators yet. Use <strong>Add KRI</strong> to record metric and threshold, or add them when editing the risk.</p>
         }
 
         <script nonce="@cspNonce">
@@ -822,7 +999,7 @@
             <div class="govuk-form-group">
               <label class="govuk-label govuk-label--s" for="raid-mit-new-desc">Action <span class="govuk-visually-hidden">(required)</span></label>
               <div id="raid-mit-new-desc-hint" class="govuk-hint">Use “We are” or “We will” language. Must be funded and resourced.</div>
-              <textarea class="govuk-textarea govuk-!-width-full" id="raid-mit-new-desc" name="title" rows="5" maxlength="450" aria-describedby="raid-mit-new-desc-hint" placeholder="e.g. We will implement multi-AZ cloud redundancy"></textarea>
+              <textarea class="govuk-textarea govuk-!-width-full" id="raid-mit-new-desc" name="title" rows="5" maxlength="4000" aria-describedby="raid-mit-new-desc-hint" placeholder="e.g. We will implement multi-AZ cloud redundancy"></textarea>
             </div>
             <div class="user-picker-wrapper user-picker-wrapper--full-width">
               @{
@@ -1001,7 +1178,7 @@
                       }
                       @if (!string.IsNullOrWhiteSpace(wRag))
                       {
-                        <span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(wproj.RagStatusLookup?.CssClass, wRag) dfe-f-badge--small">@wRag.ToUpperInvariant()</span>
+                        <span class="@WorkBadgeCss.RagCompactBadgeClass(wRag)">@wRag.ToUpperInvariant()</span>
                       }
                     </div>
                   </div>
@@ -1232,38 +1409,13 @@
             <h2 id="risk-linked-actions-heading" class="govuk-heading-s govuk-!-margin-bottom-2">Mitigation actions (@mitigationRows.Count)</h2>
             @if (mitigationRows.Count > 0)
             {
-              <div class="raid-linked-record-list">
-                @foreach (var ra in mitigationRows)
-                {
-                  var act = ra.Action!;
-                  var due = act.DueDate?.ToString("d MMM yyyy", CultureInfo.InvariantCulture) ?? "—";
-                  var progDisp = MitigationEffectiveSelectValue(act);
-                  <div class="raid-linked-record raid-linked-record--mitigation">
-                    <div class="raid-linked-record__grid">
-                      <div class="raid-linked-record__main">
-                        <div class="raid-linked-record__meta">Mitigation action</div>
-                        <div>
-                          <span class="raid-linked-record__title">@act.Title</span><span class="raid-linked-record__ref">A-@(act.Id.ToString("D4"))</span>
-                        </div>
-                        <div class="raid-linked-record__tag-row govuk-!-margin-top-2">
-                          <span class="@MitigationProgressBadgeClass(progDisp)">@progDisp.ToUpperInvariant()</span>
-                          <span class="govuk-body-s govuk-!-margin-bottom-0" style="color:#505a5f;">Due @due · @act.ProgressPercent%</span>
-                        </div>
-                      </div>
-                      <div class="raid-linked-record__aside">
-                        <a class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold" href="@Url.Action("MitigationEdit", "ModernRaid", new { riskId = Model.Id, actionId = act.Id })">Edit<span class="govuk-visually-hidden"> mitigation</span></a>
-                      </div>
-                    </div>
-                  </div>
-                }
-              </div>
-              <p class="govuk-body-s govuk-!-margin-top-3 govuk-!-margin-bottom-0">
-                <a class="govuk-link govuk-link--no-visited-state" href="@mitigationsTabUrl">Edit actions on the Mitigations tab</a>
+              <p class="govuk-body govuk-!-margin-bottom-0">
+                <a class="govuk-link govuk-link--no-visited-state" href="@mitigationsTabUrl">@mitigationRows.Count mitigation action@(mitigationRows.Count == 1 ? "" : "s") — view on Mitigations tab</a>
               </p>
             }
             else
             {
-              <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:var(--grey-4);">No mitigation actions are linked yet.</p>
+              <p class="govuk-body-s govuk-!-margin-bottom-0" style="color:var(--grey-4);">No mitigation actions are linked yet. <a class="govuk-link govuk-link--no-visited-state" href="@mitigationsTabUrl">Add on the Mitigations tab</a>.</p>
             }
           </section>
 
@@ -1338,7 +1490,7 @@
         }
         else
         {
-          <p class="govuk-body">No recorded updates yet. Changes appear here after you save edits to this risk or its mitigation actions (audit logging must be enabled).</p>
+          <p class="govuk-body">No recorded updates yet. Changes appear here after you save edits to this risk, add progress updates, or update mitigation actions.</p>
         }
         <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0 raid-risk-history__footnote">
           Latest save: @Model.UpdatedAt.ToString("d MMM yyyy HH:mm", CultureInfo.InvariantCulture) UTC · Created @Model.CreatedAt.ToString("d MMM yyyy HH:mm", CultureInfo.InvariantCulture) UTC

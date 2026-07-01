@@ -2,6 +2,8 @@ using System.Globalization;
 using ClosedXML.Excel;
 using Compass.Models;
 using Compass.Models.Modern.Work;
+using Compass.Services;
+using Compass.Services.Modern;
 using Compass.ViewModels;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Mvc;
@@ -11,6 +13,222 @@ namespace Compass.Controllers.Modern;
 
 public partial class ModernReportingController
 {
+    /// <summary>Standard work export: Work, Milestones, Updates, Risks, Issues, Assumptions, Decisions, Near misses, Accessibility.</summary>
+    [HttpGet("work/export")]
+    public async Task<IActionResult> ExportWorkScope(
+        [FromQuery] int[]? ids,
+        string? label,
+        CancellationToken cancellationToken = default)
+    {
+        var projectIds = (ids ?? Array.Empty<int>()).Distinct().Where(id => id > 0).ToList();
+        if (projectIds.Count == 0)
+            return BadRequest("No work items to export.");
+
+        var user = await GetCurrentUserAsync(cancellationToken);
+        if (user == null)
+            return Unauthorized();
+
+        var bytes = await _workScopedExcelExport.BuildWorkbookAsync(
+            projectIds,
+            user.Value.CurrentUser,
+            user.Value.Email,
+            Url,
+            cancellationToken);
+
+        var safeLabel = SanitizeFilePart(string.IsNullOrWhiteSpace(label) ? "work" : label);
+        return ReturnExcelFile(bytes, $"work-export-{safeLabel}-{Timestamp()}.xlsx");
+    }
+
+    [HttpGet("drilldown/export")]
+    public async Task<IActionResult> ExportDrilldown(
+        string source,
+        int? year,
+        int? month,
+        string? dimension,
+        string? ba,
+        string? filter,
+        int? businessAreaId,
+        int? directorateId,
+        int? groupId,
+        CancellationToken cancellationToken = default)
+    {
+        var projectIds = await ResolveDrilldownProjectIdsAsync(
+            source,
+            year,
+            month,
+            dimension,
+            ba,
+            filter,
+            businessAreaId,
+            directorateId,
+            groupId,
+            cancellationToken);
+        if (projectIds.Count == 0)
+            return BadRequest("No work items match this drill-down.");
+
+        var user = await GetCurrentUserAsync(cancellationToken);
+        if (user == null)
+            return Unauthorized();
+
+        var bytes = await _workScopedExcelExport.BuildWorkbookAsync(
+            projectIds,
+            user.Value.CurrentUser,
+            user.Value.Email,
+            Url,
+            cancellationToken);
+
+        var safeFilter = SanitizeFilePart(string.IsNullOrWhiteSpace(filter) ? "items" : filter);
+        var safeBa = SanitizeFilePart(string.IsNullOrWhiteSpace(ba) ? "scope" : ba);
+        return ReturnExcelFile(bytes, $"reporting-drilldown-{source}-{safeBa}-{safeFilter}-{Timestamp()}.xlsx");
+    }
+
+    private static string SanitizeFilePart(string value)
+    {
+        var cleaned = string.Concat(value.Select(c =>
+            char.IsLetterOrDigit(c) || c == '-' ? c : '-'));
+        return string.IsNullOrWhiteSpace(cleaned) ? "export" : cleaned;
+    }
+
+    private async Task<List<int>> ResolveDrilldownProjectIdsAsync(
+        string? source,
+        int? year,
+        int? month,
+        string? dimension,
+        string? ba,
+        string? filter,
+        int? businessAreaId,
+        int? directorateId,
+        int? groupId,
+        CancellationToken cancellationToken)
+    {
+        var src = (source ?? "").Trim().ToLowerInvariant();
+        var filterKey = (filter ?? "total").Trim();
+        List<BusinessAreaProjectItem> sourceItems;
+
+        if (src == "thematic")
+        {
+            var dashboard = await _monthlyReportService.BuildThematicReportDashboardAsync(cancellationToken);
+            var dim = string.IsNullOrWhiteSpace(dimension) ? "theme" : dimension;
+            sourceItems = ResolveDrillSourceItems(dashboard.Rows, dashboard.ScopeProjectItems, dim, ba);
+        }
+        else if (src == "priorities")
+        {
+            var pr = await _monthlyReportService.BuildPrioritiesReportAsync(
+                dimension,
+                year,
+                month,
+                groupId,
+                cancellationToken);
+            var rows = pr.Report.PrioritiesReport?.DimensionSections
+                .SelectMany(s => s.Rows)
+                .ToList() ?? new List<ModernBusinessAreaDashboardRow>();
+            sourceItems = ResolveDrillSourceItems(rows, pr.Report.ScopeProjectItems, dimension, ba);
+        }
+        else if (src == "resourcing")
+        {
+            var rr = await _monthlyReportService.BuildResourcingReportAsync(
+                year,
+                month,
+                businessAreaId,
+                directorateId,
+                dimension,
+                groupId,
+                cancellationToken);
+            sourceItems = ResolveResourcingDrillSourceItems(rr, dimension, ba);
+        }
+        else
+        {
+            var model = await _monthlyReportService.BuildDashboardAsync(
+                year,
+                month,
+                businessAreaId,
+                directorateId,
+                cancellationToken: cancellationToken);
+            sourceItems = ResolveDrillSourceItems(model.BusinessAreaRows, model.ScopeProjectItems, dimension, ba);
+        }
+
+        return ModernMonthlyReportService.FilterDrilldownItems(sourceItems, filterKey)
+            .Select(p => p.Id)
+            .Distinct()
+            .ToList();
+    }
+
+    private static List<BusinessAreaProjectItem> ResolveDrillSourceItems(
+        IEnumerable<ModernBusinessAreaDashboardRow> rows,
+        IReadOnlyList<BusinessAreaProjectItem> scopeProjects,
+        string? dimension,
+        string? ba)
+    {
+        var groupKey = (ba ?? "").Trim();
+        if (groupKey is "__scope__" or "Total")
+            return scopeProjects.ToList();
+
+        var rowList = rows.ToList();
+        if (!string.IsNullOrEmpty(dimension))
+        {
+            var match = rowList.FirstOrDefault(r =>
+                string.Equals(r.BusinessArea, groupKey, StringComparison.OrdinalIgnoreCase));
+            return match?.Projects ?? new List<BusinessAreaProjectItem>();
+        }
+
+        var baMatch = rowList.FirstOrDefault(r =>
+            string.Equals(r.BusinessArea, groupKey, StringComparison.OrdinalIgnoreCase));
+        return baMatch?.Projects ?? new List<BusinessAreaProjectItem>();
+    }
+
+    private static List<BusinessAreaProjectItem> ResolveResourcingDrillSourceItems(
+        ModernResourcingReportViewModel report,
+        string? dimension,
+        string? groupKey)
+    {
+        var key = (groupKey ?? "").Trim();
+        var allItems = report.WorkItemRows
+            .Select(ToResourcingDrillItem)
+            .ToList();
+        var byId = allItems.ToDictionary(i => i.Id);
+        if (key is "__scope__" or "Total")
+            return allItems;
+
+        IEnumerable<int> ids = Array.Empty<int>();
+        var dim = (dimension ?? "").Trim().ToLowerInvariant();
+        if (dim == "directorate")
+        {
+            ids = report.DirectorateRows
+                .FirstOrDefault(r => string.Equals(r.Name, key, StringComparison.OrdinalIgnoreCase))
+                ?.ProjectIds ?? Enumerable.Empty<int>();
+        }
+        else if (dim == "business-area")
+        {
+            ids = report.BusinessAreaRows
+                .FirstOrDefault(r => string.Equals(r.Name, key, StringComparison.OrdinalIgnoreCase))
+                ?.ProjectIds ?? Enumerable.Empty<int>();
+        }
+        else if (dim == "month")
+        {
+            ids = report.TrendPoints
+                .FirstOrDefault(t => string.Equals(t.Label, key, StringComparison.OrdinalIgnoreCase))
+                ?.WorkItemIds ?? Enumerable.Empty<int>();
+        }
+
+        return ids
+            .Distinct()
+            .Where(id => byId.ContainsKey(id))
+            .Select(id => byId[id])
+            .ToList();
+    }
+
+    private static BusinessAreaProjectItem ToResourcingDrillItem(ResourcingWorkItemRow row) => new()
+    {
+        Id = row.WorkItemId,
+        Title = row.Title,
+        BusinessArea = row.BusinessArea,
+        Rag = string.IsNullOrWhiteSpace(row.Rag) ? "Not Set" : row.Rag,
+        Priority = string.IsNullOrWhiteSpace(row.Priority) ? "Not Set" : row.Priority!,
+        PermFte = row.PermFte,
+        MspFte = row.MspFte,
+        SubmittedUpdate = true
+    };
+
     [HttpGet("thematic/export")]
     public async Task<IActionResult> ExportThematicReport(
         int? themeId,
@@ -46,6 +264,66 @@ public partial class ModernReportingController
             return Unauthorized();
 
         return ReturnExcelFile(excel, $"thematic-report-all-{Timestamp()}.xlsx");
+    }
+
+    /// <summary>Full service assessments export: summary, assessments, actions, and actions by standard.</summary>
+    [HttpGet("assessments/export")]
+    public async Task<IActionResult> ExportAssessmentsReport(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var summaryTask = _serviceAssessmentApi.GetPublishedSummaryAsync(cancellationToken);
+            var byStandardTask = _serviceAssessmentApi.GetPublishedActionsByStandardAsync(cancellationToken);
+            var allWithActionsTask = _serviceAssessmentApi.GetActionsByStandardAsync();
+            await Task.WhenAll(summaryTask, byStandardTask, allWithActionsTask);
+
+            var summary = await summaryTask;
+            var byStandard = await byStandardTask;
+            var allWithActions = await allWithActionsTask;
+
+            var (stdRows, outcomeDetail) = ServiceAssessmentStandardActionOutcomeBuilder.Build(
+                byStandard,
+                allWithActions,
+                summary?.Assessments);
+
+            var bytes = ServiceAssessmentsReportExcelExport.BuildWorkbook(
+                summary,
+                allWithActions,
+                stdRows,
+                outcomeDetail);
+
+            return ReturnExcelFile(bytes, $"service-assessments-{Timestamp()}.xlsx");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting service assessments report");
+            TempData["ErrorMessage"] = "Could not export service assessments. Please try again.";
+            return RedirectToAction(nameof(Assessments));
+        }
+    }
+
+    [HttpGet("resourcing/export")]
+    public async Task<IActionResult> ExportResourcingReport(
+        int? year,
+        int? month,
+        int? businessAreaId,
+        int? directorateId,
+        string? dimension,
+        int? groupId,
+        CancellationToken cancellationToken = default)
+    {
+        var model = await _monthlyReportService.BuildResourcingReportAsync(
+            year,
+            month,
+            businessAreaId,
+            directorateId,
+            dimension,
+            groupId,
+            cancellationToken);
+
+        var bytes = ResourcingReportExcelExport.BuildWorkbook(model);
+        var period = SanitizeFilePart(model.MonthName.Replace(" ", "-"));
+        return ReturnExcelFile(bytes, $"resourcing-report-{period}-{Timestamp()}.xlsx");
     }
 
     [HttpGet("raid/export")]
@@ -110,7 +388,9 @@ public partial class ModernReportingController
                 tagIds: tagIds,
                 cancellationToken: cancellationToken);
 
-            WriteWorkRegisterWorksheet(workbook.Worksheets.Add("Work items"), rows);
+            var periodColumns = await WorkRegisterMonthlySubmissionExportHelper.EnrichRegisterRowsWithMonthlyPeriodsAsync(
+                _context, _monthlyUpdateService, rows, cancellationToken);
+            WorkRegisterExcelExport.WriteWorkListSheet(workbook.Worksheets.Add("Work items"), rows, periodColumns);
         }
 
         using var stream = new MemoryStream();
@@ -193,48 +473,4 @@ public partial class ModernReportingController
         worksheet.Columns().AdjustToContents();
     }
 
-    private static void WriteWorkRegisterWorksheet(IXLWorksheet worksheet, IEnumerable<WorkRegisterRow> rows)
-    {
-        worksheet.Cell(1, 1).Value = "Work item";
-        worksheet.Cell(1, 2).Value = "Reference";
-        worksheet.Cell(1, 3).Value = "Status";
-        worksheet.Cell(1, 4).Value = "Business area";
-        worksheet.Cell(1, 5).Value = "SRO";
-        worksheet.Cell(1, 6).Value = "Primary contact";
-        worksheet.Cell(1, 7).Value = "Portfolio";
-        worksheet.Cell(1, 8).Value = "Phase";
-        worksheet.Cell(1, 9).Value = "Priority";
-        worksheet.Cell(1, 10).Value = "RAG";
-        worksheet.Cell(1, 11).Value = "Milestones";
-        worksheet.Cell(1, 12).Value = "Monthly update";
-        worksheet.Cell(1, 13).Value = "Risk ref";
-        worksheet.Cell(1, 14).Value = "Completed";
-        worksheet.Cell(1, 15).Value = "Cancelled reason";
-        worksheet.Cell(1, 16).Value = "Tags";
-
-        var rowNumber = 2;
-        foreach (var row in rows)
-        {
-            worksheet.Cell(rowNumber, 1).Value = row.Title ?? "";
-            worksheet.Cell(rowNumber, 2).Value = "WI-" + row.Id.ToString("D8", CultureInfo.InvariantCulture);
-            worksheet.Cell(rowNumber, 3).Value = row.Status ?? "";
-            worksheet.Cell(rowNumber, 4).Value = row.BusinessAreaName ?? row.DirectorateSummary ?? "";
-            worksheet.Cell(rowNumber, 5).Value = row.SroDisplayName ?? "";
-            worksheet.Cell(rowNumber, 6).Value = row.PrimaryContactName ?? "";
-            worksheet.Cell(rowNumber, 7).Value = row.PortfolioName ?? "";
-            worksheet.Cell(rowNumber, 8).Value = row.PhaseName ?? "";
-            worksheet.Cell(rowNumber, 9).Value = row.PriorityName ?? "";
-            worksheet.Cell(rowNumber, 10).Value = row.RagName ?? "";
-            worksheet.Cell(rowNumber, 11).Value = row.MilestoneCount;
-            worksheet.Cell(rowNumber, 12).Value = row.MonthlyUpdateStatus ?? "";
-            worksheet.Cell(rowNumber, 13).Value = row.FirstRiskReference ?? "";
-            worksheet.Cell(rowNumber, 14).Value = row.CompletedAt ?? "";
-            worksheet.Cell(rowNumber, 15).Value = row.CancelledReason ?? "";
-            worksheet.Cell(rowNumber, 16).Value = row.TagNamesSummary ?? "";
-            rowNumber++;
-        }
-
-        worksheet.Range(1, 1, 1, 16).Style.Font.Bold = true;
-        worksheet.Columns().AdjustToContents();
-    }
 }

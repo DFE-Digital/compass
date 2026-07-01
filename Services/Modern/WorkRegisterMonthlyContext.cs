@@ -22,8 +22,7 @@ public sealed class WorkRegisterMonthlyContext
     public static WorkRegisterMonthlyContext Create(IMonthlyUpdateService monthlyUpdateService, DateTime utcNow)
     {
         var nowDate = utcNow.Date;
-        var reportY = nowDate.Year;
-        var reportM = nowDate.Month;
+        var (reportY, reportM) = monthlyUpdateService.ResolveDashboardReportingPeriod(utcNow);
         var explicitPeriod = monthlyUpdateService.TryGetActiveExplicitReportingPeriod(reportY, reportM);
 
         DateTime opens;
@@ -62,7 +61,7 @@ public sealed class WorkRegisterMonthlyContext
             ExplicitPeriod = explicitPeriod,
             SubmissionWindowOpens = opens,
             SubmissionWindowCloses = closes,
-            SubmissionWindowOpen = nowDate >= opens && nowDate <= closes,
+            SubmissionWindowOpen = monthlyUpdateService.IsMonthlyReportEditingAllowed(reportY, reportM),
             CurrentDueDate = currentDueDate,
             CurrentPeriodLabel = currentPeriodLabel,
             RegisterMonthlyColumnHeader = monthHeader,

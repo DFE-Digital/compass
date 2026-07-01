@@ -1,7 +1,9 @@
 using Compass.Controllers;
 using Compass.Data;
 using Compass.Models;
+using Compass.Models.Fips;
 using Compass.Services.Aiss;
+using Compass.Services.Modern;
 using Compass.ViewModels;
 using Compass.ViewModels.Modern;
 using Microsoft.EntityFrameworkCore;
@@ -44,6 +46,305 @@ public class ModernMonthlyReportService
         {
             Report = report,
             DimensionSections = ctx.DimensionSections
+        };
+    }
+
+    public async Task<ModernResourcingReportViewModel> BuildResourcingReportAsync(
+        int? year,
+        int? month,
+        int? businessAreaId,
+        int? directorateId,
+        string? dimension,
+        int? groupId,
+        CancellationToken cancellationToken = default)
+    {
+        var currentDate = DateTime.UtcNow;
+        var calendarYearUtc = currentDate.Year;
+        var currentMonth = currentDate.Month;
+
+        const int minReportYear = 2026;
+        var maxSelectableYear = calendarYearUtc >= minReportYear ? calendarYearUtc : minReportYear;
+
+        var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(calendarYearUtc, currentMonth);
+        var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate - currentDate).Days;
+
+        var defaultReportYear = daysUntilCurrentPeriodDueDate <= 10 ? calendarYearUtc : (currentMonth == 1 ? calendarYearUtc - 1 : calendarYearUtc);
+        var defaultReportMonth = daysUntilCurrentPeriodDueDate <= 10 ? currentMonth : (currentMonth == 1 ? 12 : currentMonth - 1);
+
+        defaultReportYear = Math.Max(minReportYear, defaultReportYear);
+
+        var reportYear = year ?? defaultReportYear;
+        var reportMonth = month ?? defaultReportMonth;
+        if (reportMonth < 1 || reportMonth > 12)
+            reportMonth = defaultReportMonth;
+
+        reportYear = Math.Clamp(reportYear, minReportYear, maxSelectableYear);
+
+        var dimensionKey = NormalizeResourcingDimension(dimension);
+
+        var query = _db.Projects
+            .AsNoTracking()
+            .Include(p => p.BusinessAreaLookup)
+            .Include(p => p.DeliveryPriority)
+            .Include(p => p.RagStatusLookup)
+            .Include(p => p.MonthlyUpdates)
+            .Include(p => p.Directorates)
+                .ThenInclude(d => d.Division)
+            .Include(p => p.ProjectMissions)
+                .ThenInclude(pm => pm.Mission)
+            .Include(p => p.ProjectObjectives)
+                .ThenInclude(po => po.Objective)
+            .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
+
+        if (businessAreaId.HasValue)
+            query = query.Where(p => p.BusinessAreaId == businessAreaId.Value);
+        if (directorateId.HasValue)
+            query = query.Where(p => p.Directorates.Any(d => d.DivisionId == directorateId.Value));
+
+        var scopedProjects = await query.ToListAsync(cancellationToken);
+
+        var groupOptions = new List<PrioritiesReportGroupOption>();
+        string? groupName = null;
+        if (dimensionKey != "all")
+        {
+            groupOptions = BuildPrioritiesGroupOptions(scopedProjects, dimensionKey);
+            if (groupId.HasValue)
+            {
+                scopedProjects = FilterProjectsByPrioritiesGroup(scopedProjects, dimensionKey, groupId.Value);
+                groupName = groupOptions.FirstOrDefault(o => o.GroupId == groupId.Value)?.Name;
+            }
+        }
+
+        var bands = await _db.ResourceBandLookups.AsNoTracking()
+            .Where(rb => rb.IsActive)
+            .OrderBy(rb => rb.SortOrder)
+            .ThenBy(rb => rb.MinFte)
+            .Select(rb => new ResourcingBandViewModel
+            {
+                Id = rb.Id,
+                Name = rb.Name,
+                Description = rb.Description,
+                MinFte = rb.MinFte,
+                MaxFte = rb.MaxFte,
+                CssClass = rb.CssClass,
+                SortOrder = rb.SortOrder
+            })
+            .ToListAsync(cancellationToken);
+
+        var itemRows = new List<ResourcingWorkItemRow>();
+        foreach (var project in scopedProjects)
+        {
+            var periodUpdate = project.MonthlyUpdates.FirstOrDefault(u =>
+                u.Year == reportYear &&
+                u.Month == reportMonth &&
+                u.SubmittedAt.HasValue);
+            if (periodUpdate == null)
+                continue;
+
+            var perm = periodUpdate.MonthlyPermFte ?? 0m;
+            var msp = periodUpdate.MonthlyMspFte ?? 0m;
+            var total = perm + msp;
+            var band = ResolveResourceBand(total, bands);
+
+            var directorateNames = project.Directorates
+                .Select(d => d.Division?.Name)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n)
+                .ToList();
+
+            itemRows.Add(new ResourcingWorkItemRow
+            {
+                WorkItemId = project.Id,
+                Title = project.Title,
+                BusinessArea = project.BusinessAreaLookup?.Name ?? "Not set",
+                Directorates = directorateNames.Count == 0 ? "Not set" : string.Join(", ", directorateNames),
+                Rag = RagBucket(project),
+                Priority = project.DeliveryPriority?.Name,
+                PermFte = perm,
+                MspFte = msp,
+                ResourcingFte = total,
+                BandName = band.Name,
+                BandCssClass = band.CssClass
+            });
+        }
+
+        var workItemRows = itemRows
+            .OrderBy(r => PrioritySortKey(r.Priority ?? "Not set"))
+            .ThenByDescending(r => r.ResourcingFte)
+            .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var businessAreaRows = workItemRows
+            .GroupBy(r => r.BusinessArea)
+            .Select(g => BuildResourcingAggregateRow(
+                g.Key,
+                scopedProjects.FirstOrDefault(p => string.Equals(p.BusinessAreaLookup?.Name ?? "Not set", g.Key, StringComparison.OrdinalIgnoreCase))?.BusinessAreaId,
+                g.ToList(),
+                bands))
+            .OrderByDescending(r => r.ResourcingFteTotal)
+            .ThenBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name)
+            .ToList();
+
+        var directorateLinks = new List<(int? DirectorateId, string DirectorateName, ResourcingWorkItemRow Item)>();
+        foreach (var project in scopedProjects)
+        {
+            var item = workItemRows.FirstOrDefault(r => r.WorkItemId == project.Id);
+            if (item == null)
+                continue;
+
+            var directors = project.Directorates
+                .Where(d => d.Division != null && !string.IsNullOrWhiteSpace(d.Division!.Name))
+                .Select(d => (DirectorateId: (int?)d.DivisionId, DirectorateName: d.Division!.Name.Trim()))
+                .Distinct()
+                .ToList();
+
+            if (directors.Count == 0)
+            {
+                directorateLinks.Add((null, "Not set", item));
+                continue;
+            }
+
+            foreach (var d in directors)
+                directorateLinks.Add((d.DirectorateId, d.DirectorateName, item));
+        }
+
+        var directorateRows = directorateLinks
+            .GroupBy(x => (x.DirectorateId, x.DirectorateName))
+            .Select(g => BuildResourcingAggregateRow(
+                g.Key.DirectorateName,
+                g.Key.DirectorateId,
+                g.Select(x => x.Item).DistinctBy(i => i.WorkItemId).ToList(),
+                bands))
+            .OrderByDescending(r => r.ResourcingFteTotal)
+            .ThenBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name)
+            .ToList();
+
+        var trendPoints = BuildResourcingTrendPoints(scopedProjects, reportYear, reportMonth, minReportYear);
+        var directorateTrendSeries = BuildResourcingGroupTrendSeries(scopedProjects, reportYear, reportMonth, minReportYear, "directorate");
+        var businessAreaTrendSeries = BuildResourcingGroupTrendSeries(scopedProjects, reportYear, reportMonth, minReportYear, "businessArea");
+
+        var nextMonthDate = new DateTime(reportYear, reportMonth, 1).AddMonths(1);
+        var nextMonthAllowed =
+            (nextMonthDate.Year < defaultReportYear ||
+             (nextMonthDate.Year == defaultReportYear && nextMonthDate.Month <= defaultReportMonth)) &&
+            nextMonthDate.Year <= calendarYearUtc;
+        var prevMonthDate = new DateTime(reportYear, reportMonth, 1).AddMonths(-1);
+        var earliestReportPeriod = new DateTime(minReportYear, 1, 1);
+        var hasPreviousMonthNav = prevMonthDate >= earliestReportPeriod;
+
+        return new ModernResourcingReportViewModel
+        {
+            ReportYear = reportYear,
+            ReportMonth = reportMonth,
+            MonthName = new DateTime(reportYear, reportMonth, 1).ToString("MMMM yyyy"),
+            MinReportYear = minReportYear,
+            MaxReportYear = maxSelectableYear,
+            FilterBusinessAreaId = businessAreaId,
+            FilterDirectorateId = directorateId,
+            Dimension = dimensionKey,
+            GroupId = groupId,
+            GroupName = groupName,
+            GroupOptions = groupOptions,
+            BusinessAreas = await _db.BusinessAreaLookups.AsNoTracking()
+                .Where(ba => ba.IsActive)
+                .OrderBy(ba => ba.SortOrder)
+                .ThenBy(ba => ba.Name)
+                .ToListAsync(cancellationToken),
+            Directorates = await _db.Divisions.AsNoTracking()
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.SortOrder)
+                .ThenBy(d => d.Name)
+                .ToListAsync(cancellationToken),
+            HasPreviousMonthNav = hasPreviousMonthNav,
+            HasNextMonthNav = nextMonthAllowed,
+            PreviousNavYear = hasPreviousMonthNav ? prevMonthDate.Year : null,
+            PreviousNavMonth = hasPreviousMonthNav ? prevMonthDate.Month : null,
+            NextNavYear = nextMonthAllowed ? nextMonthDate.Year : null,
+            NextNavMonth = nextMonthAllowed ? nextMonthDate.Month : null,
+            TotalPermFte = workItemRows.Sum(r => r.PermFte),
+            TotalMspFte = workItemRows.Sum(r => r.MspFte),
+            TotalResourcingFte = workItemRows.Sum(r => r.ResourcingFte),
+            SubmittedWorkItemCount = workItemRows.Count,
+            Bands = bands,
+            DirectorateRows = directorateRows,
+            BusinessAreaRows = businessAreaRows,
+            WorkItemRows = workItemRows,
+            TrendPoints = trendPoints,
+            DirectorateTrendSeries = directorateTrendSeries,
+            BusinessAreaTrendSeries = businessAreaTrendSeries
+        };
+    }
+
+    public async Task<ModernServiceRegisterReportViewModel> BuildServiceRegisterReportAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var products = await _db.CMDBProducts
+            .AsNoTracking()
+            .Include(p => p.Phase)
+            .Include(p => p.BusinessAreas)
+                .ThenInclude(ba => ba.FipsBusinessArea)
+                    .ThenInclude(fba => fba.BusinessAreaLookup)
+                        .ThenInclude(bal => bal.DivisionBusinessAreas)
+                            .ThenInclude(dba => dba.Division)
+            .Include(p => p.Channels)
+                .ThenInclude(c => c.FipsChannel)
+            .Include(p => p.UserGroups)
+            .Include(p => p.Types)
+                .ThenInclude(t => t.FipsType)
+            .Include(p => p.Contacts)
+                .ThenInclude(c => c.FipsContactRole)
+            .OrderBy(p => p.Title)
+            .ThenBy(p => p.UniqueID)
+            .ToListAsync(cancellationToken);
+
+        var completionRows = products
+            .Select(BuildServiceRegisterProductCompletionRow)
+            .OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.UniqueId)
+            .ToList();
+
+        var directorateRows = BuildServiceRegisterAreaSummaryRows(
+            completionRows,
+            r => r.DirectorateNames);
+        var businessAreaRows = BuildServiceRegisterAreaSummaryRows(
+            completionRows,
+            r => r.BusinessAreaNames);
+
+        var activeRows = completionRows.Where(IsServiceRegisterActive).ToList();
+        var activeTotal = activeRows.Count;
+        const decimal criteriaMaxPerProduct = 6m;
+        var activeCriteriaMet = activeRows.Sum(CompletionCriteriaMetCount);
+        var activeOverallCompletionPercent = activeTotal == 0
+            ? 0m
+            : Math.Round((activeCriteriaMet / (activeTotal * criteriaMaxPerProduct)) * 100m, 1, MidpointRounding.AwayFromZero);
+
+        static List<ServiceRegisterProductCompletionRow> OrderCompletionRows(IEnumerable<ServiceRegisterProductCompletionRow> rows) =>
+            rows.OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.UniqueId)
+                .ToList();
+
+        return new ModernServiceRegisterReportViewModel
+        {
+            ActiveTotalProducts = activeTotal,
+            ActiveOverallCompletionPercent = activeOverallCompletionPercent,
+            ActiveFullyCompleteCount = activeRows.Count(r => r.CompletionPercent >= 100),
+            ActiveProductsWithoutUrlCount = activeRows.Count(r => !r.HasProductUrl),
+            ActiveProductsWithoutServiceOwnerOrSroCount = activeRows.Count(r =>
+                !r.HasServiceOwner || !r.HasSeniorResponsibleOfficer),
+            ActiveCount = completionRows.Count(IsServiceRegisterActive),
+            RejectedCount = completionRows.Count(IsServiceRegisterRejected),
+            RetiredCount = completionRows.Count(IsServiceRegisterRetired),
+            NewCount = completionRows.Count(IsServiceRegisterNew),
+            EnterpriseCount = completionRows.Count(r => r.IsEnterprise),
+            DirectorateRows = directorateRows,
+            BusinessAreaRows = businessAreaRows,
+            ActiveCompletionRows = OrderCompletionRows(activeRows),
+            EnterpriseCompletionRows = OrderCompletionRows(completionRows.Where(r => r.IsEnterprise)),
+            RetiredCompletionRows = OrderCompletionRows(completionRows.Where(IsServiceRegisterRetired)),
+            NewCompletionRows = OrderCompletionRows(completionRows.Where(IsServiceRegisterNew)),
+            RejectedCompletionRows = OrderCompletionRows(completionRows.Where(IsServiceRegisterRejected))
         };
     }
 
@@ -92,6 +393,7 @@ public class ModernMonthlyReportService
             .Include(p => p.MonthlyUpdates)
                 .ThenInclude(mu => mu.MonthlyUpdateNarratives)
             .Include(p => p.RagStatusLookup)
+            .Include(p => p.RagHistory)
             .Include(p => p.Directorates)
             .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
 
@@ -344,6 +646,13 @@ public class ModernMonthlyReportService
         var ragChanges = BuildRagChangeDetails(allProjects, ragHistoryDuringMonth, historyByProject, monthStart, reportYear, reportMonth);
         var priorityChanges = BuildPriorityChangeDetails(allProjects, prevMonthProjects, monthStart, monthEnd, reportYear, reportMonth);
 
+        var ragSixMonthTrendRows = MonthlyReportRagTrendAnalyzer.Build(
+            allProjects,
+            historyByProject,
+            reportYear,
+            reportMonth,
+            ResolveRagAtCutoff);
+
         var nextMonthDate = monthStart.AddMonths(1);
         var nextMonthAllowed =
             (nextMonthDate.Year < defaultReportYear ||
@@ -507,7 +816,8 @@ public class ModernMonthlyReportService
             ScopeProjectItems = allProjects
                 .Select(p => ToBusinessAreaProjectItem(p, reportYear, reportMonth, monthStart, monthEnd, upcomingWindowEnd, todayUtc))
                 .OrderBy(x => x.Title)
-                .ToList()
+                .ToList(),
+            RagSixMonthTrendRows = ragSixMonthTrendRows
         };
     }
 
@@ -515,6 +825,308 @@ public class ModernMonthlyReportService
     {
         var d = (dimension ?? "mission").Trim().ToLowerInvariant();
         return d is "outcomes" or "priority" ? d : "mission";
+    }
+
+    private static string NormalizeResourcingDimension(string? dimension)
+    {
+        var d = (dimension ?? "all").Trim().ToLowerInvariant();
+        return d is "mission" or "outcomes" or "priority" ? d : "all";
+    }
+
+    private static ServiceRegisterProductCompletionRow BuildServiceRegisterProductCompletionRow(CMDBProduct product)
+    {
+        var hasPhase = product.PhaseId.HasValue;
+        var hasBusinessArea = product.BusinessAreas.Any();
+        var hasChannel = product.Channels.Any();
+        var hasUserGroup = product.UserGroups.Any();
+        var hasType = product.Types.Any();
+        var contactCount = product.Contacts.Count;
+        var hasAnyContact = contactCount > 0;
+        var hasServiceOwner = product.Contacts.Any(c =>
+            string.Equals(c.FipsContactRole?.Name, "Service Owner", StringComparison.OrdinalIgnoreCase));
+        var hasSro = product.Contacts.Any(c =>
+            string.Equals(c.FipsContactRole?.Name, "Senior Responsible Officer", StringComparison.OrdinalIgnoreCase));
+        var hasProductUrl = !string.IsNullOrWhiteSpace(product.ProductURL);
+
+        var businessAreaNames = product.BusinessAreas
+            .Select(ba => ba.FipsBusinessArea?.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var directorateNames = product.BusinessAreas
+            .SelectMany(ba => ba.FipsBusinessArea?.BusinessAreaLookup?.DivisionBusinessAreas ?? Array.Empty<DivisionBusinessArea>())
+            .Select(dba => dba.Division?.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (businessAreaNames.Count == 0)
+            businessAreaNames.Add("Not set");
+        if (directorateNames.Count == 0)
+            directorateNames.Add("Not set");
+
+        var missingFields = new List<string>();
+        if (!hasAnyContact) missingFields.Add("At least 1 contact");
+        if (!hasPhase) missingFields.Add("Phase");
+        if (!hasBusinessArea) missingFields.Add("Business area");
+        if (!hasChannel) missingFields.Add("At least 1 channel");
+        if (!hasUserGroup) missingFields.Add("At least 1 user group");
+        if (!hasType) missingFields.Add("At least 1 type");
+
+        var criteriaMet = 0;
+        if (hasAnyContact) criteriaMet++;
+        if (hasPhase) criteriaMet++;
+        if (hasBusinessArea) criteriaMet++;
+        if (hasChannel) criteriaMet++;
+        if (hasUserGroup) criteriaMet++;
+        if (hasType) criteriaMet++;
+        var completionPercent = (int)Math.Round((criteriaMet / 6m) * 100m, 0, MidpointRounding.AwayFromZero);
+
+        var missingOwnerOrSro = new List<string>();
+        if (!hasServiceOwner) missingOwnerOrSro.Add("Service owner");
+        if (!hasSro) missingOwnerOrSro.Add("Senior Responsible Officer");
+
+        var channelNames = product.Channels
+            .Select(c => c.FipsChannel?.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var typeNames = product.Types
+            .Select(t => t.FipsType?.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var phaseDisplay = string.IsNullOrWhiteSpace(product.Phase?.Name) ? "Not set" : product.Phase.Name.Trim();
+
+        return new ServiceRegisterProductCompletionRow
+        {
+            ProductId = product.Id,
+            UniqueId = product.UniqueID,
+            Title = product.Title,
+            StatusLabel = ServiceRegisterStatusLabel(product.Status),
+            IsEnterprise = product.IsEnterpriseService && product.Status == CMDBProductStatus.Active,
+            CompletionPercent = completionPercent,
+            MissingFields = missingFields.Count == 0 ? "None" : string.Join(", ", missingFields),
+            HasProductUrl = hasProductUrl,
+            ProductUrl = product.ProductURL,
+            ContactCount = contactCount,
+            HasPhase = hasPhase,
+            HasBusinessArea = hasBusinessArea,
+            HasChannel = hasChannel,
+            HasUserGroup = hasUserGroup,
+            HasType = hasType,
+            HasServiceOwner = hasServiceOwner,
+            HasSeniorResponsibleOfficer = hasSro,
+            MissingOwnerOrSro = missingOwnerOrSro.Count == 0 ? "None" : string.Join(", ", missingOwnerOrSro),
+            PhaseDisplay = phaseDisplay,
+            ChannelsDisplay = channelNames.Count == 0 ? "Not set" : string.Join(", ", channelNames),
+            TypesDisplay = typeNames.Count == 0 ? "Not set" : string.Join(", ", typeNames),
+            BusinessAreasDisplay = string.Join(", ", businessAreaNames),
+            DirectoratesDisplay = string.Join(", ", directorateNames),
+            BusinessAreaNames = businessAreaNames,
+            DirectorateNames = directorateNames
+        };
+    }
+
+    private static List<ServiceRegisterAreaSummaryRow> BuildServiceRegisterAreaSummaryRows(
+        List<ServiceRegisterProductCompletionRow> rows,
+        Func<ServiceRegisterProductCompletionRow, IEnumerable<string>> namesSelector)
+    {
+        var linked = new List<(string Name, ServiceRegisterProductCompletionRow Row)>();
+        foreach (var row in rows)
+        {
+            var names = namesSelector(row)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (names.Count == 0)
+                names.Add("Not set");
+            foreach (var name in names)
+                linked.Add((name.Trim(), row));
+        }
+
+        return linked
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var products = g.Select(x => x.Row).DistinctBy(r => r.ProductId).ToList();
+                return new ServiceRegisterAreaSummaryRow
+                {
+                    Name = g.Key,
+                    ProductCount = products.Count,
+                    ActiveCount = products.Count(IsServiceRegisterActive),
+                    RejectedCount = products.Count(IsServiceRegisterRejected),
+                    RetiredCount = products.Count(IsServiceRegisterRetired),
+                    NewCount = products.Count(IsServiceRegisterNew),
+                    EnterpriseCount = products.Count(r => r.IsEnterprise),
+                    AverageCompletionPercent = products.Count == 0
+                        ? 0m
+                        : Math.Round(products.Average(r => (decimal)r.CompletionPercent), 1, MidpointRounding.AwayFromZero)
+                };
+            })
+            .OrderByDescending(r => r.ProductCount)
+            .ThenBy(r => string.Equals(r.Name, "Not set", StringComparison.OrdinalIgnoreCase) ? "zzzzzz" : r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static int CompletionCriteriaMetCount(ServiceRegisterProductCompletionRow row)
+    {
+        var met = 0;
+        if (row.ContactCount > 0) met++;
+        if (row.HasPhase) met++;
+        if (row.HasBusinessArea) met++;
+        if (row.HasChannel) met++;
+        if (row.HasUserGroup) met++;
+        if (row.HasType) met++;
+        return met;
+    }
+
+    private static string ServiceRegisterStatusLabel(CMDBProductStatus status) => status switch
+    {
+        CMDBProductStatus.Active => "Active",
+        CMDBProductStatus.Rejected => "Rejected",
+        CMDBProductStatus.Inactive => "Retired",
+        CMDBProductStatus.New => "New",
+        _ => "New"
+    };
+
+    private static bool IsServiceRegisterActive(ServiceRegisterProductCompletionRow row) =>
+        string.Equals(row.StatusLabel, "Active", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsServiceRegisterRejected(ServiceRegisterProductCompletionRow row) =>
+        string.Equals(row.StatusLabel, "Rejected", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsServiceRegisterRetired(ServiceRegisterProductCompletionRow row) =>
+        string.Equals(row.StatusLabel, "Retired", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsServiceRegisterNew(ServiceRegisterProductCompletionRow row) =>
+        string.Equals(row.StatusLabel, "New", StringComparison.OrdinalIgnoreCase);
+
+    private static (string Name, string? CssClass) ResolveResourceBand(decimal value, List<ResourcingBandViewModel> bands)
+    {
+        if (value <= 0m)
+            return ("—", null);
+        var match = bands.FirstOrDefault(b => value >= b.MinFte && (!b.MaxFte.HasValue || value <= b.MaxFte.Value));
+        if (match == null)
+            return ("Unmapped", null);
+        return (match.Name, match.CssClass);
+    }
+
+    private static ResourcingAggregateRow BuildResourcingAggregateRow(
+        string name,
+        int? groupId,
+        List<ResourcingWorkItemRow> rows,
+        List<ResourcingBandViewModel> bands)
+    {
+        var permTotal = rows.Sum(r => r.PermFte);
+        var mspTotal = rows.Sum(r => r.MspFte);
+        var total = permTotal + mspTotal;
+        var band = ResolveResourceBand(total, bands);
+
+        return new ResourcingAggregateRow
+        {
+            Name = name,
+            GroupId = groupId,
+            WorkItemCount = rows.Select(r => r.WorkItemId).Distinct().Count(),
+            PermFteTotal = permTotal,
+            MspFteTotal = mspTotal,
+            ResourcingFteTotal = total,
+            BandName = band.Name,
+            BandCssClass = band.CssClass,
+            ProjectIds = rows.Select(r => r.WorkItemId).Distinct().ToList()
+        };
+    }
+
+    private static List<ResourcingTrendMonthPoint> BuildResourcingTrendPoints(List<Project> scopedProjects, int reportYear, int reportMonth, int startYear)
+    {
+        var monthCursor = new DateTime(startYear, 1, 1);
+        var endMonth = new DateTime(reportYear, reportMonth, 1);
+        var points = new List<ResourcingTrendMonthPoint>();
+        while (monthCursor <= endMonth)
+        {
+            var y = monthCursor.Year;
+            var m = monthCursor.Month;
+            decimal perm = 0m;
+            decimal msp = 0m;
+            var submittedCount = 0;
+            var workItemIds = new List<int>();
+            foreach (var p in scopedProjects)
+            {
+                var update = p.MonthlyUpdates.FirstOrDefault(u =>
+                    u.Year == y &&
+                    u.Month == m &&
+                    u.SubmittedAt.HasValue);
+                if (update == null)
+                    continue;
+
+                submittedCount++;
+                workItemIds.Add(p.Id);
+                perm += update.MonthlyPermFte ?? 0m;
+                msp += update.MonthlyMspFte ?? 0m;
+            }
+
+            points.Add(new ResourcingTrendMonthPoint
+            {
+                Year = y,
+                Month = m,
+                Label = monthCursor.ToString("MMM yyyy"),
+                PermFteTotal = perm,
+                MspFteTotal = msp,
+                ResourcingFteTotal = perm + msp,
+                SubmittedWorkItemCount = submittedCount,
+                WorkItemIds = workItemIds
+            });
+
+            monthCursor = monthCursor.AddMonths(1);
+        }
+
+        return points;
+    }
+
+    private static List<ResourcingGroupTrendSeries> BuildResourcingGroupTrendSeries(
+        List<Project> scopedProjects,
+        int reportYear,
+        int reportMonth,
+        int startYear,
+        string groupBy)
+    {
+        var grouped = groupBy == "directorate"
+            ? scopedProjects
+                .SelectMany(p =>
+                {
+                    var dirs = p.Directorates
+                        .Where(d => d.Division != null && !string.IsNullOrWhiteSpace(d.Division!.Name))
+                        .Select(d => d.Division!.Name.Trim())
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    if (dirs.Count == 0)
+                        dirs = new List<string> { "Not set" };
+                    return dirs.Select(name => (GroupName: name, Project: p));
+                })
+                .GroupBy(x => x.GroupName, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.Project).ToList(), StringComparer.OrdinalIgnoreCase)
+            : scopedProjects
+                .GroupBy(p => p.BusinessAreaLookup?.Name ?? "Not set", StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        return grouped
+            .Select(kvp => new ResourcingGroupTrendSeries
+            {
+                GroupName = kvp.Key,
+                Points = BuildResourcingTrendPoints(kvp.Value, reportYear, reportMonth, startYear)
+            })
+            .OrderByDescending(s => s.Points.LastOrDefault()?.ResourcingFteTotal ?? 0m)
+            .ThenBy(s => s.GroupName == "Not set" ? "zzzzzz" : s.GroupName)
+            .ToList();
     }
 
     private static string GetPrioritiesDimensionLabel(string dimension) => dimension switch
@@ -770,18 +1382,31 @@ public class ModernMonthlyReportService
         DateTime monthStart,
         DateTime monthEnd,
         DateTime upcomingWindowEnd,
-        DateTime todayUtc) =>
-        new()
+        DateTime todayUtc)
+    {
+        var periodUpdate = p.MonthlyUpdates?.FirstOrDefault(u => u.Year == reportYear && u.Month == reportMonth);
+        var latestSubmitted = p.MonthlyUpdates?
+            .Where(u => u.SubmittedAt.HasValue)
+            .OrderByDescending(u => u.Year)
+            .ThenByDescending(u => u.Month)
+            .FirstOrDefault();
+
+        return new BusinessAreaProjectItem
         {
             Id = p.Id,
             Title = p.Title,
+            Status = p.Status,
+            BusinessArea = p.BusinessAreaLookup?.Name ?? "Not set",
             Summary = string.IsNullOrWhiteSpace(p.Aim) ? null : p.Aim.Trim(),
             PathToGreen = string.IsNullOrWhiteSpace(p.PathToGreen) ? null : p.PathToGreen.Trim(),
             RagJustification = string.IsNullOrWhiteSpace(p.RagJustification) ? null : p.RagJustification.Trim(),
             LatestMonthlyUpdateNarrative = ProjectMonthlyUpdateNarrative.LatestSubmittedText(p),
             Rag = RagBucket(p),
             Priority = PriorityBucket(p),
-            SubmittedUpdate = p.MonthlyUpdates.Any(u => u.Year == reportYear && u.Month == reportMonth && u.SubmittedAt.HasValue),
+            PermFte = periodUpdate?.MonthlyPermFte ?? latestSubmitted?.MonthlyPermFte,
+            MspFte = periodUpdate?.MonthlyMspFte ?? latestSubmitted?.MonthlyMspFte,
+            MilestonesSummary = BuildMilestonesSummary(p, monthStart, monthEnd, upcomingWindowEnd, todayUtc),
+            SubmittedUpdate = periodUpdate?.SubmittedAt.HasValue == true,
             IsNew = p.CreatedAt >= monthStart && p.CreatedAt <= monthEnd,
             HasMilestoneCompletedInPeriod = p.Milestones.Any(m =>
                 !m.IsDeleted &&
@@ -801,6 +1426,91 @@ public class ModernMonthlyReportService
                 m.Status != "cancelled" &&
                 m.DueDate.Date < todayUtc)
         };
+    }
+
+    internal static List<BusinessAreaProjectItem> FilterDrilldownItems(
+        IEnumerable<BusinessAreaProjectItem> items,
+        string filter)
+    {
+        var list = items.ToList();
+        if (filter.StartsWith("mx-", StringComparison.Ordinal))
+        {
+            var parts = filter.AsSpan(3).ToString().Split('|');
+            if (parts.Length == 2)
+                return list.Where(p => p.Rag == parts[0] && p.Priority == parts[1]).ToList();
+        }
+
+        return filter switch
+        {
+            "total" => list,
+            "submitted" => list.Where(p => p.SubmittedUpdate).ToList(),
+            "new" => list.Where(p => p.IsNew).ToList(),
+            "ms-done" => list.Where(p => p.HasMilestoneCompletedInPeriod).ToList(),
+            "ms-soon" => list.Where(p => p.HasMilestoneUpcomingInWindow).ToList(),
+            "ms-late" => list.Where(p => p.HasLateMilestone).ToList(),
+            _ when filter.StartsWith("rag-", StringComparison.Ordinal) =>
+                list.Where(p => p.Rag == filter[4..]).ToList(),
+            _ when filter.StartsWith("pri-", StringComparison.Ordinal) =>
+                list.Where(p => p.Priority == filter[4..]).ToList(),
+            _ => list
+        };
+    }
+
+    internal static IReadOnlyList<BusinessAreaProjectItem> SortDrilldownItems(IEnumerable<BusinessAreaProjectItem> items) =>
+        items
+            .OrderBy(p => PrioritySortKey(p.Priority))
+            .ThenBy(p => RagSortKey(p.Rag))
+            .ThenBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static int PrioritySortKey(string priority) => priority switch
+    {
+        "Critical" => 0,
+        "High" => 1,
+        "Medium" => 2,
+        "Low" => 3,
+        _ => 4
+    };
+
+    private static int RagSortKey(string rag) => rag switch
+    {
+        "Red" => 0,
+        "Amber-Red" => 1,
+        "Amber-Green" => 2,
+        "Green" => 3,
+        _ => 4
+    };
+
+    private static string? BuildMilestonesSummary(
+        Project p,
+        DateTime monthStart,
+        DateTime monthEnd,
+        DateTime upcomingWindowEnd,
+        DateTime todayUtc)
+    {
+        var lines = new List<string>();
+        foreach (var m in p.Milestones.Where(x => !x.IsDeleted).OrderBy(x => x.DueDate))
+        {
+            if (m.Status == "complete" &&
+                m.ActualDate.HasValue &&
+                m.ActualDate.Value >= monthStart &&
+                m.ActualDate.Value <= monthEnd)
+            {
+                lines.Add($"Completed in period: {m.Name} ({m.ActualDate:dd MMM yyyy})");
+                continue;
+            }
+
+            if (m.Status is "complete" or "cancelled")
+                continue;
+
+            if (m.DueDate.Date < todayUtc)
+                lines.Add($"Late: {m.Name} (due {m.DueDate:dd MMM yyyy})");
+            else if (m.DueDate >= monthStart && m.DueDate < upcomingWindowEnd)
+                lines.Add($"Due soon: {m.Name} ({m.DueDate:dd MMM yyyy})");
+        }
+
+        return lines.Count == 0 ? null : string.Join(Environment.NewLine, lines);
+    }
 
     private async Task<MonthlyReportRaidSummary> BuildRaidSummaryAsync(
         int? businessAreaId,
@@ -1263,10 +1973,16 @@ public class ModernMonthlyReportService
         List<Project> projects,
         int year,
         int month,
-        IMonthlyUpdateService monthlyUpdateService)
+        IMonthlyUpdateService monthlyUpdateService) =>
+        CalculateMonthlyUpdateStats(projects, year, month, monthlyUpdateService.GetMonthlyUpdateDueDate(year, month));
+
+    private static MonthlyUpdateStats CalculateMonthlyUpdateStats(
+        List<Project> projects,
+        int year,
+        int month,
+        DateTime dueDate)
     {
         var totalProjects = projects.Count;
-        var dueDate = monthlyUpdateService.GetMonthlyUpdateDueDate(year, month);
         var currentDate = DateTime.UtcNow;
 
         var submitted = 0;
@@ -1643,7 +2359,7 @@ public class ModernMonthlyReportService
             .ThenBy(d => d.Name)
             .ToListAsync(cancellationToken);
 
-        var monthlyUpdateStats = CalculateMonthlyUpdateStats(allProjects, reportYear, reportMonth, _monthlyUpdateService);
+        var monthlyUpdateStats = CalculateMonthlyUpdateStats(allProjects, reportYear, reportMonth, dueDate);
         var expectedProgressToday = ComputeExpectedProgressPercent(submissionWindowStart, submissionWindowEnd, DateTime.UtcNow.Date);
 
         var submittedDates = allProjects
@@ -1660,12 +2376,17 @@ public class ModernMonthlyReportService
             submittedDates);
 
         var businessAreaLeague = BuildSubmissionLeagueByBusinessArea(
-            allProjects, reportYear, reportMonth, expectedProgressToday, _monthlyUpdateService);
+            allProjects, reportYear, reportMonth, expectedProgressToday, dueDate);
         var directorateLeague = BuildSubmissionLeagueByDirectorate(
-            allProjects, directorates, reportYear, reportMonth, expectedProgressToday, _monthlyUpdateService);
+            allProjects, directorates, reportYear, reportMonth, expectedProgressToday, dueDate);
 
         var (trendColumns, businessAreaTrendRows) = BuildBusinessAreaSixMonthTrends(
             allProjects, reportYear, reportMonth);
+
+        var exportPeriodColumns = await LoadExportPeriodColumnsAsync(
+            reportYear, reportMonth, minReportYear, cancellationToken);
+        var exportRows = BuildSubmissionProgressExportRows(
+            allProjects, directorates, reportYear, reportMonth, dueDate, exportPeriodColumns);
 
         var nextMonthDate = monthStart.AddMonths(1);
         var nextMonthAllowed =
@@ -1702,6 +2423,8 @@ public class ModernMonthlyReportService
             DirectorateLeague = directorateLeague,
             TrendMonthColumns = trendColumns,
             BusinessAreaTrendRows = businessAreaTrendRows,
+            ExportPeriodColumns = exportPeriodColumns,
+            ExportRows = exportRows,
             HasPreviousMonthNav = hasPreviousMonthNav,
             HasNextMonthNav = nextMonthAllowed,
             PreviousNavYear = hasPreviousMonthNav ? prevMonthDate.Year : null,
@@ -1838,20 +2561,8 @@ public class ModernMonthlyReportService
         return (columns, rows);
     }
 
-    private static bool IsProjectInReportingScopeForMonth(Project project, int year, int month)
-    {
-        if (project.IsDeleted)
-            return false;
-        if (string.Equals(project.Status, "Cancelled", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var hasPeriodUpdate = project.MonthlyUpdates?.Any(u => u.Year == year && u.Month == month) == true;
-        if (hasPeriodUpdate)
-            return true;
-
-        return string.Equals(project.Status, "Active", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(project.Status, "Paused", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsProjectInReportingScopeForMonth(Project project, int year, int month) =>
+        WorkRegisterMonthlySubmissionExportHelper.IsProjectInReportingScopeForMonth(project, year, month);
 
     private static (int Submitted, int TotalInScope) CountSubmissionForMonth(
         IEnumerable<Project> projects,
@@ -1940,7 +2651,7 @@ public class ModernMonthlyReportService
         int reportYear,
         int reportMonth,
         decimal expectedProgressPercent,
-        IMonthlyUpdateService monthlyUpdateService)
+        DateTime dueDate)
     {
         return projects
             .GroupBy(p => p.BusinessAreaId)
@@ -1951,9 +2662,8 @@ public class ModernMonthlyReportService
                 reportYear,
                 reportMonth,
                 expectedProgressPercent,
-                monthlyUpdateService))
-            .OrderByDescending(r => r.ActualProgressPercent)
-            .ThenBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name)
+                dueDate))
+            .OrderBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
@@ -1963,7 +2673,7 @@ public class ModernMonthlyReportService
         int reportYear,
         int reportMonth,
         decimal expectedProgressPercent,
-        IMonthlyUpdateService monthlyUpdateService)
+        DateTime dueDate)
     {
         var dirNameById = directorateLookups.ToDictionary(d => d.Id, d => d.Name);
 
@@ -1974,10 +2684,9 @@ public class ModernMonthlyReportService
                 var name = g.Key.HasValue && dirNameById.TryGetValue(g.Key.Value, out var n)
                     ? n
                     : "Not set";
-                return BuildSubmissionLeagueRow(name, g.Key, g.ToList(), reportYear, reportMonth, expectedProgressPercent, monthlyUpdateService);
+                return BuildSubmissionLeagueRow(name, g.Key, g.ToList(), reportYear, reportMonth, expectedProgressPercent, dueDate);
             })
-            .OrderByDescending(r => r.ActualProgressPercent)
-            .ThenBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name)
+            .OrderBy(r => r.Name == "Not set" ? "zzzzzz" : r.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
@@ -1997,9 +2706,8 @@ public class ModernMonthlyReportService
         int reportYear,
         int reportMonth,
         decimal expectedProgressPercent,
-        IMonthlyUpdateService monthlyUpdateService)
+        DateTime dueDate)
     {
-        var dueDate = monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
         var nowUtc = DateTime.UtcNow;
         var submitted = 0;
         var inProgress = 0;
@@ -2032,7 +2740,197 @@ public class ModernMonthlyReportService
             Late = late,
             NotStarted = notStarted,
             ActualProgressPercent = actual,
-            ExpectedProgressPercent = expectedProgressPercent
+            ExpectedProgressPercent = expectedProgressPercent,
+            WorkItems = BuildSubmissionProgressWorkItems(projects, reportYear, reportMonth, dueDate)
+        };
+    }
+
+    private static List<SubmissionProgressWorkItemRow> BuildSubmissionProgressWorkItems(
+        List<Project> projects,
+        int reportYear,
+        int reportMonth,
+        DateTime dueDate)
+    {
+        return projects
+            .OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(p => BuildSubmissionProgressWorkItemRow(p, reportYear, reportMonth, dueDate))
+            .ToList();
+    }
+
+    private static SubmissionProgressWorkItemRow BuildSubmissionProgressWorkItemRow(
+        Project p,
+        int reportYear,
+        int reportMonth,
+        DateTime dueDate)
+    {
+        var (status, submittedAt) = ResolveDetailedSubmissionStatus(p, reportYear, reportMonth, dueDate);
+        return new SubmissionProgressWorkItemRow
+        {
+            ProjectId = p.Id,
+            Title = p.Title,
+            SubmissionStatus = status,
+            SubmittedAt = submittedAt
+        };
+    }
+
+    private static (string Status, DateTime? SubmittedAt) ResolveDetailedSubmissionStatus(
+        Project project,
+        int reportYear,
+        int reportMonth,
+        DateTime dueDate)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var update = project.MonthlyUpdates?.FirstOrDefault(u => u.Year == reportYear && u.Month == reportMonth);
+
+        if (update != null && update.SubmittedAt.HasValue)
+            return ("Submitted", update.SubmittedAt);
+
+        if (nowUtc > dueDate)
+            return ("Late", null);
+
+        if (update != null && !update.SubmittedAt.HasValue)
+            return ("In progress", null);
+
+        return ("Not started", null);
+    }
+
+    private static string ResolveExportPeriodSubmissionStatus(
+        Project project,
+        int reportYear,
+        int reportMonth) =>
+        WorkRegisterMonthlySubmissionExportHelper.ResolvePeriodSubmissionStatus(project, reportYear, reportMonth);
+
+    private Task<List<SubmissionTrendMonthColumn>> LoadExportPeriodColumnsAsync(
+        int reportYear,
+        int reportMonth,
+        int minReportYear,
+        CancellationToken cancellationToken) =>
+        WorkRegisterMonthlySubmissionExportHelper.LoadPeriodColumnsAsync(
+            _db, reportYear, reportMonth, minReportYear, cancellationToken);
+
+    private static List<SubmissionProgressExportRow> BuildSubmissionProgressExportRows(
+        List<Project> projects,
+        List<Division> directorateLookups,
+        int reportYear,
+        int reportMonth,
+        DateTime dueDate,
+        IReadOnlyList<SubmissionTrendMonthColumn> periodColumns)
+    {
+        var dirNameById = directorateLookups.ToDictionary(d => d.Id, d => d.Name);
+
+        return projects
+            .OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(p =>
+            {
+                var dirId = GetPrimaryDirectorateId(p);
+                var dirName = dirId.HasValue && dirNameById.TryGetValue(dirId.Value, out var n) ? n : "Not set";
+                var (currentStatus, submittedAt) = ResolveDetailedSubmissionStatus(
+                    p, reportYear, reportMonth, dueDate);
+
+                return new SubmissionProgressExportRow
+                {
+                    ProjectId = p.Id,
+                    Title = p.Title,
+                    BusinessAreaName = p.BusinessAreaLookup?.Name ?? "Not set",
+                    DirectorateName = dirName,
+                    CurrentPeriodStatus = currentStatus,
+                    CurrentPeriodSubmittedAt = submittedAt,
+                    PeriodStatuses = periodColumns
+                        .Select(col => ResolveExportPeriodSubmissionStatus(p, col.Year, col.Month))
+                        .ToList()
+                };
+            })
+            .ToList();
+    }
+
+    /// <summary>Dashboard rows per thematic tag for the thematic report (current reporting period).</summary>
+    public async Task<ModernThematicReportDashboard> BuildThematicReportDashboardAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var calendarYearUtc = nowUtc.Year;
+        var currentMonth = nowUtc.Month;
+        var minReportYear = 2026;
+        var currentPeriodDueDate = _monthlyUpdateService.GetMonthlyUpdateDueDate(calendarYearUtc, currentMonth);
+        var daysUntilCurrentPeriodDueDate = (currentPeriodDueDate.Date - nowUtc.Date).Days;
+        var defaultReportYear = daysUntilCurrentPeriodDueDate <= 10 ? calendarYearUtc : (currentMonth == 1 ? calendarYearUtc - 1 : calendarYearUtc);
+        var defaultReportMonth = daysUntilCurrentPeriodDueDate <= 10 ? currentMonth : (currentMonth == 1 ? 12 : currentMonth - 1);
+        defaultReportYear = Math.Max(minReportYear, defaultReportYear);
+
+        var reportYear = defaultReportYear;
+        var reportMonth = defaultReportMonth;
+        var monthStart = new DateTime(reportYear, reportMonth, 1);
+        var monthEnd = monthStart.AddMonths(1).AddDays(-1).AddHours(23).AddMinutes(59).AddSeconds(59);
+        var todayUtc = nowUtc.Date;
+        var upcomingWindowEnd = monthStart.AddDays(30);
+        var dueDateForSubmission = _monthlyUpdateService.GetMonthlyUpdateDueDate(reportYear, reportMonth);
+        var nowUtcForSubmission = nowUtc;
+
+        var tags = await _db.WorkItemTagLookups.AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.Name)
+            .ToListAsync(cancellationToken);
+
+        var projects = await _db.Projects
+            .AsNoTracking()
+            .Include(p => p.BusinessAreaLookup)
+            .Include(p => p.DeliveryPriority)
+            .Include(p => p.Milestones)
+            .Include(p => p.MonthlyUpdates)
+                .ThenInclude(mu => mu.MonthlyUpdateNarratives)
+            .Include(p => p.RagStatusLookup)
+            .Include(p => p.ProjectWorkItemTags)
+            .Where(p => !p.IsDeleted && p.Status != "Cancelled")
+            .ToListAsync(cancellationToken);
+
+        var rows = new List<ModernBusinessAreaDashboardRow>();
+        foreach (var tag in tags)
+        {
+            var tagged = projects
+                .Where(p => p.ProjectWorkItemTags.Any(l => l.WorkItemTagLookupId == tag.Id))
+                .Where(p => p.Status is "Active" or "Paused")
+                .ToList();
+            if (tagged.Count == 0)
+            {
+                rows.Add(new ModernBusinessAreaDashboardRow
+                {
+                    BusinessArea = tag.Name,
+                    BusinessAreaId = tag.Id,
+                    Projects = new List<BusinessAreaProjectItem>()
+                });
+                continue;
+            }
+
+            rows.Add(BuildDashboardRowFromProjects(
+                tagged,
+                tag.Name,
+                tag.Id,
+                reportYear,
+                reportMonth,
+                monthStart,
+                monthEnd,
+                upcomingWindowEnd,
+                todayUtc,
+                nowUtcForSubmission,
+                dueDateForSubmission));
+        }
+
+        var activeTagIds = tags.Select(t => t.Id).ToHashSet();
+        var scope = projects
+            .Where(p => p.Status is "Active" or "Paused" or "Completed")
+            .Where(p => p.ProjectWorkItemTags.Any(l => activeTagIds.Contains(l.WorkItemTagLookupId)))
+            .Select(p => ToBusinessAreaProjectItem(p, reportYear, reportMonth, monthStart, monthEnd, upcomingWindowEnd, todayUtc))
+            .OrderBy(x => x.Title)
+            .ToList();
+
+        return new ModernThematicReportDashboard
+        {
+            ReportYear = reportYear,
+            ReportMonth = reportMonth,
+            MonthName = monthStart.ToString("MMMM yyyy"),
+            Rows = rows,
+            ScopeProjectItems = scope
         };
     }
 

@@ -26,6 +26,12 @@
             this.confirmBody =
                 root.dataset.slConfirmBody ||
                 "This item will be removed from the list. You can add it again before saving.";
+            this.singleSubmit = root.dataset.slSingleSubmit === "true";
+            this.linkForm = root.querySelector(".js-sl-link-form");
+            this.linkIdInput = root.querySelector(".js-sl-link-id");
+            this.selectedPreview = root.querySelector(".js-sl-selected-preview");
+            this.selectedTitleEl = root.querySelector(".js-sl-selected-title");
+            this.selectedMetaEl = root.querySelector(".js-sl-selected-meta");
             this.searchInput = root.querySelector(".js-sl-search");
             this.resultsEl = root.querySelector(".js-sl-results");
             this.selectedEl = root.querySelector(".js-sl-selected");
@@ -131,6 +137,21 @@
                 if (selected.has(id)) continue;
                 const title = row.title || row.name || "—";
                 const sub = row.subtitle || row.code || null;
+                let resultSub = sub;
+                const workCode =
+                    row.workCode != null && String(row.workCode).trim() !== ""
+                        ? String(row.workCode).trim()
+                        : sub && /^WI-/i.test(String(sub))
+                          ? String(sub)
+                          : "";
+                if (row.uniqueId != null && String(row.uniqueId).trim() !== "") {
+                    resultSub = "Service ID: " + row.uniqueId;
+                    if (sub) {
+                        resultSub += " · CMDB " + sub;
+                    }
+                } else if (workCode) {
+                    resultSub = workCode;
+                }
                 const li = document.createElement("li");
                 li.setAttribute("role", "option");
                 const btn = document.createElement("button");
@@ -142,13 +163,16 @@
                     "<span class='service-line-pick__result-title'>" +
                     esc(title) +
                     "</span>" +
-                    (sub
-                        ? "<span class='service-line-pick__result-sub'> — " + esc(String(sub)) + "</span>"
+                    (resultSub
+                        ? "<span class='service-line-pick__result-sub'> — " + esc(String(resultSub)) + "</span>"
                         : "");
                 btn.addEventListener("click", () => {
-                    this.addItem(id, title, sub);
+                    if (this.singleSubmit) {
+                        this.selectForLink(id, title, sub, row);
+                    } else {
+                        this.addItem(id, title, sub);
+                    }
                     this.hideResults();
-                    if (this.searchInput) this.searchInput.value = "";
                 });
                 li.appendChild(btn);
                 ul.appendChild(li);
@@ -161,6 +185,50 @@
             }
             this.resultsEl.innerHTML = "";
             this.resultsEl.appendChild(ul);
+        }
+
+        selectForLink(id, label, subtitle, row) {
+            if (this.linkIdInput) this.linkIdInput.value = id;
+            if (this.linkForm) {
+                this.linkForm.hidden = false;
+                this.linkForm.classList.remove("govuk-!-display-none");
+            }
+            if (this.searchInput) {
+                this.searchInput.value = label;
+                this.searchInput.setAttribute("aria-expanded", "false");
+            }
+            if (this.selectedPreview) {
+                this.selectedPreview.hidden = false;
+            }
+            if (this.selectedTitleEl) {
+                this.selectedTitleEl.textContent = label;
+            }
+            if (this.selectedMetaEl) {
+                const parts = [];
+                const uniqueId = row && row.uniqueId != null ? String(row.uniqueId) : "";
+                const workCode =
+                    row && row.workCode != null && String(row.workCode).trim() !== ""
+                        ? String(row.workCode).trim()
+                        : subtitle && /^WI-/i.test(String(subtitle))
+                          ? String(subtitle)
+                          : "";
+                const serviceOwner =
+                    row && row.serviceOwner != null && String(row.serviceOwner).trim() !== ""
+                        ? String(row.serviceOwner).trim()
+                        : "";
+                if (uniqueId) {
+                    parts.push("Service ID: " + uniqueId);
+                }
+                if (workCode) {
+                    parts.push("Work item: " + workCode);
+                }
+                if (serviceOwner) {
+                    parts.push("Service owner: " + serviceOwner);
+                } else if (subtitle && !workCode) {
+                    parts.push("CMDB ID: " + subtitle);
+                }
+                this.selectedMetaEl.textContent = parts.join(" · ");
+            }
         }
 
         addItem(id, label, subtitle) {

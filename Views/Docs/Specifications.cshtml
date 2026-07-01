@@ -1,0 +1,90 @@
+@using Compass.Services.Docs
+@{
+    ViewData["Title"] = "Functional specifications";
+    ViewData["DocsSection"] = "specifications";
+    var areas = DocsSpecificationsCatalog.GetAreas();
+    var rbacUrl = Url.Action("Rbac", "Docs");
+    var apiUrl = Url.Action("Api", "Docs");
+}
+
+<div class="developers-docs__intro govuk-!-margin-bottom-6">
+    <span class="govuk-caption-xl">Specifications</span>
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">Functional specifications</h1>
+    <p class="govuk-body-l govuk-!-margin-bottom-0">
+        What each Modern COMPASS view and process does, which data it touches,
+        who can access it, how that data flows to reporting and integrations,
+        and whether a REST API exists. Pair with
+        <a class="govuk-link" href="@rbacUrl">RBAC &amp; authorization</a>
+        and the <a class="govuk-link" href="@apiUrl">API reference</a>.
+    </p>
+</div>
+
+<h2 class="govuk-heading-l" id="overview">Overview</h2>
+<p class="govuk-body">Every specification below uses the same structure:</p>
+<ul class="govuk-list govuk-list--bullet">
+    <li><strong>Process</strong> &mdash; the user-facing workflow name.</li>
+    <li><strong>Route</strong> &mdash; the Modern URL path under <code>/modern</code>.</li>
+    <li><strong>What the feature does</strong> &mdash; purpose and main actions.</li>
+    <li><strong>What data is used or collected</strong> &mdash; primary entities and lookups.</li>
+    <li><strong>What permissions are needed</strong> &mdash; sign-in, feature toggles, groups and record-level rules.</li>
+    <li><strong>How the data is used</strong> &mdash; reporting, exports, AISS, PowerBI and other consumers.</li>
+    <li><strong>API availability</strong> &mdash; <code>/api/v1</code> resources or UI-only.</li>
+</ul>
+
+<div class="govuk-inset-text">
+    Base access for all Modern UI routes: Entra ID sign-in (<code>[Authorize]</code>).
+    Feature toggles (<code>raid</code>, <code>standards</code>, <code>fips</code>, <code>ddr</code>) can hide entire areas &mdash; see
+    <a class="govuk-link" href="@(rbacUrl)#feature-gates">feature-gate filters</a>.
+    Central Operations Admin and super admin bypass most group checks.
+</div>
+
+<div class="developers-specifications">
+@foreach (var area in areas)
+{
+    <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+    <h2 class="govuk-heading-l" id="@area.Id">@area.Title</h2>
+  @if (!string.IsNullOrWhiteSpace(area.Introduction))
+  {
+    <p class="govuk-body">@area.Introduction</p>
+  }
+  @foreach (var view in area.Views)
+  {
+    @await Html.PartialAsync("_SpecificationCard", view)
+  }
+}
+</div>
+
+@section Aside {
+    <h2 class="docs-page-aside-heading">On this page</h2>
+    <ul class="docs-page-aside-nav docs-spec-aside-nav" data-spec-aside-nav>
+        <li><a class="govuk-link govuk-link--no-visited-state" href="#overview">Overview</a></li>
+        @foreach (var area in areas)
+        {
+            <li class="docs-spec-aside-nav__area"
+                data-spec-area-item
+                data-spec-area="@area.Id">
+                <a class="govuk-link govuk-link--no-visited-state"
+                   href="#@area.Id"
+                   data-spec-area-link
+                   aria-expanded="false">@area.Title</a>
+                <ul class="docs-page-aside-nav--sub" data-spec-area-panel hidden>
+                    @foreach (var view in area.Views)
+                    {
+                        <li>
+                            <a class="govuk-link govuk-link--no-visited-state"
+                               href="#@view.Id"
+                               data-spec-view
+                               data-spec-area="@area.Id">@view.Title</a>
+                        </li>
+                    }
+                </ul>
+            </li>
+        }
+    </ul>
+}
+
+@section Scripts {
+    <script src="~/js/docs-specifications-nav.js"
+            asp-append-version="true"
+            nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+}

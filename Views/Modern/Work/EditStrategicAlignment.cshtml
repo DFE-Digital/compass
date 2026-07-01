@@ -7,6 +7,8 @@
     var missionPillars = (List<Compass.Models.Modern.Work.WorkLookupOption>)ViewBag.MissionPillars ?? new List<Compass.Models.Modern.Work.WorkLookupOption>();
     var directorates = (List<Compass.Models.Directorate>)ViewBag.Directorates ?? new List<Compass.Models.Directorate>();
     var riskAppetiteOptions = (List<LookupOption>)ViewBag.RiskAppetiteOptions ?? new List<LookupOption>();
+    var workTagOptions = (List<LookupOption>)ViewBag.WorkTagOptions ?? new List<LookupOption>();
+    var selectedWorkTagIds = (int[])ViewBag.SelectedWorkTagIds ?? Array.Empty<int>();
     var selectedPo = work.PriorityOutcomes?.Select(po => po.PriorityOutcomeId).ToHashSet() ?? new HashSet<int>();
     var selectedMp = work.MissionPillars?.Select(mp => mp.MissionPillarId).ToHashSet() ?? new HashSet<int>();
     var selectedDir = work.Directorates?.Select(d => d.DirectorateId).ToHashSet() ?? new HashSet<int>();
@@ -101,24 +103,35 @@
             }
           </fieldset>
 
+ <fieldset id="edit-flagship" class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Thematic tags</legend>
+ <div class="govuk-hint govuk-!-margin-bottom-3" id="wt-hint">Select all that apply.</div>
+            @if (workTagOptions.Count == 0)
+            {
+ <p class="govuk-body govuk-!-margin-bottom-0">No thematic tags configured.</p>
+            }
+            else
+            {
+ <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes" aria-describedby="wt-hint">
+                @foreach (var wt in workTagOptions)
+                {
+                  var wtChecked = selectedWorkTagIds.Contains(wt.Id);
+                  var wtHintId = $"wt-{wt.Id}-hint";
+ <div class="govuk-checkboxes__item">
+ <input class="govuk-checkboxes__input" type="checkbox" name="workTagIds" value="@wt.Id" id="wt-@wt.Id" checked="@wtChecked" @if (!string.IsNullOrWhiteSpace(wt.Value)) { <text>aria-describedby="@wtHintId"</text> } />
+ <label class="govuk-label govuk-checkboxes__label" for="wt-@wt.Id">@wt.Name</label>
+                  @if (!string.IsNullOrWhiteSpace(wt.Value))
+                  {
+ <div id="@wtHintId" class="govuk-hint govuk-checkboxes__hint">@wt.Value</div>
+                  }
+                </div>
+                }
+              </div>
+            }
+          </fieldset>
+
  <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
  <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Governance flags</legend>
-
- <div id="edit-flagship" class="govuk-form-group">
- <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Flagship project?</legend>
- <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
- <div class="govuk-radios__item">
- <input class="govuk-radios__input" type="radio" name="FlagshipProject" id="edit-fp-yes" value="true" @(Model.FlagshipProject ? "checked" : null) />
- <label class="govuk-label govuk-radios__label" for="edit-fp-yes">Yes</label>
-                </div>
- <div class="govuk-radios__item">
- <input class="govuk-radios__input" type="radio" name="FlagshipProject" id="edit-fp-no" value="false" @(!Model.FlagshipProject ? "checked" : null) />
- <label class="govuk-label govuk-radios__label" for="edit-fp-no">No</label>
-                </div>
-              </div>
-            </fieldset>
-          </div>
 
  <div id="edit-spend-control" class="govuk-form-group govuk-!-margin-bottom-0">
  <fieldset class="govuk-fieldset">
@@ -138,18 +151,33 @@
           </fieldset>
 
  <div id="edit-risk-appetite" class="govuk-form-group govuk-!-margin-top-6 govuk-!-margin-bottom-6">
- <label class="govuk-label govuk-label--m" for="RiskAppetiteId">Risk appetite</label>
- <div class="govuk-hint" id="risk-app-hint">The level of risk tolerance for this work.</div>
- <select name="RiskAppetiteId" id="RiskAppetiteId" class="govuk-select govuk-!-width-one-half" aria-describedby="risk-app-hint">
-            <option value="">— Select —</option>
-            @foreach (var opt in riskAppetiteOptions)
+ <fieldset class="govuk-fieldset">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Risk appetite</legend>
+ <div class="govuk-hint govuk-!-margin-bottom-3" id="risk-app-hint">The level of risk tolerance for this work.</div>
+ <div class="govuk-radios" data-module="govuk-radios" aria-describedby="risk-app-hint">
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="RiskAppetiteId" id="risk-appetite-none" value="" @(!Model.RiskAppetiteId.HasValue ? "checked" : "") />
+ <label class="govuk-label govuk-radios__label" for="risk-appetite-none">Not set</label>
+              </div>
+              @foreach (var opt in riskAppetiteOptions)
+              {
+                var raHintId = $"risk-appetite-{opt.Id}-hint";
+                var raChecked = Model.RiskAppetiteId == opt.Id;
+ <div class="govuk-radios__item">
+ <input class="govuk-radios__input" type="radio" name="RiskAppetiteId" id="risk-appetite-@opt.Id" value="@opt.Id" @(raChecked ? "checked" : null) @if (!string.IsNullOrWhiteSpace(opt.Value)) { <text>aria-describedby="@raHintId"</text> } />
+ <label class="govuk-label govuk-radios__label" for="risk-appetite-@opt.Id">@opt.Name</label>
+                @if (!string.IsNullOrWhiteSpace(opt.Value))
+                {
+ <div id="@raHintId" class="govuk-hint govuk-radios__hint">@opt.Value</div>
+                }
+              </div>
+              }
+            </div>
+            @if (!riskAppetiteOptions.Any())
             {
-              if (Model.RiskAppetiteId == opt.Id)
-              { <option value="@opt.Id" selected>@opt.Name</option> }
-              else
-              { <option value="@opt.Id">@opt.Name</option> }
+ <p class="govuk-body govuk-!-margin-bottom-0">No risk appetite options configured. Ask an administrator to add them.</p>
             }
-          </select>
+          </fieldset>
         </div>
 
  <div class="govuk-button-group govuk-!-margin-top-6 govuk-!-margin-bottom-0">
