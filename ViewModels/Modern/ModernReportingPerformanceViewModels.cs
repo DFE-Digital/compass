@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Compass.Models;
+using Compass.ViewModels.Modern;
 
 namespace Compass.ViewModels;
 
@@ -112,4 +113,41 @@ public class ModernReportingPerformanceBusinessAreaRow
     public int Returned => Submitted + Late;
     public decimal ReturnRatePercent { get; set; }
     public decimal MetricCompletionPercent { get; set; }
+}
+
+/// <summary>
+/// Live submission progress at <c>/modern/reporting/performance-submission-progress</c> —
+/// same product scope as commission workspace <em>All products</em>, with business area and metric breakdown.
+/// </summary>
+public class ModernReportingPerformanceSubmissionProgressViewModel
+{
+    public string? LoadError { get; set; }
+
+    public List<CommissionPickerOption> CommissionOptions { get; set; } = new();
+
+    public int? SelectedCommissionId { get; set; }
+
+    public CommissionSummaryVm? Commission { get; set; }
+
+    public int ProductsInScope { get; set; }
+    public int NotStarted { get; set; }
+    public int InProgress { get; set; }
+    public int Submitted { get; set; }
+    public int Late { get; set; }
+    public int Returned => Submitted + Late;
+    public decimal ReturnRatePercent { get; set; }
+    public decimal MetricCompletionPercent { get; set; }
+    public int CompletedMetricCells { get; set; }
+    public int ApplicableMetricCells { get; set; }
+
+    /// <summary>Open, Upcoming, or Closed relative to commission dates.</summary>
+    public string SubmissionWindowPhase { get; set; } = "";
+
+    public int? DaysUntilDue { get; set; }
+
+    public List<ModernReportingPerformanceBusinessAreaRow> BusinessAreas { get; set; } = new();
+
+    public List<OpsPerfMetricRow> MetricRows { get; set; } = new();
+
+    public bool HasCommission { get; set; }
 }
