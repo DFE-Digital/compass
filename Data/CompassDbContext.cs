@@ -3529,6 +3529,7 @@ public partial class CompassDbContext : DbContext
             e.Property(x => x.ScoringConcernsNotes).HasMaxLength(-1);
             e.Property(x => x.ScoringAnswersJson).HasMaxLength(-1);
             e.Property(x => x.TriageOutcomeNarrative).HasMaxLength(-1);
+            e.Property(x => x.TriageMeetingNotes).HasMaxLength(-1);
             e.HasIndex(x => x.TriageMeetingId);
             e.HasIndex(x => x.TriageCreatedProjectId);
             e.HasOne<DemandPipelineTriageMeeting>()

@@ -142,10 +142,17 @@
             if (this.emailInput) this.emailInput.value = user?.email ?? '';
             if (this.summary) {
                 if (user?.id) {
-                    this.summary.innerHTML = `<div class="user-picker__selected-card">
+                    const govuk = this.root?.dataset.govukStyling === 'true';
+                    const cardClass = govuk
+                        ? 'govuk-inset-text govuk-!-margin-top-2 govuk-!-margin-bottom-0'
+                        : 'user-picker__selected-card';
+                    const removeClass = govuk
+                        ? 'govuk-link govuk-link--no-visited-state js-user-picker-clear'
+                        : 'govuk-link govuk-link--no-visited-state govuk-body-s js-user-picker-clear';
+                    this.summary.innerHTML = `<div class="${cardClass}">
                         <div class="user-picker__selected-name">${escapeHtml(user.name ?? '')}</div>
                         <div class="user-picker__selected-meta">${escapeHtml(user.email ?? '')}</div>
-                        <button type="button" class="govuk-link govuk-link--no-visited-state govuk-body-s js-user-picker-clear">Remove</button>
+                        <button type="button" class="${removeClass}">Remove</button>
                     </div>`;
                     this.summary.querySelector('.js-user-picker-clear')?.addEventListener('click', () => this.clearSelection());
                 } else {

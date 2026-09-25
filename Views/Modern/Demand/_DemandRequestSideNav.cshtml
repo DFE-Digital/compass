@@ -1,0 +1,85 @@
+@model Compass.Models.DemandPipeline.DemandPipelineRequest
+@using Compass.Models.Modern.Work
+@{
+  var tab = (ViewBag.Tab as string ?? "request").Trim().ToLowerInvariant();
+  var transitions = ViewBag.WorkflowTransitions as List<(string Id, string Label)> ?? new();
+  string TabUrl(string t) => Url.Action("RequestDetail", "ModernDemand", new { id = Model.Id, tab = t }) ?? "#";
+
+  int stageIndex = Model.Status switch
+  {
+    "ExploratoryReview" => 1,
+    "Scoring" or "Scored" => 2,
+    "TriagePending" or "Triage Pending" or "Backlog" => 3,
+    "Triaged" or "Rejected" or "Paused" or "Closed" or "Progressed to delivery" or "Closed - Progressed to delivery" => 4,
+    _ => 0
+  };
+
+  var stages = new (string Key, string Label)[]
+  {
+    ("request", "Request"),
+    ("explore", "Explore"),
+    ("scoring", "Scoring"),
+    ("triage", "Triage"),
+    ("outcome", "Outcome")
+  };
+
+  string StatusLabel(string? s) => s switch
+  {
+    "ExploratoryReview" => "Exploratory review",
+    "TriagePending" or "Triage Pending" => "Triage pending",
+    "Progressed to delivery" or "Closed - Progressed to delivery" => "Progressed to delivery",
+    _ => s ?? "—"
+  };
+
+  const string navListId = "demand-request-side-nav-list";
+}
+<nav class="dfe-f-side-navigation demand-request-side-nav" aria-label="Demand stages" data-module="dfe-f-side-navigation">
+  <p class="govuk-body-s govuk-!-margin-bottom-2">
+    <span class="@WorkBadgeCss.DemandPipelineStatusBadgeClass(Model.Status)">@StatusLabel(Model.Status)</span>
+  </p>
+  <button type="button" class="dfe-f-side-navigation__toggle" aria-controls="@navListId" aria-expanded="false">Stages</button>
+  <ul id="@navListId" class="dfe-f-side-navigation__list" hidden>
+    @for (var i = 0; i < stages.Length; i++)
+    {
+      var currentPage = tab == stages[i].Key;
+      var isStage = i == stageIndex;
+      <li class="dfe-f-side-navigation__item@(currentPage ? " dfe-f-side-navigation__item--current" : "")">
+        <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state"
+           href="@TabUrl(stages[i].Key)"
+           id="tab-@stages[i].Key"@if (currentPage) { <text> aria-current="page"</text> }>
+          @stages[i].Label
+          @if (isStage && !currentPage)
+          {
+            <span class="govuk-visually-hidden"> (current stage)</span>
+          }
+        </a>
+      </li>
+    }
+    <li class="dfe-f-side-navigation__item@(tab == "risks" ? " dfe-f-side-navigation__item--current" : "")">
+      <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state" href="@TabUrl("risks")" id="tab-risks"@if (tab == "risks") { <text> aria-current="page"</text> }>Risks</a>
+    </li>
+    <li class="dfe-f-side-navigation__item@(tab == "issues" ? " dfe-f-side-navigation__item--current" : "")">
+      <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state" href="@TabUrl("issues")" id="tab-issues"@if (tab == "issues") { <text> aria-current="page"</text> }>Issues</a>
+    </li>
+    <li class="dfe-f-side-navigation__item@(tab == "linked" ? " dfe-f-side-navigation__item--current" : "")">
+      <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state" href="@TabUrl("linked")" id="tab-linked"@if (tab == "linked") { <text> aria-current="page"</text> }>Linked records</a>
+    </li>
+  </ul>
+</nav>
+
+@if (transitions.Count > 0)
+{
+  <div class="demand-request-side-actions" id="demand-pipeline-actions">
+    <h2 class="govuk-heading-s govuk-!-margin-bottom-2">Actions</h2>
+    @for (var i = 0; i < transitions.Count; i++)
+    {
+      var (tid, tlabel) = transitions[i];
+      var primary = i == 0;
+      <form method="post" asp-controller="ModernDemand" asp-action="RequestWorkflowTransition" asp-route-id="@Model.Id">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="transition" value="@tid" />
+        <button type="submit" class="govuk-button @(primary ? "" : "govuk-button--secondary") govuk-!-margin-bottom-0">@tlabel</button>
+      </form>
+    }
+  </div>
+}

@@ -1,4 +1,5 @@
 @model Compass.Models.DemandDashboardViewModel
+@using Compass.Models.Modern.Work
 @using Compass.ViewModels.Modern
 @{
   ViewData["Title"] = "Demand dashboard";
@@ -13,9 +14,9 @@
   };
   (string CssClass, string Label) BandParts(string? b) => b switch
   {
-    "MustDo" => ("dfe-c-band--must", "MUST DO"),
-    "CouldDo" => ("dfe-c-band--could", "COULD DO"),
-    "DoNotDo" => ("dfe-c-band--not", "DO NOT DO"),
+    "MustDo" => (WorkBadgeCss.DemandBandBadgeClass(b), "MUST DO"),
+    "CouldDo" => (WorkBadgeCss.DemandBandBadgeClass(b), "COULD DO"),
+    "DoNotDo" => (WorkBadgeCss.DemandBandBadgeClass(b), "DO NOT DO"),
     _ => ("", "")
   };
   string DemandsReadyPhrase(int n) => n == 1 ? "1 demand ready" : $"{n} demands ready";
@@ -35,7 +36,7 @@
  <li class="govuk-breadcrumbs__list-item" aria-current="page">Dashboard</li>
 }
 
-<div id="sc-demand-dash">
+<div id="sc-demand-dash" class="modern-work-page">
 @{
   var demandDashboardActions = await Html.PartialAsync("_DemandDashboardHeaderActions");
   var demandDashboardLede = await Html.PartialAsync("_GovukBodyParagraph", "Pipeline overview, recent submissions, and the next triage meeting");
@@ -98,14 +99,17 @@
  })
 </div>
 
-<div class="dfe-c-mb-4">
- <div class="dfe-c-section-header">
-  <h2>Recent submissions</h2>
-  <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Register", "ModernDemand")">Full register →</a>
+<div class="govuk-summary-card govuk-!-margin-bottom-6">
+ <div class="govuk-summary-card__title-wrapper">
+  <h2 class="govuk-summary-card__title">Recent submissions</h2>
+  <ul class="govuk-summary-card__actions">
+   <li class="govuk-summary-card__action"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Register", "ModernDemand")">Full register</a></li>
+  </ul>
  </div>
+ <div class="govuk-summary-card__content">
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
-  <table class="govuk-table">
+  <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table">
    <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Request</button>
         </th><th scope="col" class="govuk-table__header" aria-sort="none">
@@ -120,7 +124,7 @@
    <tbody class="govuk-table__body">
     @if (!Model.RecentSubmissions.Any())
     {
- <tr class="govuk-table__row"><td colspan="5" class="dfe-c-text-muted">No submitted demand requests yet.</td></tr>
+ <tr class="govuk-table__row"><td colspan="5" class="govuk-table__cell dfe-c-text-muted">No submitted demand requests yet.</td></tr>
     }
     else
     {
@@ -129,10 +133,11 @@
       var band = BandParts(row.SuggestedBand);
       <tr class="govuk-table__row">
        <td class="govuk-table__cell">
- <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = row.Id })">@row.Title</a><span class="dfe-c-table-ref">@row.Reference</span>
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = row.Id })">@row.Title</a>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">@row.Reference</div>
        </td>
        <td class="govuk-table__cell">@row.Department</td>
- <td class="govuk-table__cell"><span class="dfe-c-tag @row.StatusTagClass">@row.StatusLabel</span></td>
+ <td class="govuk-table__cell"><span class="@row.StatusTagClass">@row.StatusLabel</span></td>
        <td class="govuk-table__cell">
         @if (row.TotalScore.HasValue)
         {
@@ -159,14 +164,18 @@
    </tbody>
   </table>
  </div>
+ </div>
 </div>
 
 <!-- Next triage meeting items -->
-<div class="dfe-c-mb-4">
- <div class="dfe-c-section-header">
-  <h2>Next triage meeting</h2>
-  <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("Triage", "ModernDemand")">View triage →</a>
+<div class="govuk-summary-card govuk-!-margin-bottom-6">
+ <div class="govuk-summary-card__title-wrapper">
+  <h2 class="govuk-summary-card__title">Next triage meeting</h2>
+  <ul class="govuk-summary-card__actions">
+   <li class="govuk-summary-card__action"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Triage", "ModernDemand")">View triage</a></li>
+  </ul>
  </div>
+ <div class="govuk-summary-card__content">
   @if (Model.NextTriageMeetingDate == null)
   {
  <p class="govuk-body dfe-c-text-muted">No upcoming meeting scheduled.</p>
@@ -182,7 +191,7 @@
  </p>
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
-  <table class="govuk-table">
+  <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table">
    <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Request</button>
         </th><th scope="col" class="govuk-table__header" aria-sort="none">
@@ -197,7 +206,7 @@
    <tbody class="govuk-table__body">
     @if (!Model.NextMeetingItems.Any())
     {
- <tr class="govuk-table__row"><td colspan="5" class="dfe-c-text-muted">No scored demands on this agenda yet.</td></tr>
+ <tr class="govuk-table__row"><td colspan="5" class="govuk-table__cell dfe-c-text-muted">No scored demands on this agenda yet.</td></tr>
     }
     else
     {
@@ -205,10 +214,11 @@
      {
       <tr class="govuk-table__row">
        <td class="govuk-table__cell">
- <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = item.Id })">@item.Title</a><span class="dfe-c-table-ref">@item.Reference</span>
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = item.Id })">@item.Title</a>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">@item.Reference</div>
        </td>
        <td class="govuk-table__cell">@item.Department</td>
- <td class="govuk-table__cell"><span class="dfe-c-tag @item.StatusTagClass">@item.StatusLabel</span></td>
+ <td class="govuk-table__cell"><span class="@item.StatusTagClass">@item.StatusLabel</span></td>
        <td class="govuk-table__cell">
         @if (item.TotalScore.HasValue)
         {
@@ -227,17 +237,21 @@
   </table>
  </div>
   }
+ </div>
 </div>
 
 <!-- Business cases with no demand -->
-<div class="dfe-c-mb-4">
- <div class="dfe-c-section-header">
-  <h2>Business cases with no demand created</h2>
-  <a class="dfe-c-button--link" style="font-size:0.875rem;" href="@Url.Action("BusinessCaseNew", "ModernDemand")">Add business case →</a>
+<div class="govuk-summary-card govuk-!-margin-bottom-6">
+ <div class="govuk-summary-card__title-wrapper">
+  <h2 class="govuk-summary-card__title">Business cases with no demand created</h2>
+  <ul class="govuk-summary-card__actions">
+   <li class="govuk-summary-card__action"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("BusinessCaseNew", "ModernDemand")">Add business case</a></li>
+  </ul>
  </div>
+ <div class="govuk-summary-card__content">
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
-  <table class="govuk-table">
+  <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table">
    <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Business case</button>
         </th><th scope="col" class="govuk-table__header" aria-sort="none">
@@ -250,7 +264,7 @@
    <tbody class="govuk-table__body">
     @if (!Model.OrphanBusinessCases.Any())
     {
- <tr class="govuk-table__row"><td colspan="4" class="dfe-c-text-muted">All business cases have a demand request.</td></tr>
+ <tr class="govuk-table__row"><td colspan="4" class="govuk-table__cell dfe-c-text-muted">All business cases have a demand request.</td></tr>
     }
     else
     {
@@ -258,9 +272,10 @@
      {
       <tr class="govuk-table__row">
        <td class="govuk-table__cell">
- <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("BusinessCase", "ModernDemand", new { id = bc.Id })">@bc.Title</a><span class="dfe-c-table-ref">@bc.Reference</span>
+ <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("BusinessCaseDetail", "ModernDemand", new { id = bc.Id })">@bc.Title</a>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">@bc.Reference</div>
        </td>
- <td class="govuk-table__cell"><span class="dfe-c-tag dfe-c-tag--grey">@bc.Stage</span></td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.DemandStageBadgeClass(bc.Stage)">@bc.Stage</span></td>
        <td class="govuk-table__cell">@(string.IsNullOrEmpty(bc.BusinessArea) ? "—" : bc.BusinessArea)</td>
        <td class="govuk-table__cell">@bc.CreatedAt.ToString("d MMM yyyy")</td>
       </tr>
@@ -268,6 +283,7 @@
     }
    </tbody>
   </table>
+ </div>
  </div>
 </div>
 </div>

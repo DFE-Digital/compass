@@ -2307,6 +2307,7 @@ public class ModernOperationsController : Controller
         string? endTime,
         string? chairName,
         string? chairEmail,
+        int? chairUserId,
         string? returnTab = null)
     {
         var blocked = await DemandDisabledRedirectAsync();
@@ -2342,7 +2343,7 @@ public class ModernOperationsController : Controller
             entity.StartTime = startTime;
             entity.EndTime = endTime;
             entity.Chair = chair;
-            entity.ChairUserId = null;
+            entity.ChairUserId = chairUserId;
             entity.UpdatedAt = now;
             entity.UpdatedBy = user;
         }
@@ -2356,7 +2357,7 @@ public class ModernOperationsController : Controller
                 StartTime = startTime,
                 EndTime = endTime,
                 Chair = chair,
-                ChairUserId = null,
+                ChairUserId = chairUserId,
                 Status = "Scheduled",
                 CreatedAt = now,
                 UpdatedAt = now,

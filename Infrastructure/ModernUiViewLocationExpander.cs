@@ -3,10 +3,10 @@ using Microsoft.AspNetCore.Mvc.Razor;
 namespace Compass.Infrastructure;
 
 /// <summary>
-/// <see cref="Compass.Controllers.Modern.ModernWorkController"/>, <see cref="Compass.Controllers.Modern.ModernReportingController"/>, <see cref="Compass.Controllers.Modern.ModernPerformanceController"/>, and <see cref="Compass.Controllers.Modern.ModernDashboardController"/> return views from
-/// <c>Views/Modern/...</c>, but partial resolution uses the controller name (e.g. <c>ModernWork</c>),
-/// so <c>PartialAsync("_Foo")</c> only searched <c>Views/ModernWork/</c> and <c>Views/Shared/</c>.
-/// This expander prepends the actual modern view folders so co-located partials resolve.
+/// Modern controllers return views from <c>Views/Modern/...</c>, but partial resolution uses the
+/// controller name (e.g. <c>ModernDemand</c>), so <c>PartialAsync("_Foo")</c> only searched
+/// <c>Views/ModernDemand/</c> and <c>Views/Shared/</c>. This expander prepends the actual modern
+/// view folders so co-located partials resolve.
 /// </summary>
 public sealed class ModernUiViewLocationExpander : IViewLocationExpander
 {
@@ -38,6 +38,11 @@ public sealed class ModernUiViewLocationExpander : IViewLocationExpander
         else if (string.Equals(controllerName, "ModernDashboard", StringComparison.OrdinalIgnoreCase))
         {
             yield return "/Views/Modern/Dashboard/{0}.cshtml";
+            yield return "/Views/Modern/Shared/{0}.cshtml";
+        }
+        else if (string.Equals(controllerName, "ModernDemand", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "/Views/Modern/Demand/{0}.cshtml";
             yield return "/Views/Modern/Shared/{0}.cshtml";
         }
         else if (string.Equals(controllerName, "ModernManage", StringComparison.OrdinalIgnoreCase))

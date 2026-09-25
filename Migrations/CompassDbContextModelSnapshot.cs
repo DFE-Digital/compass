@@ -4957,6 +4957,10 @@ namespace Compass.Migrations
                     b.Property<Guid?>("TriageMeetingId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("TriageMeetingNotes")
+                        .HasMaxLength(-1)
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("TriageOutcome")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");

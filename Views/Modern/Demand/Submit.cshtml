@@ -6,7 +6,6 @@
   ViewData["Title"] = demandEditFromRequest ? "Edit demand information" : "Submit a demand request";
   var bc = ViewBag.LinkedBc as Compass.Models.DemandPipeline.DemandPipelineBusinessCase;
   var portfolios = ViewBag.Portfolios as IEnumerable<Portfolio> ?? Enumerable.Empty<Portfolio>();
-  var departmentGroups = ViewBag.DepartmentGroups as IEnumerable<string> ?? Enumerable.Empty<string>();
   var priorityOutcomes = ViewBag.PriorityOutcomes as IEnumerable<Objective> ?? Enumerable.Empty<Objective>();
   var missionPillars = ViewBag.MissionPillars as IEnumerable<Mission> ?? Enumerable.Empty<Mission>();
 
@@ -68,8 +67,8 @@
   Lede = submitHeaderLede
 })
 
-<div class="dfe-c-form-layout">
- <div class="dfe-c-form-layout__main">
+<div class="govuk-grid-row sc-demand-form__layout">
+ <div class="govuk-grid-column-three-quarters">
  <div class="dfe-c-card dfe-c-card--plain">
     <form asp-controller="ModernDemand" asp-action="@(demandEditFromRequest ? "RequestEdit" : "Submit")" asp-route-id="@(demandEditFromRequest ? Model.Id : (Model.Id != Guid.Empty ? Model.Id : (Guid?)null))" method="post" id="demand-submit-form">
       @Html.AntiForgeryToken()
@@ -103,7 +102,8 @@
         </div>
       }
 
- <h2 class="govuk-heading-m">Your details</h2>
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Your details</legend>
 
  <div class="govuk-form-group @(HasError("SubmittedByUserId") ? "govuk-form-group--error" : "")" id="SubmittedByUserId">
         @if (HasError("SubmittedByUserId"))
@@ -117,33 +117,16 @@
           Hint = "This is who we will contact with additional questions or updates about this demand. Search by name or email.",
           DefaultUserId = Model.SubmittedByUserId,
           DefaultName = Model.SubmittedBy,
-          DefaultSummaryText = "No primary contact selected."
+          DefaultSummaryText = "No primary contact selected.",
+          Placeholder = "",
+          UseGovUkStyling = true
         })
       </div>
 
- <div class="govuk-form-group @(HasError("DepartmentGroup") ? "govuk-form-group--error" : "")">
- <label class="govuk-label" for="DepartmentGroup">Business area <span style="color:#d4351c">*</span></label>
-        @if (HasError("DepartmentGroup"))
-        {
- <p id="DepartmentGroup-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("DepartmentGroup")</p>
-        }
- <select asp-for="DepartmentGroup" class="govuk-select @(HasError("DepartmentGroup") ? "govuk-select--error" : "")" aria-describedby="@(HasError("DepartmentGroup") ? "DepartmentGroup-error" : null)">
-          <option value="">— Select business area —</option>
-          @foreach (var opt in departmentGroups)
-          {
-            if (Model.DepartmentGroup == opt)
-            { <option value="@opt" selected>@opt</option> }
-            else
-            { <option value="@opt">@opt</option> }
-          }
-        </select>
-      </div>
-
  <div class="govuk-form-group">
- <label class="govuk-label" for="PortfolioId">Business areas</label>
- <div class="govuk-hint" id="portfolio-hint">Which DDT business area or portfolio supports this demand, if known.</div>
- <select asp-for="PortfolioId" class="govuk-select" aria-describedby="portfolio-hint">
-          <option value="">— Select business areas, if known —</option>
+ <label class="govuk-label" for="PortfolioId">Business area</label>
+ <select asp-for="PortfolioId" class="govuk-select govuk-!-width-full">
+          <option value="">— Select business area —</option>
           @foreach (var p in portfolios)
           {
             if (Model.PortfolioId == p.Id)
@@ -152,6 +135,15 @@
             { <option value="@p.Id">@p.Name</option> }
           }
         </select>
+      </div>
+
+ <div class="govuk-form-group @(HasError("DepartmentGroup") ? "govuk-form-group--error" : "")">
+ <label class="govuk-label" for="DepartmentGroup">Policy or programme area <span style="color:#d4351c">*</span></label>
+        @if (HasError("DepartmentGroup"))
+        {
+ <p id="DepartmentGroup-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("DepartmentGroup")</p>
+        }
+ <input asp-for="DepartmentGroup" class="govuk-input @(HasError("DepartmentGroup") ? "govuk-input--error" : "")" maxlength="200" autocomplete="off" aria-describedby="@(HasError("DepartmentGroup") ? "DepartmentGroup-error" : null)" />
       </div>
 
  <div class="govuk-form-group @(HasError("SroUserId") ? "govuk-form-group--error" : "")" id="SroUserId">
@@ -166,13 +158,16 @@
           Hint = "SRO accountable for this demand. Search by name or email.",
           DefaultUserId = Model.SroUserId,
           DefaultName = Model.Sro,
-          DefaultSummaryText = "No SRO selected."
+          DefaultSummaryText = "No SRO selected.",
+          Placeholder = "",
+          UseGovUkStyling = true
         })
       </div>
 
- <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+ </fieldset>
 
- <h2 class="govuk-heading-m">About your request</h2>
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">About your request</legend>
 
  <div class="govuk-form-group @(HasError("Title") ? "govuk-form-group--error" : "")">
  <label class="govuk-label" for="Title">Proposed request title <span style="color:#d4351c">*</span></label>
@@ -180,7 +175,7 @@
         {
  <p id="Title-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("Title")</p>
         }
- <input type="text" asp-for="Title" class="govuk-input @(HasError("Title") ? "govuk-input--error" : "")" placeholder="e.g. AI attendance analytics dashboard" aria-describedby="@(HasError("Title") ? "Title-error" : null)" />
+ <input type="text" asp-for="Title" class="govuk-input @(HasError("Title") ? "govuk-input--error" : "")" aria-describedby="@(HasError("Title") ? "Title-error" : null)" />
       </div>
 
  <div class="govuk-form-group @(HasError("Description") ? "govuk-form-group--error" : "")">
@@ -190,12 +185,12 @@
         {
  <p id="Description-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("Description")</p>
         }
- <textarea asp-for="Description" rows="5" class="govuk-textarea @(HasError("Description") ? "govuk-textarea--error" : "")" placeholder="What problem does this solve? What is the expected outcome?" aria-describedby="description-hint @(HasError("Description") ? "Description-error" : "")"></textarea>
+ <textarea asp-for="Description" rows="15" class="govuk-textarea @(HasError("Description") ? "govuk-textarea--error" : "")" aria-describedby="description-hint @(HasError("Description") ? "Description-error" : "")"></textarea>
       </div>
 
  <div class="govuk-form-group">
  <label class="govuk-label" for="PreviousResearch">Previous insight or research conducted</label>
- <textarea asp-for="PreviousResearch" rows="4" class="govuk-textarea"></textarea>
+ <textarea asp-for="PreviousResearch" rows="15" class="govuk-textarea"></textarea>
       </div>
 
  <div class="govuk-form-group @(HasError("TargetDeliveryDate") ? "govuk-form-group--error" : "")">
@@ -207,13 +202,14 @@
  <input type="date" asp-for="TargetDeliveryDate" class="govuk-input govuk-input--width-10 @(HasError("TargetDeliveryDate") ? "govuk-input--error" : "")" aria-describedby="@(HasError("TargetDeliveryDate") ? "TargetDeliveryDate-error" : null)" />
       </div>
 
- <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+ </fieldset>
 
- <h2 class="govuk-heading-m">Strategic alignment</h2>
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Strategic alignment</legend>
 
  <div class="govuk-form-group">
  <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend">Priority outcome (optional)</legend>
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Priority outcome (optional)</legend>
  <div class="govuk-hint">Select all that apply.</div>
  <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
             @foreach (var po in priorityOutcomes)
@@ -230,7 +226,7 @@
 
  <div class="govuk-form-group">
  <fieldset class="govuk-fieldset">
- <legend class="govuk-fieldset__legend">Mission pillar (optional)</legend>
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Mission pillar (optional)</legend>
  <div class="govuk-hint">Select all that apply.</div>
  <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
             @foreach (var mp in missionPillars)
@@ -247,7 +243,7 @@
 
  <div class="govuk-form-group @(HasError("StatutoryDriver") ? "govuk-form-group--error" : "")" id="StatutoryDriver">
  <fieldset class="govuk-fieldset" @(HasError("StatutoryDriver") ? "aria-describedby=StatutoryDriver-error" : "")>
- <legend class="govuk-fieldset__legend">Legal or statutory requirement? <span style="color:#d4351c">*</span></legend>
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Legal or statutory requirement? <span style="color:#d4351c">*</span></legend>
           @if (HasError("StatutoryDriver"))
           {
  <p id="StatutoryDriver-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("StatutoryDriver")</p>
@@ -272,7 +268,7 @@
         {
  <p id="ManifestoCommitment-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("ManifestoCommitment")</p>
         }
- <textarea asp-for="ManifestoCommitment" rows="3" class="govuk-textarea @(HasError("ManifestoCommitment") ? "govuk-textarea--error" : "")" aria-describedby="manifesto-hint @(HasError("ManifestoCommitment") ? "ManifestoCommitment-error" : "")"></textarea>
+ <textarea asp-for="ManifestoCommitment" rows="15" class="govuk-textarea @(HasError("ManifestoCommitment") ? "govuk-textarea--error" : "")" aria-describedby="manifesto-hint @(HasError("ManifestoCommitment") ? "ManifestoCommitment-error" : "")"></textarea>
       </div>
 
  <div class="govuk-form-group @(HasError("ExpectedBenefits") ? "govuk-form-group--error" : "")">
@@ -281,7 +277,7 @@
         {
  <p id="ExpectedBenefits-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("ExpectedBenefits")</p>
         }
- <textarea asp-for="ExpectedBenefits" rows="3" class="govuk-textarea @(HasError("ExpectedBenefits") ? "govuk-textarea--error" : "")" aria-describedby="@(HasError("ExpectedBenefits") ? "ExpectedBenefits-error" : null)"></textarea>
+ <textarea asp-for="ExpectedBenefits" rows="15" class="govuk-textarea @(HasError("ExpectedBenefits") ? "govuk-textarea--error" : "")" aria-describedby="@(HasError("ExpectedBenefits") ? "ExpectedBenefits-error" : null)"></textarea>
       </div>
 
  <div class="govuk-form-group @(HasError("RiskIfNotDelivered") ? "govuk-form-group--error" : "")">
@@ -290,16 +286,17 @@
         {
  <p id="RiskIfNotDelivered-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("RiskIfNotDelivered")</p>
         }
- <textarea asp-for="RiskIfNotDelivered" rows="3" class="govuk-textarea @(HasError("RiskIfNotDelivered") ? "govuk-textarea--error" : "")" aria-describedby="@(HasError("RiskIfNotDelivered") ? "RiskIfNotDelivered-error" : null)"></textarea>
+ <textarea asp-for="RiskIfNotDelivered" rows="15" class="govuk-textarea @(HasError("RiskIfNotDelivered") ? "govuk-textarea--error" : "")" aria-describedby="@(HasError("RiskIfNotDelivered") ? "RiskIfNotDelivered-error" : null)"></textarea>
       </div>
 
- <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+ </fieldset>
 
- <h2 class="govuk-heading-m">Funding and headcount</h2>
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Funding and headcount</legend>
 
  <div class="govuk-form-group @(HasError("FundingProvided") ? "govuk-form-group--error" : "")" id="FundingProvided">
  <fieldset class="govuk-fieldset" @(HasError("FundingProvided") ? "aria-describedby=FundingProvided-error" : "")>
- <legend class="govuk-fieldset__legend">Funding provided for delivery? <span style="color:#d4351c">*</span></legend>
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Funding provided for delivery? <span style="color:#d4351c">*</span></legend>
           @if (HasError("FundingProvided"))
           {
  <p id="FundingProvided-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("FundingProvided")</p>
@@ -324,12 +321,12 @@
         {
  <p id="FundingProvidedDetails-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("FundingProvidedDetails")</p>
         }
- <textarea asp-for="FundingProvidedDetails" rows="3" class="govuk-textarea @(HasError("FundingProvidedDetails") ? "govuk-textarea--error" : "")" aria-describedby="funding-details-hint @(HasError("FundingProvidedDetails") ? "FundingProvidedDetails-error" : "")"></textarea>
+ <textarea asp-for="FundingProvidedDetails" rows="15" class="govuk-textarea @(HasError("FundingProvidedDetails") ? "govuk-textarea--error" : "")" aria-describedby="funding-details-hint @(HasError("FundingProvidedDetails") ? "FundingProvidedDetails-error" : "")"></textarea>
       </div>
 
  <div class="govuk-form-group @(HasError("HeadcountProvided") ? "govuk-form-group--error" : "")" id="HeadcountProvided">
  <fieldset class="govuk-fieldset" @(HasError("HeadcountProvided") ? "aria-describedby=HeadcountProvided-error" : "")>
- <legend class="govuk-fieldset__legend">Does this come with headcount? <span style="color:#d4351c">*</span></legend>
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Does this come with headcount? <span style="color:#d4351c">*</span></legend>
           @if (HasError("HeadcountProvided"))
           {
  <p id="HeadcountProvided-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("HeadcountProvided")</p>
@@ -354,12 +351,12 @@
         {
  <p id="HeadcountProvidedDetails-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("HeadcountProvidedDetails")</p>
         }
- <textarea asp-for="HeadcountProvidedDetails" rows="3" class="govuk-textarea @(HasError("HeadcountProvidedDetails") ? "govuk-textarea--error" : "")" aria-describedby="headcount-details-hint @(HasError("HeadcountProvidedDetails") ? "HeadcountProvidedDetails-error" : "")"></textarea>
+ <textarea asp-for="HeadcountProvidedDetails" rows="15" class="govuk-textarea @(HasError("HeadcountProvidedDetails") ? "govuk-textarea--error" : "")" aria-describedby="headcount-details-hint @(HasError("HeadcountProvidedDetails") ? "HeadcountProvidedDetails-error" : "")"></textarea>
       </div>
 
  <div class="govuk-form-group @(HasError("IsNewDigitalService") ? "govuk-form-group--error" : "")" id="IsNewDigitalService">
  <fieldset class="govuk-fieldset" @(HasError("IsNewDigitalService") ? "aria-describedby=IsNewDigitalService-error" : "")>
- <legend class="govuk-fieldset__legend">Changing an existing digital service or product? <span style="color:#d4351c">*</span></legend>
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Changing an existing digital service or product? <span style="color:#d4351c">*</span></legend>
           @if (HasError("IsNewDigitalService"))
           {
  <p id="IsNewDigitalService-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("IsNewDigitalService")</p>
@@ -384,12 +381,12 @@
         {
  <p id="DigitalServiceChangeDetails-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("DigitalServiceChangeDetails")</p>
         }
- <textarea asp-for="DigitalServiceChangeDetails" rows="3" class="govuk-textarea @(HasError("DigitalServiceChangeDetails") ? "govuk-textarea--error" : "")" aria-describedby="digital-change-hint @(HasError("DigitalServiceChangeDetails") ? "DigitalServiceChangeDetails-error" : "")"></textarea>
+ <textarea asp-for="DigitalServiceChangeDetails" rows="15" class="govuk-textarea @(HasError("DigitalServiceChangeDetails") ? "govuk-textarea--error" : "")" aria-describedby="digital-change-hint @(HasError("DigitalServiceChangeDetails") ? "DigitalServiceChangeDetails-error" : "")"></textarea>
       </div>
 
  <div class="govuk-form-group @(HasError("IsPublicFacing") ? "govuk-form-group--error" : "")" id="IsPublicFacing">
  <fieldset class="govuk-fieldset" @(HasError("IsPublicFacing") ? "aria-describedby=IsPublicFacing-error" : "")>
- <legend class="govuk-fieldset__legend">Public-facing digital service? <span style="color:#d4351c">*</span></legend>
+ <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Public-facing digital service? <span style="color:#d4351c">*</span></legend>
           @if (HasError("IsPublicFacing"))
           {
  <p id="IsPublicFacing-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg("IsPublicFacing")</p>
@@ -406,6 +403,8 @@
           </div>
         </fieldset>
       </div>
+
+ </fieldset>
 
  <div class="govuk-button-group">
         @if (demandEditFromRequest)
@@ -468,40 +467,15 @@
     </div>
   </div>
 
- <div class="dfe-c-form-layout__aside">
+ <div class="govuk-grid-column-one-quarter sc-demand-form__aside">
  <div class="dfe-c-sidebar">
  <div class="dfe-c-scard">
- <div class="dfe-c-scard__title">How demands are scored</div>
-        <p style="font-size:0.8125rem;color:var(--grey-4);margin-bottom:0.875rem;">A demand lead scores your submission across four sections totalling 100 points. The band determines what happens at triage.</p>
-        <div style="font-size:0.8125rem;display:flex;flex-direction:column;gap:0;">
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--grey-2);">
-            <div><div style="font-weight:700;">Strategic alignment</div><div style="color:var(--grey-4);font-size:0.75rem;">Statutory, ministerial and strategy fit</div></div>
-            <span style="font-weight:700;color:var(--navy);">/ 15</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--grey-2);">
-            <div><div style="font-weight:700;">Urgency</div><div style="color:var(--grey-4);font-size:0.75rem;">Deadlines and consequence of inaction</div></div>
-            <span style="font-weight:700;color:var(--navy);">/ 10</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--grey-2);">
-            <div><div style="font-weight:700;">Funding and readiness</div><div style="color:var(--grey-4);font-size:0.75rem;">Budget, SRO, headcount</div></div>
-            <span style="font-weight:700;color:var(--navy);">/ 22</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:2px solid var(--grey-2);">
-            <div><div style="font-weight:700;">RICE</div><div style="color:var(--grey-4);font-size:0.75rem;">Reach, impact, confidence, effort</div></div>
-            <span style="font-weight:700;color:var(--navy);">/ 42</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;">
-            <span style="font-weight:700;">Total</span>
-            <span style="font-weight:700;color:var(--navy);">/ 100</span>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:2px;margin-top:0.5rem;font-size:0.8125rem;">
-          <div style="padding:4px 8px;background:var(--t-green-bg);color:var(--rag-g);font-weight:700;">57–100 — Must do (progressed)</div>
-          <div style="padding:4px 8px;background:var(--t-amber-bg);color:var(--t-amber-fg);font-weight:700;">21–56 — Could do (may be progressed)</div>
-          <div style="padding:4px 8px;background:var(--t-red-bg);color:var(--t-red-fg);font-weight:700;">1–20 — Do not do (not progressed)</div>
-        </div>
-      </div>
-    </div>
+ <h3 class="dfe-c-scard__heading">How demands are scored</h3>
+ <p class="dfe-c-scard__body">A demand lead scores your submission across four sections totalling 100 points. The band determines what happens at triage.</p>
+ <p class="dfe-c-scard__body">Strategic alignment / 15. Urgency / 10. Funding and readiness / 22. RICE / 42. Total / 100.</p>
+ <p class="dfe-c-scard__body">57–100 must do (progressed). 21–56 could do (may be progressed). 1–20 do not do (not progressed).</p>
+ </div>
+ </div>
   </div>
 </div>
 </div>

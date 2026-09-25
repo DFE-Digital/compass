@@ -934,8 +934,8 @@ public static class ApiCatalogue
                     Method: "GET",
                     Path: "/api/v1/ServiceRegister/fips/user-groups",
                     Scope: "ServiceRegister:read",
-                    Description: "FIPS user groups lookup (root groups with children and synonyms).",
-                    ResponseExample: "[ { \"id\": 1, \"name\": \"Teachers\", \"children\": [], \"synonyms\": [\"Classroom teachers\"] } ]"),
+                    Description: "FIPS user groups lookup. Every group is returned, nested under its parent to every level, with parentId, synonyms, and the same tree on children and childGroups.",
+                    ResponseExample: "[ { \"id\": 13, \"parentId\": null, \"name\": \"Social care workforce\", \"children\": [ { \"id\": 20, \"parentId\": 13, \"name\": \"Social worker\", \"children\": [ { \"id\": 21, \"parentId\": 20, \"name\": \"Chief Social Worker for Children and Families\", \"children\": [], \"synonyms\": [] } ], \"synonyms\": [] } ], \"synonyms\": [] } ]"),
                 new(
                     Id: "sr-fips-roles",
                     Method: "GET",

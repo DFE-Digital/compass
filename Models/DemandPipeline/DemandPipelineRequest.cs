@@ -147,6 +147,9 @@ public class DemandPipelineRequest
     /// <summary>Full narrative recorded at triage.</summary>
     public string? TriageOutcomeNarrative { get; set; }
 
+    /// <summary>Discussion notes captured while this demand is in a triage meeting.</summary>
+    public string? TriageMeetingNotes { get; set; }
+
     /// <summary>Work item created from triage when requested.</summary>
     public int? TriageCreatedProjectId { get; set; }
 

@@ -2,6 +2,7 @@ using Compass.Data;
 using Compass.Filters;
 using Compass.Models;
 using Compass.Models.DemandPipeline;
+using Compass.Models.Modern.Work;
 using Compass.Services;
 using Compass.Services.DemandPipeline;
 using Microsoft.AspNetCore.Authorization;
@@ -19,17 +20,20 @@ public partial class ModernDemandController : Controller
     private readonly CompassDbContext _db;
     private readonly Compass.Services.DemandPipeline.IDemandScoringFrameworkService _demandScoringFramework;
     private readonly IWorkItemNotificationService _workItemNotifications;
+    private readonly IPermissionService _permissions;
     private readonly ILogger<ModernDemandController> _logger;
 
     public ModernDemandController(
         CompassDbContext db,
         Compass.Services.DemandPipeline.IDemandScoringFrameworkService demandScoringFramework,
         IWorkItemNotificationService workItemNotifications,
+        IPermissionService permissions,
         ILogger<ModernDemandController> logger)
     {
         _db = db;
         _demandScoringFramework = demandScoringFramework;
         _workItemNotifications = workItemNotifications;
+        _permissions = permissions;
         _logger = logger;
     }
 
@@ -209,9 +213,9 @@ public partial class ModernDemandController : Controller
                 var band = BandDisplayForSuggested(d.SuggestedBand);
                 var (statusLabel, statusTagClass) = d.Status switch
                 {
-                    "Scored" => ("SCORED", "dfe-c-tag--teal"),
-                    "TriagePending" or "Triage Pending" => ("TRIAGE PENDING", "dfe-c-tag--red"),
-                    _ => ((d.Status ?? "—").ToUpperInvariant(), "dfe-c-tag--grey")
+                    "Scored" => ("SCORED", WorkBadgeCss.DemandPipelineStatusBadgeClass(d.Status)),
+                    "TriagePending" or "Triage Pending" => ("TRIAGE PENDING", WorkBadgeCss.DemandPipelineStatusBadgeClass(d.Status)),
+                    _ => ((d.Status ?? "—").ToUpperInvariant(), WorkBadgeCss.DemandPipelineStatusBadgeClass(d.Status))
                 };
                 meetingItems.Add(new DemandDashboardTriageItem
                 {
@@ -354,29 +358,30 @@ public partial class ModernDemandController : Controller
 
     private static (string CssClass, string Label) BandDisplayForSuggested(string? band) => band switch
     {
-        "MustDo" => ("dfe-c-band--must", "MUST DO"),
-        "CouldDo" => ("dfe-c-band--could", "COULD DO"),
-        "DoNotDo" => ("dfe-c-band--not", "DO NOT DO"),
-        _ => ("dfe-c-band--could", "—")
+        "MustDo" => (WorkBadgeCss.DemandBandBadgeClass(band), "MUST DO"),
+        "CouldDo" => (WorkBadgeCss.DemandBandBadgeClass(band), "COULD DO"),
+        "DoNotDo" => (WorkBadgeCss.DemandBandBadgeClass(band), "DO NOT DO"),
+        _ => ("", "—")
     };
 
     private static DemandDashboardRecentRow MapDemandDashboardRecentRow(DemandPipelineRequest d)
     {
-        var (label, tagClass) = d.Status switch
+        var tagClass = WorkBadgeCss.DemandPipelineStatusBadgeClass(d.Status);
+        var (label, _) = d.Status switch
         {
-            "Submitted" => ("SUBMITTED", "dfe-c-tag--grey"),
-            "ExploratoryReview" => ("EXPLORE", "dfe-c-tag--amber"),
-            "Scoring" => ("SCORING", "dfe-c-tag--blue"),
-            "Scored" => ("SCORED", "dfe-c-tag--teal"),
-            "TriagePending" or "Triage Pending" => ("TRIAGE PENDING", "dfe-c-tag--red"),
-            "Triaged" => ("TRIAGED", "dfe-c-tag--green"),
-            "Closed" => ("CLOSED", "dfe-c-tag--grey"),
-            "Progressed to delivery" => ("PROGRESSED", "dfe-c-tag--green"),
-            "Closed - Progressed to delivery" => ("PROGRESSED", "dfe-c-tag--green"),
-            "Rejected" => ("REJECTED", "dfe-c-tag--red"),
-            "Paused" => ("PAUSED", "dfe-c-tag--grey"),
-            "Returned" => ("RETURNED", "dfe-c-tag--amber"),
-            _ => ((d.Status ?? "—").ToUpperInvariant(), "dfe-c-tag--grey")
+            "Submitted" => ("SUBMITTED", tagClass),
+            "ExploratoryReview" => ("EXPLORE", tagClass),
+            "Scoring" => ("SCORING", tagClass),
+            "Scored" => ("SCORED", tagClass),
+            "TriagePending" or "Triage Pending" => ("TRIAGE PENDING", tagClass),
+            "Triaged" => ("TRIAGED", tagClass),
+            "Closed" => ("CLOSED", tagClass),
+            "Progressed to delivery" => ("PROGRESSED", tagClass),
+            "Closed - Progressed to delivery" => ("PROGRESSED", tagClass),
+            "Rejected" => ("REJECTED", tagClass),
+            "Paused" => ("PAUSED", tagClass),
+            "Returned" => ("RETURNED", tagClass),
+            _ => ((d.Status ?? "—").ToUpperInvariant(), tagClass)
         };
 
         return new DemandDashboardRecentRow
