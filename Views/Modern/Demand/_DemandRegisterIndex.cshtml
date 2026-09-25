@@ -1,4 +1,5 @@
 @model IEnumerable<DemandPipelineRequest>
+@using Compass.Models.Modern.Work
 @using Compass.ViewModels.Modern
 @{
   var list = Model?.ToList() ?? new List<DemandPipelineRequest>();
@@ -21,23 +22,7 @@
   string? TabQ() => currentTab != "all" ? currentTab : null;
 }
 @functions {
-  string StatusTagMod(string? s) => s switch {
-    "Draft" => "dfe-c-tag--grey",
-    "Submitted" => "dfe-c-tag--grey",
-    "ExploratoryReview" => "dfe-c-tag--amber",
-    "Scoring" => "dfe-c-tag--blue",
-    "Scored" => "dfe-c-tag--teal",
-    "TriagePending" => "dfe-c-tag--red",
-    "Triaged" => "dfe-c-tag--green",
-    "Closed" => "dfe-c-tag--grey",
-    "Returned" => "dfe-c-tag--amber",
-    "Progressed to delivery" => "dfe-c-tag--green",
-    "Closed - Progressed to delivery" => "dfe-c-tag--green",
-    "Rejected" => "dfe-c-tag--red",
-    "Active" => "dfe-c-tag--blue",
-    "Paused" => "dfe-c-tag--grey",
-    _ => "dfe-c-tag--grey"
-  };
+  string StatusTagMod(string? s) => WorkBadgeCss.DemandPipelineStatusBadgeClass(s);
   string StatusTagLabel(string? s) => s switch {
     "Draft" => "DRAFT", "Submitted" => "SUBMITTED", "Active" => "ACTIVE", "ExploratoryReview" => "EXPLORE",
     "Scoring" => "SCORING", "Scored" => "SCORED", "TriagePending" => "TRIAGE PENDING",
@@ -45,12 +30,7 @@
     "Progressed to delivery" => "PROGRESSED", "Closed - Progressed to delivery" => "CLOSED",
     "Rejected" => "REJECTED", "Paused" => "PAUSED", _ => (s ?? "—").ToUpperInvariant()
   };
-  string BandClass(string? b) => b switch {
-    "MustDo" => "dfe-c-band--must",
-    "CouldDo" => "dfe-c-band--could",
-    "DoNotDo" => "dfe-c-band--not",
-    _ => ""
-  };
+  string BandClass(string? b) => WorkBadgeCss.DemandBandBadgeClass(b);
   string BandDisplay(string? b) => b switch {
     "MustDo" => "MUST DO", "CouldDo" => "COULD DO", "DoNotDo" => "DO NOT DO", _ => ""
   };
@@ -60,20 +40,14 @@
     if (score >= 21) return "var(--rag-a)";
     return "var(--rag-r)";
   }
-  string OutcomeTagMod(string? o) => o switch {
-    "Progress" => "dfe-c-tag--blue",
-    "Reject" => "dfe-c-tag--red",
-    "Pause" => "dfe-c-tag--amber",
-    "FurtherInvestigation" => "dfe-c-tag--grey",
-    _ => "dfe-c-tag--grey"
-  };
+  string OutcomeTagMod(string? o) => WorkBadgeCss.DemandOutcomeBadgeClass(o);
   string OutcomeTagLabel(string? o) => o switch {
     "Progress" => "PROGRESSED", "Reject" => "REJECTED", "Pause" => "PAUSED",
     "FurtherInvestigation" => "FURTHER INVESTIGATION", _ => ""
   };
 }
 
-<div id="sc-demand-index">
+<div id="sc-demand-index" class="modern-work-page modern-work-page--all-work">
 @{
   var demandRegisterActions = await Html.PartialAsync("_DemandRegisterHeaderActions");
   var demandRegisterLedeText = $"{totalInTab} request{(totalInTab == 1 ? "" : "s")} across " + (
@@ -91,7 +65,8 @@
   Actions = demandRegisterActions
 })
 
- <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-3" aria-label="Demand register sections">
+ <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Demand register sections">
+ <div class="dfe-f-sub-navigation__bar">
  <ul class="dfe-f-sub-navigation__list">
  <li class="dfe-f-sub-navigation__item@(currentTab == "all" ? " dfe-f-sub-navigation__item--active" : "")">
  <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action(actionName, "ModernDemand", new { tab = (string?)null })" id="tab-demand-all"@if (currentTab == "all") { <text> aria-current="page"</text> }>Active demand (@cAll)</a>
@@ -109,6 +84,7 @@
  <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action(actionName, "ModernDemand", new { tab = "paused" })" id="tab-demand-paused"@if (currentTab == "paused") { <text> aria-current="page"</text> }>Paused (@cPaused)</a>
  </li>
  </ul>
+ </div>
   </nav>
 
  <form method="get" action="@Url.Action(actionName, "ModernDemand")" id="demand-register-filter-form" class="dfe-c-mb-3">
@@ -124,11 +100,11 @@
  <span class="filter-toggle-label">Filter</span>
         </button>
       </div>
- <div class="filter-panel" id="dr-filter-panel">
+ <div class="filter-panel filter-panel--allwork" id="dr-filter-panel">
  <div class="filter-panel__grid">
           <div>
             <label for="dr-filter-stage">Status</label>
- <select name="stage" id="dr-filter-stage" class="govuk-select">
+ <select name="stage" id="dr-filter-stage" class="govuk-select govuk-!-width-full">
               @{ var stageOpts = new[] { ("", "All", "all"), ("submitted", "Submitted", "submitted"), ("in-review", "Explore", "in-review"), ("scoring", "Scoring", "scoring"), ("scored", "Scored", "scored"), ("triaged", "Triaged", "triaged") }; }
               @foreach (var (val, label, matchKey) in stageOpts)
               {
@@ -139,7 +115,7 @@
           </div>
           <div>
             <label for="dr-filter-band">Band</label>
- <select name="band" id="dr-filter-band" class="govuk-select">
+ <select name="band" id="dr-filter-band" class="govuk-select govuk-!-width-full">
               @{ var bandOpts = new[] { ("", "All"), ("MustDo", "Must do"), ("CouldDo", "Could do"), ("DoNotDo", "Do not do") }; }
               @foreach (var (val, label) in bandOpts)
               {
@@ -150,7 +126,7 @@
           </div>
           <div>
             <label for="dr-filter-dept">Business area</label>
- <select name="department" id="dr-filter-dept" class="govuk-select">
+ <select name="department" id="dr-filter-dept" class="govuk-select govuk-!-width-full">
               <option value="">All departments</option>
               @foreach (var g in departmentGroups)
               {
@@ -178,7 +154,7 @@
   {
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
-      <table class="govuk-table">
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table">
         <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Request</button>
         </th><th scope="col" class="govuk-table__header" aria-sort="none">
@@ -209,17 +185,17 @@
                 @if (d.Status == "Draft")
                 {
                   <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Submit", "ModernDemand", new { id = d.Id })">@(string.IsNullOrEmpty(d.Title) ? "Untitled draft" : d.Title)</a>
- <span class="dfe-c-table-ref">@d.Reference · <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Submit", "ModernDemand", new { id = d.Id })" onclick="event.stopPropagation();">Continue editing</a></span>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">@d.Reference · <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Submit", "ModernDemand", new { id = d.Id })">Continue editing</a></div>
                 }
                 else
                 {
-                  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id })"><strong>@d.Title</strong></a>
- <span class="dfe-c-table-ref">@d.Reference</span>
+                  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id })">@d.Title</a>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">@d.Reference</div>
                 }
               </td>
               <td class="govuk-table__cell">@(d.DepartmentGroup ?? "—")</td>
               <td class="govuk-table__cell">@(d.Sro ?? "—")</td>
- <td class="govuk-table__cell"><span class="dfe-c-tag @StatusTagMod(d.Status)">@StatusTagLabel(d.Status)</span></td>
+ <td class="govuk-table__cell"><span class="@StatusTagMod(d.Status)">@StatusTagLabel(d.Status)</span></td>
               <td class="govuk-table__cell">
                 @if (d.TotalScore.HasValue)
                 {
@@ -243,7 +219,7 @@
               <td class="govuk-table__cell">
                 @if (!string.IsNullOrEmpty(d.TriageOutcome) && !string.IsNullOrEmpty(OutcomeTagLabel(d.TriageOutcome)))
                 {
- <span class="dfe-c-tag @OutcomeTagMod(d.TriageOutcome)">@OutcomeTagLabel(d.TriageOutcome)</span>
+ <span class="@OutcomeTagMod(d.TriageOutcome)">@OutcomeTagLabel(d.TriageOutcome)</span>
                 }
                 else
                 {
@@ -257,7 +233,9 @@
         </tbody>
       </table>
     </div>
- <p class="dfe-c-text-muted dfe-c-mt-1" id="dr-showing">Showing @count of @totalInTab demand@(totalInTab == 1 ? "" : "s")</p>
+ <div class="modern-work-register-footer govuk-!-margin-top-4">
+ <p class="govuk-body modern-work-register-footer__count" id="dr-showing">Showing @count of @totalInTab demand@(totalInTab == 1 ? "" : "s")</p>
+ </div>
   }
   </div>
 </div>

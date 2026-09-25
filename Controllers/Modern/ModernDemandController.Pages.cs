@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using Compass.Models;
 using Compass.Models.DemandPipeline;
@@ -99,6 +100,9 @@ public partial class ModernDemandController
 
         var isSubmit = string.Equals(command, "submit", StringComparison.OrdinalIgnoreCase);
         var isDraftSave = !isSubmit;
+
+        // Assigned when the demand is created. The form does not collect it.
+        ModelState.Remove(nameof(input.Reference));
 
         input.PriorityOutcomeIds = JoinIntList(priorityOutcomeIds);
         input.MissionPillarIds = JoinIntList(missionPillarIds);
@@ -264,13 +268,14 @@ public partial class ModernDemandController
 
     private async Task PopulateDemandSubmitLookupsAsync()
     {
-        var orgGroups = await _db.OrganizationalGroups.AsNoTracking()
-            .Where(g => g.IsActive)
-            .OrderBy(g => g.Name)
+        var businessAreas = await _db.BusinessAreaLookups.AsNoTracking()
+            .Where(b => b.IsActive)
+            .OrderBy(b => b.SortOrder)
+            .ThenBy(b => b.Name)
             .ToListAsync();
 
-        ViewBag.Portfolios = orgGroups
-            .Select(g => new Portfolio { Id = g.Id, Name = g.Name, IsActive = true })
+        ViewBag.Portfolios = businessAreas
+            .Select(b => new Portfolio { Id = b.Id, Name = b.Name, IsActive = true })
             .ToList();
 
         ViewBag.DepartmentGroups = await _db.DemandPipelineRequests.AsNoTracking()
@@ -313,7 +318,7 @@ public partial class ModernDemandController
         if (model.SubmittedByUserId == null)
             ModelState.AddModelError(nameof(model.SubmittedByUserId), "Select a primary contact.");
         if (string.IsNullOrWhiteSpace(model.DepartmentGroup))
-            ModelState.AddModelError(nameof(model.DepartmentGroup), "Select a business area.");
+            ModelState.AddModelError(nameof(model.DepartmentGroup), "Enter the policy or programme area.");
         if (model.SroUserId == null)
             ModelState.AddModelError(nameof(model.SroUserId), "Select the SRO.");
         if (string.IsNullOrWhiteSpace(model.Title))
@@ -460,7 +465,7 @@ public partial class ModernDemandController
 
     [HttpGet("triage")]
     [HttpGet("/ModernDemand/Triage")]
-    public async Task<IActionResult> Triage(Guid? meetingId)
+    public async Task<IActionResult> Triage(Guid? meetingId, Guid? demandId)
     {
         ViewBag.MainNavSection = "demand";
         ViewBag.SubNavItem = "demand-dashboard";
@@ -501,12 +506,64 @@ public partial class ModernDemandController
 
         if (meetingId.HasValue)
         {
+            vm.SelectedMeeting = meetings.FirstOrDefault(m => m.Id == meetingId.Value);
             vm.MeetingDemands = assignedDemands
                 .Where(d => d.TriageMeetingId == meetingId.Value)
+                .OrderByDescending(d => d.TotalScore)
+                .ThenBy(d => d.Title)
                 .ToList();
+            var selected = demandId.HasValue
+                ? vm.MeetingDemands.FirstOrDefault(d => d.Id == demandId.Value)
+                : vm.MeetingDemands.FirstOrDefault();
+            vm.SelectedDemandId = selected?.Id;
+            ViewBag.CanManageDemandPipeline = await CurrentUserCanManageDemandPipelineAsync();
         }
 
         return View("~/Views/Modern/Demand/Triage.cshtml", vm);
+    }
+
+    [HttpPost("triage/meeting/{meetingId:guid}/notes")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveTriageMeetingNotes(Guid meetingId, Guid demandId, string? triageMeetingNotes)
+    {
+        if (!await CurrentUserCanManageDemandPipelineAsync())
+        {
+            TempData["Error"] = "Only Central Operations can add meeting notes.";
+            return RedirectToAction(nameof(Triage), new { meetingId, demandId });
+        }
+
+        var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == demandId && d.TriageMeetingId == meetingId);
+        if (demand == null) return NotFound();
+
+        demand.TriageMeetingNotes = string.IsNullOrWhiteSpace(triageMeetingNotes) ? null : triageMeetingNotes.Trim();
+        demand.UpdatedAt = DateTime.UtcNow;
+        demand.UpdatedBy = User.Identity?.Name;
+        await _db.SaveChangesAsync();
+
+        TempData["Message"] = "Meeting notes saved.";
+        return RedirectToAction(nameof(Triage), new { meetingId, demandId });
+    }
+
+    [HttpGet("triage/meeting/{id:guid}")]
+    public async Task<IActionResult> TriageMeetingPack(Guid id)
+    {
+        ViewBag.MainNavSection = "demand";
+        ViewBag.SubNavItem = "demand-triage";
+
+        var meeting = await _db.DemandPipelineTriageMeetings.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id);
+        if (meeting == null) return NotFound();
+
+        var demands = await _db.DemandPipelineRequests.AsNoTracking()
+            .Where(d => d.TriageMeetingId == id)
+            .OrderByDescending(d => d.TotalScore)
+            .ThenBy(d => d.Title)
+            .ToListAsync();
+
+        return View("~/Views/Modern/Demand/TriageMeetingPack.cshtml", new TriageMeetingPackViewModel
+        {
+            Meeting = meeting,
+            Demands = demands
+        });
     }
 
     [HttpGet("request/{id:guid}")]
@@ -532,6 +589,9 @@ public partial class ModernDemandController
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RequestWorkflowTransition(Guid id, string transition)
     {
+        var denied = await DenyUnlessDemandPipelineManagerAsync(id);
+        if (denied != null) return denied;
+
         var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
         if (demand == null) return NotFound();
 
@@ -578,13 +638,16 @@ public partial class ModernDemandController
         await _db.SaveChangesAsync();
 
         TempData["Message"] = "Demand stage updated.";
-        return RedirectToAction(nameof(RequestDetail), new { id });
+        return RedirectToAction(nameof(RequestDetail), new { id, tab = TabForWorkflowTransition(transition) });
     }
 
     [HttpPost("request/{id:guid}/assign-triage")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RequestAssignTriageMeeting(Guid id, Guid? triageMeetingId)
     {
+        var denied = await DenyUnlessDemandPipelineManagerAsync(id, "triage");
+        if (denied != null) return denied;
+
         var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
         if (demand == null) return NotFound();
 
@@ -620,6 +683,9 @@ public partial class ModernDemandController
         int? triagePrimaryContactUserId,
         string? triageOutcomeNarrative)
     {
+        var denied = await DenyUnlessDemandPipelineManagerAsync(id, "triage");
+        if (denied != null) return denied;
+
         var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
         if (demand == null) return NotFound();
 
@@ -709,7 +775,7 @@ public partial class ModernDemandController
         await _db.SaveChangesAsync();
 
         TempData["Message"] = "Triage outcome recorded.";
-        return RedirectToAction(nameof(RequestDetail), new { id, tab = "triage" });
+        return RedirectToAction(nameof(RequestDetail), new { id, tab = "outcome" });
     }
 
     [HttpPost("request/{id:guid}/scoring/draft")]
@@ -724,6 +790,9 @@ public partial class ModernDemandController
         string? scoringAssessmentNotes,
         string? scoringConcernsNotes)
     {
+        var denied = await DenyUnlessDemandPipelineManagerAsync(id, "scoring");
+        if (denied != null) return denied;
+
         var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
         if (demand == null) return NotFound();
 
@@ -744,6 +813,9 @@ public partial class ModernDemandController
         [FromForm] string? scoringAssessmentNotes,
         [FromForm] string? scoringConcernsNotes)
     {
+        if (!await CurrentUserCanManageDemandPipelineAsync())
+            return StatusCode(StatusCodes.Status403Forbidden);
+
         var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
         if (demand == null) return NotFound();
 
@@ -764,6 +836,9 @@ public partial class ModernDemandController
         string? scoringConcernsNotes,
         bool? confirmScoringComplete)
     {
+        var denied = await DenyUnlessDemandPipelineManagerAsync(id, "scoring");
+        if (denied != null) return denied;
+
         var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
         if (demand == null) return NotFound();
 
@@ -800,6 +875,9 @@ public partial class ModernDemandController
         string? exploreNotes,
         List<int>? exploreUniversalBarrierIds)
     {
+        var denied = await DenyUnlessDemandPipelineManagerAsync(id, "explore");
+        if (denied != null) return denied;
+
         var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
         if (demand == null) return NotFound();
 
@@ -857,6 +935,9 @@ public partial class ModernDemandController
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ExploreAutosave(Guid id, [FromBody] ExploreAutosaveRequest req)
     {
+        if (!await CurrentUserCanManageDemandPipelineAsync())
+            return StatusCode(StatusCodes.Status403Forbidden);
+
         var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
         if (demand == null) return Json(new { ok = false, error = "Demand not found" });
 
@@ -878,6 +959,129 @@ public partial class ModernDemandController
         await _db.SaveChangesAsync();
 
         return Json(new { ok = true, savedAt = DateTime.Now.ToString("HH:mm") });
+    }
+
+    [HttpPost("request/{id:guid}/work-item/create")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequestCreateWorkItem(Guid id)
+    {
+        var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
+        if (demand == null) return NotFound();
+        if (!await CanLinkDemandWorkItemAsync(demand))
+            return await DenyWorkItemLinkAsync(id);
+
+        if (await FindLinkedWorkItemAsync(demand) != null)
+        {
+            TempData["Error"] = "This request is already linked to a work item.";
+            return RedirectToAction(nameof(RequestDetail), new { id, tab = "request" });
+        }
+
+        var now = DateTime.UtcNow;
+        var title = (demand.Title ?? "").Trim();
+        if (title.Length > 200) title = title[..200];
+        if (string.IsNullOrWhiteSpace(title)) title = demand.Reference;
+
+        var project = new Project
+        {
+            ProjectCode = await NextWorkItemCodeAsync(),
+            Title = title,
+            Aim = string.IsNullOrWhiteSpace(demand.Description) ? null : demand.Description.Trim(),
+            TargetDeliveryDate = demand.TargetDeliveryDate,
+            BusinessAreaId = demand.PortfolioId,
+            PrimaryContactUserId = demand.SubmittedByUserId,
+            PipelineDemandRequestId = demand.Id,
+            Status = "Active",
+            IsFlagship = false,
+            IsAiInitiative = false,
+            ShowInFips = false,
+            CreatedAt = now,
+            UpdatedAt = now,
+            CreationMethod = "Demand"
+        };
+        _db.Projects.Add(project);
+        await _db.SaveChangesAsync();
+
+        if (!string.IsNullOrWhiteSpace(demand.Description))
+        {
+            var actorEmail = CurrentUserEmail ?? string.Empty;
+            var actorName = await _db.Users.AsNoTracking()
+                .Where(u => u.Email == actorEmail)
+                .Select(u => u.Name)
+                .FirstOrDefaultAsync();
+            _db.ProjectProblemStatements.Add(new ProjectProblemStatement
+            {
+                ProjectId = project.Id,
+                ProblemStatement = demand.Description.Trim(),
+                CreatedByEmail = actorEmail,
+                CreatedByName = actorName,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+
+        demand.TriageCreatedProjectId = project.Id;
+        demand.UpdatedAt = now;
+        demand.UpdatedBy = User.Identity?.Name;
+        await _db.SaveChangesAsync();
+
+        try
+        {
+            var creatorEmail = User.Identity?.Name ?? string.Empty;
+            var creatorName = await _db.Users.AsNoTracking()
+                .Where(u => u.Email == creatorEmail)
+                .Select(u => u.Name)
+                .FirstOrDefaultAsync();
+            await _workItemNotifications.TrySendWorkItemCreatedAsync(project.Id, creatorEmail, creatorName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send work item created notification for project {ProjectId}", project.Id);
+        }
+
+        TempData["Message"] = "Work item created and linked to this request.";
+        return RedirectToAction(nameof(RequestDetail), new { id, tab = "request" });
+    }
+
+    [HttpPost("request/{id:guid}/work-item/link")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequestLinkWorkItem(Guid id, int projectId)
+    {
+        var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
+        if (demand == null) return NotFound();
+        if (!await CanLinkDemandWorkItemAsync(demand))
+            return await DenyWorkItemLinkAsync(id);
+
+        var project = await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted);
+        if (project == null)
+        {
+            TempData["Error"] = "Work item not found.";
+            return RedirectToAction(nameof(RequestDetail), new { id, tab = "request" });
+        }
+
+        await LinkDemandAndWorkItemAsync(demand, project);
+        TempData["Message"] = "Work item linked to this request.";
+        return RedirectToAction(nameof(RequestDetail), new { id, tab = "request" });
+    }
+
+    [HttpPost("request/{id:guid}/work-item/unlink")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequestUnlinkWorkItem(Guid id)
+    {
+        var demand = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == id);
+        if (demand == null) return NotFound();
+        if (!await CanLinkDemandWorkItemAsync(demand))
+            return await DenyWorkItemLinkAsync(id);
+
+        var project = await FindLinkedWorkItemAsync(demand);
+        if (project != null && project.PipelineDemandRequestId == demand.Id)
+            project.PipelineDemandRequestId = null;
+        demand.TriageCreatedProjectId = null;
+        demand.UpdatedAt = DateTime.UtcNow;
+        demand.UpdatedBy = User.Identity?.Name;
+        await _db.SaveChangesAsync();
+
+        TempData["Message"] = "Work item unlinked from this request.";
+        return RedirectToAction(nameof(RequestDetail), new { id, tab = "request" });
     }
 
     [HttpGet("request/explore/search-work")]
@@ -1190,7 +1394,22 @@ public partial class ModernDemandController
         }
         ViewBag.MissionPillarName = missionPillarName;
 
-        ViewBag.PortfolioName = null;
+        string? portfolioName = null;
+        if (demand.PortfolioId is int portfolioId)
+        {
+            portfolioName = await _db.BusinessAreaLookups.AsNoTracking()
+                .Where(b => b.Id == portfolioId)
+                .Select(b => b.Name)
+                .FirstOrDefaultAsync();
+            if (string.IsNullOrWhiteSpace(portfolioName))
+            {
+                portfolioName = await _db.OrganizationalGroups.AsNoTracking()
+                    .Where(g => g.Id == portfolioId)
+                    .Select(g => g.Name)
+                    .FirstOrDefaultAsync();
+            }
+        }
+        ViewBag.PortfolioName = portfolioName;
 
         var stages = await _db.DemandPipelineStages.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.DisplayOrder).ToListAsync();
         if (stages.Count == 0)
@@ -1217,11 +1436,15 @@ public partial class ModernDemandController
             PortfolioName = ViewBag.PortfolioName
         };
 
+        var canManagePipeline = await CurrentUserCanManageDemandPipelineAsync();
+        ViewBag.CanManageDemandPipeline = canManagePipeline;
+        ViewBag.IsDemandSubmitter = await IsDemandSubmitterAsync(demand);
+
         var isClosedForExploreEdit = demand.Status == "Draft"
                          || demand.Status == "Progressed to delivery"
                          || demand.Status == "Closed - Progressed to delivery";
-        ViewBag.ExploreCanSaveFields = !isClosedForExploreEdit;
-        ViewBag.ExploreCanWorkflow = demand.Status == "ExploratoryReview";
+        ViewBag.ExploreCanSaveFields = canManagePipeline && !isClosedForExploreEdit;
+        ViewBag.ExploreCanWorkflow = canManagePipeline && demand.Status == "ExploratoryReview";
 
         ViewBag.ExploreRelatedLinksList = ParseRelatedLinks(demand.ExploreRelatedLinksJson);
         var selectedBarrierIds = await _db.DemandPipelineRequestUniversalBarriers.AsNoTracking()
@@ -1249,10 +1472,10 @@ public partial class ModernDemandController
             ? await _db.DemandPipelineTriageMeetings.AsNoTracking().FirstOrDefaultAsync(m => m.Id == demand.TriageMeetingId.Value)
             : null;
 
-        var canRecordOutcome = demand.Status == "Scored"
+        var canRecordOutcome = canManagePipeline && (demand.Status == "Scored"
                                || demand.Status == "TriagePending"
                                || demand.Status == "Triage Pending"
-                               || demand.Status == "Triaged";
+                               || demand.Status == "Triaged");
         ViewBag.CanRecordTriageOutcome = canRecordOutcome;
         ViewBag.BusinessAreasForTriage = await _db.BusinessAreaLookups.AsNoTracking()
             .Where(x => x.IsActive)
@@ -1283,15 +1506,23 @@ public partial class ModernDemandController
             ViewBag.TriagePrimaryContactDisplay = user != null ? (user.Name + " (" + user.Email + ")") : null;
         }
 
-        if (demand.TriageCreatedProjectId.HasValue)
+        var linkedWork = demand.TriageCreatedProjectId.HasValue
+            ? await _db.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == demand.TriageCreatedProjectId.Value && !p.IsDeleted)
+            : null;
+        linkedWork ??= await _db.Projects.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.PipelineDemandRequestId == demand.Id && !p.IsDeleted);
+        ViewBag.LinkedWorkItem = linkedWork;
+        ViewBag.CanLinkDemandWorkItem = await CanLinkDemandWorkItemAsync(demand);
+        if (linkedWork != null)
         {
-            var project = await _db.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == demand.TriageCreatedProjectId.Value);
-            ViewBag.TriageCreatedProjectId = project?.Id;
-            ViewBag.TriageCreatedProjectCode = project?.ProjectCode;
-            ViewBag.TriageCreatedProjectTitle = project?.Title;
+            ViewBag.TriageCreatedProjectId = linkedWork.Id;
+            ViewBag.TriageCreatedProjectCode = linkedWork.ProjectCode;
+            ViewBag.TriageCreatedProjectTitle = linkedWork.Title;
         }
 
-        ViewBag.WorkflowTransitions = GetWorkflowTransitions(demand.Status);
+        ViewBag.WorkflowTransitions = canManagePipeline
+            ? GetWorkflowTransitions(demand.Status)
+            : new List<(string Id, string Label)>();
 
         if (!string.IsNullOrWhiteSpace(demand.CreatedBy))
         {
@@ -1395,6 +1626,115 @@ public partial class ModernDemandController
             });
         }
     }
+
+    private string? CurrentUserEmail =>
+        User.FindFirstValue(ClaimTypes.Email)
+        ?? User.FindFirst("preferred_username")?.Value
+        ?? User.Identity?.Name;
+
+    private async Task<bool> CanLinkDemandWorkItemAsync(DemandPipelineRequest demand)
+    {
+        if (await CurrentUserCanManageDemandPipelineAsync()) return true;
+        return await IsDemandSubmitterAsync(demand);
+    }
+
+    private Task<IActionResult> DenyWorkItemLinkAsync(Guid id)
+    {
+        TempData["Error"] = "You cannot link a work item to this request.";
+        return Task.FromResult<IActionResult>(RedirectToAction(nameof(RequestDetail), new { id, tab = "request" }));
+    }
+
+    private async Task<Project?> FindLinkedWorkItemAsync(DemandPipelineRequest demand)
+    {
+        if (demand.TriageCreatedProjectId is int projectId)
+        {
+            var byId = await _db.Projects.FirstOrDefaultAsync(p => p.Id == projectId && !p.IsDeleted);
+            if (byId != null) return byId;
+        }
+
+        return await _db.Projects.FirstOrDefaultAsync(p => p.PipelineDemandRequestId == demand.Id && !p.IsDeleted);
+    }
+
+    private async Task LinkDemandAndWorkItemAsync(DemandPipelineRequest demand, Project project)
+    {
+        var previous = await FindLinkedWorkItemAsync(demand);
+        if (previous != null && previous.Id != project.Id && previous.PipelineDemandRequestId == demand.Id)
+            previous.PipelineDemandRequestId = null;
+
+        if (project.PipelineDemandRequestId is Guid otherDemandId && otherDemandId != demand.Id)
+        {
+            var other = await _db.DemandPipelineRequests.FirstOrDefaultAsync(d => d.Id == otherDemandId && d.TriageCreatedProjectId == project.Id);
+            if (other != null)
+                other.TriageCreatedProjectId = null;
+        }
+
+        project.PipelineDemandRequestId = demand.Id;
+        project.UpdatedAt = DateTime.UtcNow;
+        demand.TriageCreatedProjectId = project.Id;
+        demand.UpdatedAt = DateTime.UtcNow;
+        demand.UpdatedBy = User.Identity?.Name;
+        await _db.SaveChangesAsync();
+    }
+
+    private async Task<string> NextWorkItemCodeAsync()
+    {
+        var codes = await _db.Projects.AsNoTracking()
+            .Where(p => p.ProjectCode.StartsWith("DDTDEL-"))
+            .Select(p => p.ProjectCode)
+            .ToListAsync();
+        var next = 1;
+        foreach (var code in codes)
+        {
+            var parts = code.Split('-');
+            if (parts.Length >= 2 && int.TryParse(parts[^1], out var n) && n >= next)
+                next = n + 1;
+        }
+
+        var candidate = $"DDTDEL-{next:D4}";
+        return candidate.Length <= 20 ? candidate : $"DDTDEL-{next}";
+    }
+
+    private async Task<bool> CurrentUserCanManageDemandPipelineAsync()
+    {
+        var email = CurrentUserEmail;
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        return await _permissions.IsCentralOperationsAdminOrSuperAdminAsync(email);
+    }
+
+    private async Task<bool> IsDemandSubmitterAsync(DemandPipelineRequest demand)
+    {
+        var email = CurrentUserEmail?.Trim();
+        if (string.IsNullOrWhiteSpace(email)) return false;
+
+        if (demand.SubmittedByUserId is int submittedByUserId)
+        {
+            var userId = await _db.Users.AsNoTracking()
+                .Where(u => u.Email == email)
+                .Select(u => (int?)u.Id)
+                .FirstOrDefaultAsync();
+            if (userId == submittedByUserId) return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(demand.SubmittedBy)
+               && demand.SubmittedBy.Contains(email, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<IActionResult?> DenyUnlessDemandPipelineManagerAsync(Guid id, string? tab = null)
+    {
+        if (await CurrentUserCanManageDemandPipelineAsync()) return null;
+        TempData["Error"] = "Only Central Operations can change explore, scoring, or triage.";
+        return RedirectToAction(nameof(RequestDetail), new { id, tab });
+    }
+
+    private static string TabForWorkflowTransition(string? transition) => (transition ?? "").Trim() switch
+    {
+        "to-explore" => "explore",
+        "to-scoring" => "scoring",
+        "to-scored" => "scoring",
+        "to-triage" => "triage",
+        "to-triaged" or "to-progressed" => "outcome",
+        _ => "request"
+    };
 
     private static List<(string Id, string Label)> GetWorkflowTransitions(string? status)
     {

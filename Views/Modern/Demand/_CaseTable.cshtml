@@ -1,4 +1,5 @@
 @model IEnumerable<Compass.Models.DemandPipeline.DemandPipelineBusinessCase>
+@using Compass.Models.Modern.Work
 @{
     var list = Model?.ToList() ?? new List<Compass.Models.DemandPipeline.DemandPipelineBusinessCase>();
     var count = list.Count;
@@ -15,20 +16,20 @@
   {
     return stage switch
     {
-      "Ready" => ("READY TO SUBMIT", "dfe-c-tag--green"),
-      "Developing" => ("DEVELOPING", "dfe-c-tag--amber"),
-      "Idea" => ("IDEA / CONCEPT", "dfe-c-tag--blue"),
-      _ => ((stage ?? "—").ToUpperInvariant(), "dfe-c-tag--grey")
+      "Ready" => ("READY TO SUBMIT", WorkBadgeCss.DemandStageBadgeClass(stage)),
+      "Developing" => ("DEVELOPING", WorkBadgeCss.DemandStageBadgeClass(stage)),
+      "Idea" => ("IDEA / CONCEPT", WorkBadgeCss.DemandStageBadgeClass(stage)),
+      _ => ((stage ?? "—").ToUpperInvariant(), WorkBadgeCss.DemandStageBadgeClass(stage))
     };
   }
 
   (string Label, string Css) FundingTag(string? fp)
   {
-    if (string.IsNullOrWhiteSpace(fp)) return ("UNKNOWN", "dfe-c-tag--grey");
-    if (string.Equals(fp, "Confirmed", StringComparison.OrdinalIgnoreCase)) return ("CONFIRMED", "dfe-c-tag--green");
-    if (string.Equals(fp, "Not yet confirmed", StringComparison.OrdinalIgnoreCase)) return ("NOT CONFIRMED", "dfe-c-tag--red");
-    if (string.Equals(fp, "Not applicable", StringComparison.OrdinalIgnoreCase)) return ("N/A", "dfe-c-tag--grey");
-    return (fp.ToUpperInvariant(), "dfe-c-tag--amber");
+    if (string.IsNullOrWhiteSpace(fp)) return ("UNKNOWN", WorkBadgeCss.DemandFundingBadgeClass(fp));
+    if (string.Equals(fp, "Confirmed", StringComparison.OrdinalIgnoreCase)) return ("CONFIRMED", WorkBadgeCss.DemandFundingBadgeClass(fp));
+    if (string.Equals(fp, "Not yet confirmed", StringComparison.OrdinalIgnoreCase)) return ("NOT CONFIRMED", WorkBadgeCss.DemandFundingBadgeClass(fp));
+    if (string.Equals(fp, "Not applicable", StringComparison.OrdinalIgnoreCase)) return ("N/A", WorkBadgeCss.DemandFundingBadgeClass(fp));
+    return (fp.ToUpperInvariant(), WorkBadgeCss.DemandFundingBadgeClass(fp));
   }
 
   string EstSubmit(Compass.Models.DemandPipeline.DemandPipelineBusinessCase bc)
@@ -40,13 +41,13 @@
 
 @if (count == 0)
 {
- <p class="dfe-c-body muted">No business cases found.</p>
+ <p class="govuk-body dfe-c-text-muted">No business cases found.</p>
 }
 else if (isSubmitted)
 {
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
-    <table class="govuk-table">
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table">
       <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Business case</button>
         </th><th scope="col" class="govuk-table__header" aria-sort="none">
@@ -67,12 +68,12 @@ else if (isSubmitted)
           <tr class="govuk-table__row">
             <td class="govuk-table__cell">
               <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("BusinessCaseDetail", "ModernDemand", new { id = bc.Id })">@bc.Title</a>
- <span class="dfe-c-table-ref">@bc.Reference</span>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">@bc.Reference</div>
             </td>
             <td class="govuk-table__cell">@(bc.DepartmentGroup ?? "—")</td>
             <td class="govuk-table__cell">@(bc.Lead ?? "—")</td>
             <td class="govuk-table__cell">@(bc.Sro ?? "—")</td>
- <td class="govuk-table__cell"><span class="dfe-c-tag @st.Css">@st.Label</span></td>
+ <td class="govuk-table__cell"><span class="@st.Css">@st.Label</span></td>
             <td class="govuk-table__cell">@(bc.SubmittedDate?.ToString("d MMM yyyy") ?? bc.UpdatedAt.ToString("d MMM yyyy"))</td>
             <td class="govuk-table__cell">
               @if (bc.LinkedDemandRequestId.HasValue)
@@ -85,13 +86,15 @@ else if (isSubmitted)
       </tbody>
     </table>
   </div>
- <p class="dfe-c-text-muted dfe-c-mt-1" id="bc-showing">Showing @count business case@(count == 1 ? "" : "s")</p>
+ <div class="modern-work-register-footer govuk-!-margin-top-4">
+ <p class="govuk-body modern-work-register-footer__count" id="bc-showing">Showing @count business case@(count == 1 ? "" : "s")</p>
+ </div>
 }
 else
 {
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
-    <table class="govuk-table">
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table">
       <thead class="govuk-table__head"><tr class="govuk-table__row"><th scope="col" class="govuk-table__header" aria-sort="none">
           <button type="button" class="dfe-f-table-sort-button">Business case</button>
         </th><th scope="col" class="govuk-table__header" aria-sort="none">
@@ -116,18 +119,18 @@ else
           <tr class="govuk-table__row">
             <td class="govuk-table__cell">
               <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("BusinessCaseDetail", "ModernDemand", new { id = bc.Id })">@bc.Title</a>
- <span class="dfe-c-table-ref">@bc.Reference</span>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">@bc.Reference</div>
             </td>
             <td class="govuk-table__cell">@(bc.DepartmentGroup ?? "—")</td>
             <td class="govuk-table__cell">@(bc.Lead ?? "—")</td>
             <td class="govuk-table__cell">@(bc.Sro ?? "—")</td>
- <td class="govuk-table__cell"><span class="dfe-c-tag @st.Css">@st.Label</span></td>
- <td class="govuk-table__cell"><span class="dfe-c-tag @fu.Css">@fu.Label</span></td>
+ <td class="govuk-table__cell"><span class="@st.Css">@st.Label</span></td>
+ <td class="govuk-table__cell"><span class="@fu.Css">@fu.Label</span></td>
             <td class="govuk-table__cell">@EstSubmit(bc)</td>
             <td class="govuk-table__cell">
               @if (demandSubmitted)
               {
- <span class="dfe-c-tag dfe-c-tag--green">SUBMITTED</span>
+ <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">SUBMITTED</span>
               }
             </td>
           </tr>
@@ -135,5 +138,7 @@ else
       </tbody>
     </table>
   </div>
- <p class="dfe-c-text-muted dfe-c-mt-1" id="bc-showing">Showing @count of @totalForFooter business case@(totalForFooter == 1 ? "" : "s")</p>
+ <div class="modern-work-register-footer govuk-!-margin-top-4">
+ <p class="govuk-body modern-work-register-footer__count" id="bc-showing">Showing @count of @totalForFooter business case@(totalForFooter == 1 ? "" : "s")</p>
+ </div>
 }

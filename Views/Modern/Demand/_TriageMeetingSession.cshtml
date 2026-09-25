@@ -1,0 +1,198 @@
+@model Compass.ViewModels.Modern.DemandTriageHubViewModel
+@using Compass.Models.DemandPipeline
+@using Compass.Models.Modern.Work
+@using Compass.Services.DemandPipeline
+@{
+  var meeting = Model.SelectedMeeting!;
+  var demands = Model.MeetingDemands ?? new List<DemandPipelineRequest>();
+  var selected = demands.FirstOrDefault(d => d.Id == Model.SelectedDemandId) ?? demands.FirstOrDefault();
+  var canManage = ViewBag.CanManageDemandPipeline as bool? ?? false;
+  var when = meeting.MeetingDate?.ToString("dddd d MMMM yyyy") ?? "Date to be confirmed";
+  if (!string.IsNullOrWhiteSpace(meeting.StartTime) || !string.IsNullOrWhiteSpace(meeting.EndTime))
+    when += $" · {(meeting.StartTime ?? "").Trim()}–{(meeting.EndTime ?? "").Trim()}";
+
+  string ItemUrl(Guid demandId) => Url.Action("Triage", "ModernDemand", new { meetingId = meeting.Id, demandId }) ?? "#";
+}
+<p class="govuk-body">
+  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Triage", "ModernDemand")">All triage meetings</a>
+</p>
+
+@if (TempData["Message"] != null)
+{
+  <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="triage-meeting-success">
+    <div class="govuk-notification-banner__header">
+      <h2 class="govuk-notification-banner__title" id="triage-meeting-success">Success</h2>
+    </div>
+    <div class="govuk-notification-banner__content">
+      <p class="govuk-notification-banner__heading">@TempData["Message"]</p>
+    </div>
+  </div>
+}
+@if (TempData["Error"] != null)
+{
+  <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+    <h2 class="govuk-error-summary__title">There is a problem</h2>
+    <div class="govuk-error-summary__body">@TempData["Error"]</div>
+  </div>
+}
+
+<div class="govuk-summary-card govuk-!-margin-bottom-6">
+  <div class="govuk-summary-card__title-wrapper">
+    <h2 class="govuk-summary-card__title">This meeting</h2>
+  </div>
+  <div class="govuk-summary-card__content">
+    <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">When</dt>
+        <dd class="govuk-summary-list__value">@when</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Location</dt>
+        <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(meeting.Location) ? "—" : meeting.Location)</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Chair</dt>
+        <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(meeting.Chair) ? "—" : meeting.Chair)</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Status</dt>
+        <dd class="govuk-summary-list__value">@meeting.Status</dd>
+      </div>
+      @if (!string.IsNullOrWhiteSpace(meeting.Attendees))
+      {
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Attendees</dt>
+          <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@meeting.Attendees</dd>
+        </div>
+      }
+      @if (!string.IsNullOrWhiteSpace(meeting.Notes))
+      {
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Meeting notes</dt>
+          <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@meeting.Notes</dd>
+        </div>
+      }
+    </dl>
+  </div>
+</div>
+
+@if (demands.Count == 0)
+{
+  <p class="govuk-body">No demands are assigned to this meeting.</p>
+}
+else
+{
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-one-third-from-desktop">
+      <h2 class="govuk-heading-m">Items</h2>
+      <ul class="govuk-list triage-meeting-agenda">
+        @foreach (var d in demands)
+        {
+          var current = selected != null && d.Id == selected.Id;
+          <li class="triage-meeting-agenda__item@(current ? " triage-meeting-agenda__item--current" : "")">
+            <a class="govuk-link govuk-link--no-visited-state" href="@ItemUrl(d.Id)"@if (current) { <text> aria-current="true"</text> }>
+              <span class="govuk-body govuk-!-margin-bottom-0 govuk-!-font-weight-bold">@d.Title</span>
+              <span class="govuk-body-s govuk-!-margin-bottom-0">@d.Reference@if (d.TotalScore.HasValue) { <text> · @d.TotalScore / 100</text> }</span>
+            </a>
+          </li>
+        }
+      </ul>
+    </div>
+    <div class="govuk-grid-column-two-thirds-from-desktop">
+      @if (selected != null)
+      {
+        var band = string.IsNullOrWhiteSpace(selected.SuggestedBand) ? null : DemandScoringHelper.BandLabel(selected.SuggestedBand);
+        <h2 class="govuk-heading-m govuk-!-margin-bottom-2">@selected.Title</h2>
+        <p class="govuk-body">
+          <span class="@WorkBadgeCss.DemandPipelineStatusBadgeClass(selected.Status)">@selected.Status</span>
+          <span class="govuk-!-margin-left-2">@selected.Reference</span>
+          @if (selected.TotalScore.HasValue)
+          {
+            <span class="govuk-!-margin-left-2"><strong>@selected.TotalScore / 100</strong>@(band == null ? "" : $" · {band}")</span>
+          }
+        </p>
+        <dl class="govuk-summary-list">
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Submitted by</dt>
+            <dd class="govuk-summary-list__value">@(selected.SubmittedBy ?? "—")</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">SRO</dt>
+            <dd class="govuk-summary-list__value">@(selected.Sro ?? "—")</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Policy or programme area</dt>
+            <dd class="govuk-summary-list__value">@(selected.DepartmentGroup ?? "—")</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Request</dt>
+            <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@(string.IsNullOrWhiteSpace(selected.Description) ? "—" : selected.Description)</dd>
+          </div>
+        </dl>
+
+        <details class="govuk-details">
+          <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Explore</span></summary>
+          <div class="govuk-details__text">
+            <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Recommendation</dt><dd class="govuk-summary-list__value">@(selected.ExploreRecommendation ?? "—")</dd></div>
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Aim</dt><dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@(string.IsNullOrWhiteSpace(selected.ExploreAimClarification) ? "—" : selected.ExploreAimClarification)</dd></div>
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Research</dt><dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@(string.IsNullOrWhiteSpace(selected.ExploreResearchAndInsights) ? "—" : selected.ExploreResearchAndInsights)</dd></div>
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Notes</dt><dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@(string.IsNullOrWhiteSpace(selected.ExploreNotes) ? "—" : selected.ExploreNotes)</dd></div>
+            </dl>
+          </div>
+        </details>
+
+        <details class="govuk-details">
+          <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Scoring</span></summary>
+          <div class="govuk-details__text">
+            <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Strategic</dt><dd class="govuk-summary-list__value">@(selected.ScoreStrategic?.ToString() ?? "—")</dd></div>
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Urgency</dt><dd class="govuk-summary-list__value">@(selected.ScoreUrgency?.ToString() ?? "—")</dd></div>
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Funding</dt><dd class="govuk-summary-list__value">@(selected.ScoreFunding?.ToString() ?? "—")</dd></div>
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">RICE</dt><dd class="govuk-summary-list__value">@(selected.ScoreRice?.ToString() ?? "—")</dd></div>
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Assessment</dt><dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@(string.IsNullOrWhiteSpace(selected.ScoringAssessmentNotes) ? "—" : selected.ScoringAssessmentNotes)</dd></div>
+              @if (canManage && !string.IsNullOrWhiteSpace(selected.ScoringConcernsNotes))
+              {
+                <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Concerns</dt><dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@selected.ScoringConcernsNotes</dd></div>
+              }
+            </dl>
+          </div>
+        </details>
+
+        <details class="govuk-details">
+          <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Funding and benefits</span></summary>
+          <div class="govuk-details__text">
+            <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Expected benefits</dt><dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@(string.IsNullOrWhiteSpace(selected.ExpectedBenefits) ? "—" : selected.ExpectedBenefits)</dd></div>
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Risk if not delivered</dt><dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@(string.IsNullOrWhiteSpace(selected.RiskIfNotDelivered) ? "—" : selected.RiskIfNotDelivered)</dd></div>
+              <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Funding</dt><dd class="govuk-summary-list__value">@(selected.FundingProvided == true ? "Yes" : selected.FundingProvided == false ? "No" : "—")@(string.IsNullOrWhiteSpace(selected.FundingProvidedDetails) ? "" : $" — {selected.FundingProvidedDetails}")</dd></div>
+            </dl>
+          </div>
+        </details>
+
+        <h3 class="govuk-heading-s">Meeting notes</h3>
+        <p class="govuk-body">Notes added here are saved on this demand.</p>
+        @if (canManage)
+        {
+          <form method="post" asp-controller="ModernDemand" asp-action="SaveTriageMeetingNotes" asp-route-meetingId="@meeting.Id">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="demandId" value="@selected.Id" />
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="triage-meeting-notes">Notes from this discussion</label>
+              <textarea class="govuk-textarea" id="triage-meeting-notes" name="triageMeetingNotes" rows="8">@selected.TriageMeetingNotes</textarea>
+            </div>
+            <button type="submit" class="govuk-button">Save notes</button>
+          </form>
+        }
+        else if (!string.IsNullOrWhiteSpace(selected.TriageMeetingNotes))
+        {
+          <p class="govuk-body" style="white-space:pre-wrap;">@selected.TriageMeetingNotes</p>
+        }
+        else
+        {
+          <p class="govuk-body">No meeting notes yet.</p>
+        }
+      }
+    </div>
+  </div>
+}

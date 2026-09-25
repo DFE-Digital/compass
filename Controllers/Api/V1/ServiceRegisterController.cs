@@ -505,24 +505,13 @@ public class ServiceRegisterController : ControllerBase
             x.Active)).ToList();
     }
 
-    private async Task<List<FipsUserGroupApiRow>> QueryFipsUserGroupsAsync(CancellationToken cancellationToken)
+    private async Task<List<FipsUserGroupApiTree.FipsUserGroupApiRow>> QueryFipsUserGroupsAsync(CancellationToken cancellationToken)
     {
-        var roots = await _context.FipsUserGroups.AsNoTracking()
-            .Include(g => g.Children)
+        var all = await _context.FipsUserGroups.AsNoTracking()
             .Include(g => g.Synonyms)
-            .Where(g => g.ParentId == null)
-            .OrderBy(g => g.DisplayOrder)
             .ToListAsync(cancellationToken);
 
-        return roots.Select(g => new FipsUserGroupApiRow(
-                g.Id,
-                g.Name,
-                g.Description,
-                g.DisplayOrder,
-                g.Active,
-                g.Children.OrderBy(c => c.DisplayOrder).ThenBy(c => c.Name).Select(c => c.Name).ToList(),
-                g.Synonyms.Select(s => s.Synonym).OrderBy(s => s).ToList()))
-            .ToList();
+        return FipsUserGroupApiTree.Build(all);
     }
 
     private async Task<List<FipsContactRoleApiRow>> QueryFipsContactRolesAsync(CancellationToken cancellationToken)
@@ -583,15 +572,6 @@ public class ServiceRegisterController : ControllerBase
         string? Description,
         int DisplayOrder,
         bool Active);
-
-    private sealed record FipsUserGroupApiRow(
-        int Id,
-        string Name,
-        string? Description,
-        int DisplayOrder,
-        bool Active,
-        IReadOnlyList<string> Children,
-        IReadOnlyList<string> Synonyms);
 
     private sealed record FipsContactRoleApiRow(
         int Id,

@@ -174,6 +174,60 @@ public static class WorkBadgeCss
         return "dfe-f-badge dfe-f-badge--grey";
     }
 
+    private const string DemandBadge = "dfe-f-badge dfe-f-badge--small";
+
+    /// <summary>Demand pipeline status as <c>dfe-f-badge</c>, matching work register badges.</summary>
+    public static string DemandPipelineStatusBadgeClass(string? status) => status switch
+    {
+        "ExploratoryReview" or "Returned" => DemandBadge + " dfe-f-badge--orange",
+        "Scoring" or "Active" => DemandBadge + " dfe-f-badge--blue",
+        "Scored" => DemandBadge + " dfe-f-badge--teal",
+        "TriagePending" or "Triage Pending" or "Rejected" => DemandBadge + " dfe-f-badge--red",
+        "Triaged" or "Progressed to delivery" or "Closed - Progressed to delivery" or "Backlog" => DemandBadge + " dfe-f-badge--green",
+        _ => DemandBadge + " dfe-f-badge--grey"
+    };
+
+    /// <summary>Must / could / do-not-do band as <c>dfe-f-badge</c>.</summary>
+    public static string DemandBandBadgeClass(string? band) => band switch
+    {
+        "MustDo" => DemandBadge + " dfe-f-badge--green",
+        "CouldDo" => DemandBadge + " dfe-f-badge--orange",
+        "DoNotDo" => DemandBadge + " dfe-f-badge--red",
+        _ => ""
+    };
+
+    /// <summary>Business case stage as <c>dfe-f-badge</c>.</summary>
+    public static string DemandStageBadgeClass(string? stage) => stage switch
+    {
+        "Ready" => DemandBadge + " dfe-f-badge--green",
+        "Developing" => DemandBadge + " dfe-f-badge--orange",
+        "Idea" => DemandBadge + " dfe-f-badge--blue",
+        _ => DemandBadge + " dfe-f-badge--grey"
+    };
+
+    /// <summary>Business case funding position as <c>dfe-f-badge</c>.</summary>
+    public static string DemandFundingBadgeClass(string? funding)
+    {
+        if (string.IsNullOrWhiteSpace(funding))
+            return DemandBadge + " dfe-f-badge--grey";
+        if (funding.Equals("Confirmed", StringComparison.OrdinalIgnoreCase))
+            return DemandBadge + " dfe-f-badge--green";
+        if (funding.Equals("Not yet confirmed", StringComparison.OrdinalIgnoreCase))
+            return DemandBadge + " dfe-f-badge--red";
+        if (funding.Equals("Not applicable", StringComparison.OrdinalIgnoreCase))
+            return DemandBadge + " dfe-f-badge--grey";
+        return DemandBadge + " dfe-f-badge--orange";
+    }
+
+    /// <summary>Triage outcome as <c>dfe-f-badge</c>.</summary>
+    public static string DemandOutcomeBadgeClass(string? outcome) => outcome switch
+    {
+        "Progress" => DemandBadge + " dfe-f-badge--blue",
+        "Reject" => DemandBadge + " dfe-f-badge--red",
+        "Pause" => DemandBadge + " dfe-f-badge--orange",
+        _ => DemandBadge + " dfe-f-badge--grey"
+    };
+
     /// <summary>Work status as <c>dfe-f-badge</c> (Active, Paused, Completed, Cancelled).</summary>
     public static string StatusDfeFrontendBadgeClass(string? status)
     {
