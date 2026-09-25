@@ -1,6 +1,8 @@
 using System.Text;
+using System.Text.Json;
 using ClosedXML.Excel;
 using Compass.Data;
+using Compass.Helpers;
 using Compass.Models;
 using Compass.Models.DemandTriage;
 using Compass.Services;
@@ -191,11 +193,96 @@ public class ExportsController : Controller
             .Where(d => projectIds.Contains(d.ProjectId))
             .Include(d => d.Division)
             .ToListAsync(cancellationToken);
-        var divByProject = directorates
+        var directoratesByProject = directorates
             .GroupBy(d => d.ProjectId)
+            .ToDictionary(g => g.Key, g => (ICollection<ProjectDirectorate>)g.ToList());
+
+        var missions = await _db.ProjectMissions.AsNoTracking()
+            .Where(pm => projectIds.Contains(pm.ProjectId))
+            .Include(pm => pm.Mission)
+            .ToListAsync(cancellationToken);
+        var missionsByProject = missions
+            .Where(pm => pm.Mission != null && !pm.Mission.IsDeleted)
+            .GroupBy(pm => pm.ProjectId)
+            .ToDictionary(g => g.Key, g => (ICollection<ProjectMission>)g.ToList());
+
+        var objectives = await _db.ProjectObjectives.AsNoTracking()
+            .Where(po => projectIds.Contains(po.ProjectId))
+            .Include(po => po.Objective)
+            .ToListAsync(cancellationToken);
+        var objectivesByProject = objectives
+            .Where(po => po.Objective != null && !po.Objective.IsDeleted)
+            .GroupBy(po => po.ProjectId)
+            .ToDictionary(g => g.Key, g => (ICollection<ProjectObjective>)g.ToList());
+
+        var problemStatements = await _db.ProjectProblemStatements.AsNoTracking()
+            .Where(ps => projectIds.Contains(ps.ProjectId))
+            .ToListAsync(cancellationToken);
+        var problemByProject = problemStatements
+            .GroupBy(ps => ps.ProjectId)
             .ToDictionary(
                 g => g.Key,
-                g => string.Join("; ", g.Select(x => x.Division.Name).Distinct()));
+                g => g.OrderByDescending(ps => ps.UpdatedAt).First().ProblemStatement);
+
+        var budgetOwners = await _db.ProjectBudgetOwners.AsNoTracking()
+            .Where(b => projectIds.Contains(b.ProjectId))
+            .Include(b => b.BusinessAreaLookup)
+            .ToListAsync(cancellationToken);
+        var budgetByProject = budgetOwners
+            .GroupBy(b => b.ProjectId)
+            .ToDictionary(
+                g => g.Key,
+                g => string.Join("; ", g
+                    .Select(x => x.BusinessAreaLookup?.Name?.Trim() ?? "")
+                    .Where(n => n.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n)));
+
+        var departmentIds = projects
+            .SelectMany(p => ParseDepartmentIds(p.OtherDepartments))
+            .Distinct()
+            .ToList();
+        var departmentNames = departmentIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await _db.GovernmentDepartments.AsNoTracking()
+                .Where(g => departmentIds.Contains(g.Id))
+                .ToDictionaryAsync(g => g.Id, g => g.Title, cancellationToken);
+        var multiDeptByProject = projects.ToDictionary(
+            p => p.Id,
+            p => string.Join("; ", ParseDepartmentIds(p.OtherDepartments)
+                .Select(id => departmentNames.TryGetValue(id, out var name) ? name : "")
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct(StringComparer.OrdinalIgnoreCase)));
+
+        var weeklyAll = await _db.ProjectWeeklyWorkUpdates.AsNoTracking()
+            .Where(w => projectIds.Contains(w.ProjectId))
+            .Include(w => w.DraftRagStatusLookup)
+            .OrderByDescending(w => w.IsoYear).ThenByDescending(w => w.IsoWeek)
+            .ThenByDescending(w => w.SubmittedAt ?? w.UpdatedAt ?? w.CreatedAt)
+            .ToListAsync(cancellationToken);
+        var latestWeeklyByProject = weeklyAll
+            .GroupBy(w => w.ProjectId)
+            .ToDictionary(g => g.Key, g => g.First());
+        var currentFteByProject = new Dictionary<int, ProjectMonthlyUpdate>();
+        foreach (var group in monthlyAll.GroupBy(m => m.ProjectId))
+        {
+            var picked = PickCurrentFteUpdate(group);
+            if (picked != null)
+                currentFteByProject[group.Key] = picked;
+        }
+
+        foreach (var project in projects)
+        {
+            project.Directorates = directoratesByProject.TryGetValue(project.Id, out var dirs)
+                ? dirs
+                : new List<ProjectDirectorate>();
+            project.ProjectMissions = missionsByProject.TryGetValue(project.Id, out var pms)
+                ? pms
+                : new List<ProjectMission>();
+            project.ProjectObjectives = objectivesByProject.TryGetValue(project.Id, out var pos)
+                ? pos
+                : new List<ProjectObjective>();
+        }
 
         var tags = await _db.ProjectWorkItemTags.AsNoTracking()
             .Where(t => projectIds.Contains(t.ProjectId))
@@ -205,7 +292,11 @@ public class ExportsController : Controller
             .GroupBy(t => t.ProjectId)
             .ToDictionary(
                 g => g.Key,
-                g => string.Join("; ", g.Select(x => x.WorkItemTagLookup.Name)));
+                g => string.Join("; ", g
+                    .Where(x => x.WorkItemTagLookup != null && x.WorkItemTagLookup.IsActive)
+                    .OrderBy(x => x.WorkItemTagLookup!.SortOrder)
+                    .ThenBy(x => x.WorkItemTagLookup!.Name)
+                    .Select(x => x.WorkItemTagLookup!.Name)));
 
         var products = await _db.ProjectProducts.AsNoTracking()
             .Where(pp => projectIds.Contains(pp.ProjectId))
@@ -262,7 +353,6 @@ public class ExportsController : Controller
             sroByProject,
             svcByProject,
             pmoByProject,
-            divByProject,
             tagsByProject,
             productsByProject,
             prodCounts,
@@ -271,9 +361,15 @@ public class ExportsController : Controller
             asmDict,
             msDict,
             periodColumns,
-            periodStatusesByProject);
+            periodStatusesByProject,
+            problemByProject,
+            multiDeptByProject,
+            budgetByProject,
+            latestWeeklyByProject,
+            currentFteByProject);
 
         var milestones = await _db.Milestones.AsNoTracking()
+            .Include(m => m.RagStatusLookup)
             .Where(m => m.ProjectId != null && !m.IsDeleted && projectIds.Contains(m.ProjectId.Value))
             .OrderBy(m => m.ProjectId).ThenBy(m => m.DueDate)
             .ToListAsync(cancellationToken);
@@ -301,6 +397,14 @@ public class ExportsController : Controller
         var wsMonthly = wb.AddWorksheet("Monthly updates (history)");
         WriteProjectMonthlyUpdatesDetailed(wsMonthly, monthlyDetailed, narrBlocksAll, codeTitle);
 
+        var wsWeekly = wb.AddWorksheet("Weekly updates (history)");
+        WriteProjectWeeklyUpdatesDetailed(wsWeekly, weeklyAll, codeTitle);
+
+        await WriteWorkRisksSheetAsync(wb.AddWorksheet("Risks"), projectIds, codeTitle, cancellationToken);
+        await WriteWorkIssuesSheetAsync(wb.AddWorksheet("Issues"), projectIds, codeTitle, cancellationToken);
+        await WriteWorkAssumptionsSheetAsync(wb.AddWorksheet("Assumptions"), projectIds, codeTitle, cancellationToken);
+        await WriteWorkDependenciesSheetAsync(wb.AddWorksheet("Dependencies"), projectIds, codeTitle, cancellationToken);
+
         using var stream = new MemoryStream();
         wb.SaveAs(stream);
         stream.Position = 0;
@@ -315,6 +419,68 @@ public class ExportsController : Controller
     {
         if (u == null) return "";
         return string.IsNullOrWhiteSpace(u.Name) ? (u.Email ?? "") : $"{u.Name} ({u.Email})";
+    }
+
+    /// <summary>
+    /// Every linked directorate name. Primary first when one is designated, otherwise the full list
+    /// (the values previously exported as Divisions).
+    /// </summary>
+    private static string FormatDirectorateColumn(Project project)
+    {
+        var primary = WorkStrategicAlignmentExport.GetPrimaryDirectorateName(project);
+        var additional = WorkStrategicAlignmentExport.GetAdditionalDirectorateNames(project);
+        if (string.IsNullOrEmpty(primary))
+            return additional;
+        if (string.IsNullOrEmpty(additional))
+            return primary;
+        return string.Join(WorkStrategicAlignmentExport.MultiValueDelimiter, primary, additional);
+    }
+
+    /// <summary>Non-primary directorates only. Empty when no primary is designated, because those names are already in Directorate.</summary>
+    private static string FormatAdditionalDirectoratesColumn(Project project)
+    {
+        if (string.IsNullOrEmpty(WorkStrategicAlignmentExport.GetPrimaryDirectorateName(project)))
+            return "";
+        return WorkStrategicAlignmentExport.GetAdditionalDirectorateNames(project);
+    }
+
+    /// <summary>Linked strategic-alignment names, falling back to legacy free text when nothing is linked.</summary>
+    private static string AlignmentOrLegacy(string joined, string? legacy)
+    {
+        if (!string.IsNullOrWhiteSpace(joined))
+            return joined;
+        return legacy?.Trim() ?? "";
+    }
+
+    private static List<int> ParseDepartmentIds(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return new List<int>();
+        try
+        {
+            return JsonSerializer.Deserialize<int[]>(json)?
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList() ?? new List<int>();
+        }
+        catch (JsonException)
+        {
+            return new List<int>();
+        }
+    }
+
+    /// <summary>
+    /// Latest submitted monthly return that recorded FTE, otherwise the latest return that recorded FTE.
+    /// </summary>
+    private static ProjectMonthlyUpdate? PickCurrentFteUpdate(IEnumerable<ProjectMonthlyUpdate> updates)
+    {
+        var ordered = updates
+            .OrderByDescending(u => u.Year)
+            .ThenByDescending(u => u.Month)
+            .ToList();
+        return ordered.FirstOrDefault(u =>
+                   u.SubmittedAt != null && (u.MonthlyPermFte != null || u.MonthlyMspFte != null))
+               ?? ordered.FirstOrDefault(u => u.MonthlyPermFte != null || u.MonthlyMspFte != null);
     }
 
     [HttpGet]
@@ -407,7 +573,6 @@ public class ExportsController : Controller
         IReadOnlyDictionary<int, string> sroByProject,
         IReadOnlyDictionary<int, string> svcByProject,
         IReadOnlyDictionary<int, string> pmoByProject,
-        IReadOnlyDictionary<int, string> divByProject,
         IReadOnlyDictionary<int, string> tagsByProject,
         IReadOnlyDictionary<int, string> productsByProject,
         IReadOnlyDictionary<int, int> prodCounts,
@@ -416,11 +581,16 @@ public class ExportsController : Controller
         IReadOnlyDictionary<int, int> asmDict,
         IReadOnlyDictionary<int, int> msDict,
         IReadOnlyList<SubmissionTrendMonthColumn> periodColumns,
-        IReadOnlyDictionary<int, List<string>> periodStatusesByProject)
+        IReadOnlyDictionary<int, List<string>> periodStatusesByProject,
+        IReadOnlyDictionary<int, string> problemByProject,
+        IReadOnlyDictionary<int, string> multiDeptByProject,
+        IReadOnlyDictionary<int, string> budgetByProject,
+        IReadOnlyDictionary<int, ProjectWeeklyWorkUpdate> latestWeeklyByProject,
+        IReadOnlyDictionary<int, ProjectMonthlyUpdate> currentFteByProject)
     {
         var headers = new List<string>
         {
-            "WorkItemId", "ProjectCode", "Title", "Aim", "StrategicObjectives", "MissionPillars",
+            "WorkItemId", "ProjectCode", "Title", "Aim", "PriorityOutcomes", "MissionPillars", "Thematic tags",
             "StartDate", "TargetDeliveryDate", "ActualDeliveryDate",
             "Phase", "BusinessArea", "RagStatus", "RagJustification", "PathToGreen",
             "DeliveryPriority", "DeliveryPriorityChangeReason",
@@ -432,8 +602,8 @@ public class ExportsController : Controller
             "PipelineDemandRequestId", "ServiceUsers", "IsInternal", "IsExternal",
             "IsSubjectToSpendControl", "CreationMethod", "CreatedAt", "UpdatedAt",
             "HistoricBuRTId",
-            "Divisions", "SeniorResponsibleOfficers", "ServiceOwners", "PmoContacts",
-            "TeamContacts", "WorkItemTags",
+            "Directorate", "Additional Directorates", "SeniorResponsibleOfficers", "ServiceOwners", "PmoContacts",
+            "TeamContacts",
             "LinkedProductsSummary", "LinkedProductCount",
             "OpenRisksCount", "OpenIssuesCount", "AssumptionsLinkedCount", "MilestoneCount",
             "DiscoveryStartDatePlanned", "DiscoveryStartDateActual", "DiscoveryEndDatePlanned", "DiscoveryEndDateActual",
@@ -447,7 +617,16 @@ public class ExportsController : Controller
             "LatestMonthly_PermFte", "LatestMonthly_MspFte",
             "LatestMonthly_DraftRag", "LatestMonthly_DraftRagJustification", "LatestMonthly_DraftPathToGreen",
             "LatestMonthly_CreatedAt", "LatestMonthly_UpdatedAt",
-            "LatestMonthly_CreatedByName", "LatestMonthly_CreatedByEmail"
+            "LatestMonthly_CreatedByName", "LatestMonthly_CreatedByEmail",
+            "ProblemStatement",
+            "MultiDeptCooperation",
+            "BudgetOwners",
+            "LatestMonthly_PeopleNarrative",
+            "CurrentPermFte", "CurrentMspFte",
+            "LatestWeekly_Period", "LatestWeekly_SubmittedAt",
+            "LatestWeekly_Narrative", "LatestWeekly_PeopleNarrative",
+            "LatestWeekly_PermFte", "LatestWeekly_MspFte",
+            "LatestWeekly_DraftRag", "LatestWeekly_DraftRagJustification", "LatestWeekly_DraftPathToGreen"
         };
         headers.AddRange(periodColumns.Select(c => c.Label));
 
@@ -470,7 +649,6 @@ public class ExportsController : Controller
             sroByProject.TryGetValue(p.Id, out var sroStr);
             svcByProject.TryGetValue(p.Id, out var svcStr);
             pmoByProject.TryGetValue(p.Id, out var pmoStr);
-            divByProject.TryGetValue(p.Id, out var divStr);
             tagsByProject.TryGetValue(p.Id, out var tagStr);
             productsByProject.TryGetValue(p.Id, out var prodStr);
             prodCounts.TryGetValue(p.Id, out var pc);
@@ -490,8 +668,9 @@ public class ExportsController : Controller
             SetCell(ws, row, ref col, p.ProjectCode);
             SetCell(ws, row, ref col, p.Title);
             SetCell(ws, row, ref col, p.Aim);
-            SetCell(ws, row, ref col, p.StrategicObjectives);
-            SetCell(ws, row, ref col, p.MissionPillars);
+            SetCell(ws, row, ref col, AlignmentOrLegacy(WorkStrategicAlignmentExport.GetPriorityOutcomeNames(p), p.StrategicObjectives));
+            SetCell(ws, row, ref col, AlignmentOrLegacy(WorkStrategicAlignmentExport.GetMissionPillarNames(p), p.MissionPillars));
+            SetCell(ws, row, ref col, tagStr ?? "");
             SetCell(ws, row, ref col, p.StartDate);
             SetCell(ws, row, ref col, p.TargetDeliveryDate);
             SetCell(ws, row, ref col, p.ActualDeliveryDate);
@@ -525,12 +704,12 @@ public class ExportsController : Controller
             SetCell(ws, row, ref col, p.CreatedAt);
             SetCell(ws, row, ref col, p.UpdatedAt);
             SetCell(ws, row, ref col, p.HistoricBuRTId);
-            SetCell(ws, row, ref col, divStr ?? "");
+            SetCell(ws, row, ref col, FormatDirectorateColumn(p));
+            SetCell(ws, row, ref col, FormatAdditionalDirectoratesColumn(p));
             SetCell(ws, row, ref col, sroStr ?? "");
             SetCell(ws, row, ref col, svcStr ?? "");
             SetCell(ws, row, ref col, pmoStr ?? "");
             SetCell(ws, row, ref col, contactStr ?? "");
-            SetCell(ws, row, ref col, tagStr ?? "");
             SetCell(ws, row, ref col, prodStr ?? "");
             SetCell(ws, row, ref col, pc);
             SetCell(ws, row, ref col, rc);
@@ -566,6 +745,33 @@ public class ExportsController : Controller
             SetCell(ws, row, ref col, mu?.UpdatedAt);
             SetCell(ws, row, ref col, mu?.CreatedByName);
             SetCell(ws, row, ref col, mu?.CreatedByEmail);
+
+            problemByProject.TryGetValue(p.Id, out var problem);
+            multiDeptByProject.TryGetValue(p.Id, out var multiDept);
+            budgetByProject.TryGetValue(p.Id, out var budgetOwners);
+            latestWeeklyByProject.TryGetValue(p.Id, out var weekly);
+            currentFteByProject.TryGetValue(p.Id, out var currentFte);
+            var currentPerm = currentFte?.MonthlyPermFte ?? weekly?.WeeklyPermFte;
+            var currentMsp = currentFte?.MonthlyMspFte ?? weekly?.WeeklyMspFte;
+            var weeklyPeriod = weekly == null
+                ? ""
+                : WeeklyUpdateService.FormatPeriodLabel(weekly.WeekStartDate, weekly.WeekEndDate);
+
+            SetCell(ws, row, ref col, problem ?? "");
+            SetCell(ws, row, ref col, multiDept ?? "");
+            SetCell(ws, row, ref col, budgetOwners ?? "");
+            SetCell(ws, row, ref col, mu?.PeopleNarrative);
+            SetCell(ws, row, ref col, currentPerm);
+            SetCell(ws, row, ref col, currentMsp);
+            SetCell(ws, row, ref col, weeklyPeriod);
+            SetCell(ws, row, ref col, weekly?.SubmittedAt);
+            SetCell(ws, row, ref col, weekly?.Narrative);
+            SetCell(ws, row, ref col, weekly?.PeopleNarrative);
+            SetCell(ws, row, ref col, weekly?.WeeklyPermFte);
+            SetCell(ws, row, ref col, weekly?.WeeklyMspFte);
+            SetCell(ws, row, ref col, weekly?.DraftRagStatusLookup?.Name ?? "");
+            SetCell(ws, row, ref col, weekly?.DraftRagJustification);
+            SetCell(ws, row, ref col, weekly?.DraftPathToGreen);
 
             if (periodColumns.Count > 0
                 && periodStatusesByProject.TryGetValue(p.Id, out var periodStatuses))
@@ -628,9 +834,9 @@ public class ExportsController : Controller
     {
         var headers = new[]
         {
-            "MonthlyUpdateId", "ProjectId", "ProjectCode", "ProjectTitle", "Year", "Month",
+            "MonthlyUpdateId", "ProjectId", "ProjectTitle", "ProjectCode", "Year", "Month",
             "MainNarrative", "AdditionalNarrativeBlocks",
-            "SubmittedAt", "MonthlyPermFte", "MonthlyMspFte",
+            "SubmittedAt", "MonthlyPermFte", "MonthlyMspFte", "PeopleNarrative",
             "DraftRagStatus", "DraftRagJustification", "DraftPathToGreen",
             "CreatedAt", "UpdatedAt", "CreatedByName", "CreatedByEmail"
         };
@@ -645,8 +851,8 @@ public class ExportsController : Controller
             var col = 1;
             SetCell(ws, row, ref col, m.Id);
             SetCell(ws, row, ref col, m.ProjectId);
-            SetCell(ws, row, ref col, ct.Code ?? "");
             SetCell(ws, row, ref col, ct.Title ?? "");
+            SetCell(ws, row, ref col, ct.Code ?? "");
             SetCell(ws, row, ref col, m.Year);
             SetCell(ws, row, ref col, m.Month);
             SetCell(ws, row, ref col, m.Narrative);
@@ -654,6 +860,7 @@ public class ExportsController : Controller
             SetCell(ws, row, ref col, m.SubmittedAt);
             SetCell(ws, row, ref col, m.MonthlyPermFte);
             SetCell(ws, row, ref col, m.MonthlyMspFte);
+            SetCell(ws, row, ref col, m.PeopleNarrative);
             SetCell(ws, row, ref col, m.DraftRagStatusLookup?.Name ?? "");
             SetCell(ws, row, ref col, m.DraftRagJustification);
             SetCell(ws, row, ref col, m.DraftPathToGreen);
@@ -666,6 +873,352 @@ public class ExportsController : Controller
 
         ws.SheetView.FreezeRows(1);
         ws.Columns(1, headers.Length).AdjustToContents();
+    }
+
+    private static void WriteProjectWeeklyUpdatesDetailed(
+        IXLWorksheet ws,
+        List<ProjectWeeklyWorkUpdate> list,
+        IReadOnlyDictionary<int, (string Code, string Title)> codeTitle)
+    {
+        var headers = new[]
+        {
+            "WeeklyUpdateId", "ProjectId", "ProjectTitle", "ProjectCode",
+            "IsoYear", "IsoWeek", "WeekStart", "WeekEnd", "Period",
+            "Narrative", "PeopleNarrative",
+            "SubmittedAt", "WeeklyPermFte", "WeeklyMspFte",
+            "DraftRagStatus", "DraftRagJustification", "DraftPathToGreen",
+            "CreatedAt", "UpdatedAt", "CreatedByName", "CreatedByEmail"
+        };
+        for (var c = 0; c < headers.Length; c++)
+            ws.Cell(1, c + 1).Value = headers[c];
+        ws.Row(1).Style.Font.Bold = true;
+        var row = 2;
+        foreach (var w in list)
+        {
+            codeTitle.TryGetValue(w.ProjectId, out var ct);
+            var col = 1;
+            SetCell(ws, row, ref col, w.Id);
+            SetCell(ws, row, ref col, w.ProjectId);
+            SetCell(ws, row, ref col, ct.Title ?? "");
+            SetCell(ws, row, ref col, ct.Code ?? "");
+            SetCell(ws, row, ref col, w.IsoYear);
+            SetCell(ws, row, ref col, w.IsoWeek);
+            SetCell(ws, row, ref col, w.WeekStartDate);
+            SetCell(ws, row, ref col, w.WeekEndDate);
+            SetCell(ws, row, ref col, WeeklyUpdateService.FormatPeriodLabel(w.WeekStartDate, w.WeekEndDate));
+            SetCell(ws, row, ref col, w.Narrative);
+            SetCell(ws, row, ref col, w.PeopleNarrative);
+            SetCell(ws, row, ref col, w.SubmittedAt);
+            SetCell(ws, row, ref col, w.WeeklyPermFte);
+            SetCell(ws, row, ref col, w.WeeklyMspFte);
+            SetCell(ws, row, ref col, w.DraftRagStatusLookup?.Name ?? "");
+            SetCell(ws, row, ref col, w.DraftRagJustification);
+            SetCell(ws, row, ref col, w.DraftPathToGreen);
+            SetCell(ws, row, ref col, w.CreatedAt);
+            SetCell(ws, row, ref col, w.UpdatedAt);
+            SetCell(ws, row, ref col, w.CreatedByName);
+            SetCell(ws, row, ref col, w.CreatedByEmail);
+            row++;
+        }
+
+        ws.SheetView.FreezeRows(1);
+        ws.Columns(1, headers.Length).AdjustToContents();
+    }
+
+    private async Task WriteWorkRisksSheetAsync(
+        IXLWorksheet ws,
+        List<int> projectIds,
+        IReadOnlyDictionary<int, (string Code, string Title)> codeTitle,
+        CancellationToken cancellationToken)
+    {
+        var headers = new[]
+        {
+            "Reference", "RiskId", "WorkItemId", "WorkItemTitle", "ProjectCode",
+            "Title", "Description", "Status", "Tier", "Priority",
+            "Likelihood", "Impact", "Score", "Owner",
+            "IdentifiedDate", "TargetDate", "ClosedDate",
+            "ResponseStrategy", "Cause", "ImpactIfRealised", "Contingency", "Notes"
+        };
+        WriteHeaderRow(ws, headers);
+
+        var risks = await _db.Risks.AsNoTracking()
+            .Where(r => !r.IsDeleted && r.ProjectId != null && projectIds.Contains(r.ProjectId.Value))
+            .Include(r => r.RiskStatus)
+            .Include(r => r.RiskTier)
+            .Include(r => r.RiskPriority)
+            .Include(r => r.Likelihood)
+            .Include(r => r.ImpactLevel)
+            .Include(r => r.OwnerUser)
+            .OrderBy(r => r.ProjectId).ThenBy(r => r.Id)
+            .ToListAsync(cancellationToken);
+
+        var row = 2;
+        foreach (var r in risks)
+        {
+            var projectId = r.ProjectId!.Value;
+            codeTitle.TryGetValue(projectId, out var ct);
+            var col = 1;
+            SetCell(ws, row, ref col, $"R-{r.Id:D4}");
+            SetCell(ws, row, ref col, r.Id);
+            SetCell(ws, row, ref col, projectId);
+            SetCell(ws, row, ref col, ct.Title ?? "");
+            SetCell(ws, row, ref col, ct.Code ?? "");
+            SetCell(ws, row, ref col, r.Title);
+            SetCell(ws, row, ref col, r.Description);
+            SetCell(ws, row, ref col, r.RiskStatus?.Label ?? r.Status);
+            SetCell(ws, row, ref col, r.RiskTier?.Name);
+            SetCell(ws, row, ref col, r.RiskPriority?.Label);
+            SetCell(ws, row, ref col, r.Likelihood?.Label);
+            SetCell(ws, row, ref col, r.ImpactLevel?.Label);
+            SetCell(ws, row, ref col, r.RiskScore);
+            SetCell(ws, row, ref col, UserDisplay(r.OwnerUser));
+            SetCell(ws, row, ref col, r.IdentifiedDate);
+            SetCell(ws, row, ref col, r.TargetDate);
+            SetCell(ws, row, ref col, r.ClosedDate);
+            SetCell(ws, row, ref col, r.ResponseStrategy);
+            SetCell(ws, row, ref col, r.Cause);
+            SetCell(ws, row, ref col, r.ImpactIfRealised);
+            SetCell(ws, row, ref col, r.Contingency);
+            SetCell(ws, row, ref col, r.Notes);
+            row++;
+        }
+
+        FinishSheet(ws, headers.Length);
+    }
+
+    private async Task WriteWorkIssuesSheetAsync(
+        IXLWorksheet ws,
+        List<int> projectIds,
+        IReadOnlyDictionary<int, (string Code, string Title)> codeTitle,
+        CancellationToken cancellationToken)
+    {
+        var headers = new[]
+        {
+            "Reference", "IssueId", "WorkItemId", "WorkItemTitle", "ProjectCode",
+            "Title", "Description", "Status", "Priority", "Severity", "Category", "Owner",
+            "DetectedDate", "TargetResolutionDate", "ClosedDate",
+            "Workaround", "ResolutionSummary", "UserImpact", "ServiceImpact", "Blocked"
+        };
+        WriteHeaderRow(ws, headers);
+
+        var issues = await _db.Issues.AsNoTracking()
+            .Where(i => !i.IsDeleted && i.ProjectId != null && projectIds.Contains(i.ProjectId.Value))
+            .Include(i => i.StatusLookup)
+            .Include(i => i.PriorityLookup)
+            .Include(i => i.SeverityLookup)
+            .Include(i => i.CategoryLookup)
+            .Include(i => i.OwnerUser)
+            .OrderBy(i => i.ProjectId).ThenBy(i => i.Id)
+            .ToListAsync(cancellationToken);
+
+        var row = 2;
+        foreach (var issue in issues)
+        {
+            var projectId = issue.ProjectId!.Value;
+            codeTitle.TryGetValue(projectId, out var ct);
+            var col = 1;
+            SetCell(ws, row, ref col, $"I-{issue.Id:D4}");
+            SetCell(ws, row, ref col, issue.Id);
+            SetCell(ws, row, ref col, projectId);
+            SetCell(ws, row, ref col, ct.Title ?? "");
+            SetCell(ws, row, ref col, ct.Code ?? "");
+            SetCell(ws, row, ref col, issue.Title);
+            SetCell(ws, row, ref col, issue.Description);
+            SetCell(ws, row, ref col, issue.StatusLookup?.Label ?? issue.Status);
+            SetCell(ws, row, ref col, issue.PriorityLookup?.Label ?? issue.Priority);
+            SetCell(ws, row, ref col, issue.SeverityLookup?.Label ?? issue.Severity);
+            SetCell(ws, row, ref col, issue.CategoryLookup?.Label ?? issue.Category);
+            SetCell(ws, row, ref col, UserDisplay(issue.OwnerUser));
+            SetCell(ws, row, ref col, issue.DetectedDate);
+            SetCell(ws, row, ref col, issue.TargetResolutionDate);
+            SetCell(ws, row, ref col, issue.ClosedDate);
+            SetCell(ws, row, ref col, issue.Workaround);
+            SetCell(ws, row, ref col, issue.ResolutionSummary);
+            SetCell(ws, row, ref col, issue.UserImpactSummary);
+            SetCell(ws, row, ref col, issue.ServiceImpactSummary);
+            SetCell(ws, row, ref col, issue.BlockedFlag);
+            row++;
+        }
+
+        FinishSheet(ws, headers.Length);
+    }
+
+    private async Task WriteWorkAssumptionsSheetAsync(
+        IXLWorksheet ws,
+        List<int> projectIds,
+        IReadOnlyDictionary<int, (string Code, string Title)> codeTitle,
+        CancellationToken cancellationToken)
+    {
+        var headers = new[]
+        {
+            "Reference", "AssumptionId", "WorkItemId", "WorkItemTitle", "ProjectCode",
+            "Description", "Status", "Criticality", "Owner",
+            "ReviewDate", "ValidationOutcome", "CreatedAt", "UpdatedAt"
+        };
+        WriteHeaderRow(ws, headers);
+
+        var assumptions = await _db.Assumptions.AsNoTracking()
+            .Where(a => !a.IsDeleted && a.ProjectId != null && projectIds.Contains(a.ProjectId.Value))
+            .Include(a => a.StatusLookup)
+            .Include(a => a.CriticalityLookup)
+            .Include(a => a.OwnerUser)
+            .OrderBy(a => a.ProjectId).ThenBy(a => a.Id)
+            .ToListAsync(cancellationToken);
+
+        var row = 2;
+        foreach (var a in assumptions)
+        {
+            var projectId = a.ProjectId!.Value;
+            codeTitle.TryGetValue(projectId, out var ct);
+            var col = 1;
+            SetCell(ws, row, ref col, $"A-{a.Id:D4}");
+            SetCell(ws, row, ref col, a.Id);
+            SetCell(ws, row, ref col, projectId);
+            SetCell(ws, row, ref col, ct.Title ?? "");
+            SetCell(ws, row, ref col, ct.Code ?? "");
+            SetCell(ws, row, ref col, a.Description);
+            SetCell(ws, row, ref col, a.StatusLookup?.Label);
+            SetCell(ws, row, ref col, a.CriticalityLookup?.Label);
+            SetCell(ws, row, ref col, UserDisplay(a.OwnerUser));
+            SetCell(ws, row, ref col, a.ReviewDate);
+            SetCell(ws, row, ref col, a.ValidationOutcome);
+            SetCell(ws, row, ref col, a.CreatedAt);
+            SetCell(ws, row, ref col, a.UpdatedAt);
+            row++;
+        }
+
+        FinishSheet(ws, headers.Length);
+    }
+
+    private async Task WriteWorkDependenciesSheetAsync(
+        IXLWorksheet ws,
+        List<int> projectIds,
+        IReadOnlyDictionary<int, (string Code, string Title)> codeTitle,
+        CancellationToken cancellationToken)
+    {
+        var headers = new[]
+        {
+            "DependencyId", "WorkItemId", "WorkItemTitle", "ProjectCode",
+            "Direction", "Relationship",
+            "RelatedEntityType", "RelatedEntityId", "RelatedTitle", "BusinessArea",
+            "Description", "Status", "LinkType", "Criticality", "Owner", "Organisation",
+            "DueDate", "CreatedAt", "UpdatedAt"
+        };
+        WriteHeaderRow(ws, headers);
+
+        var projectIdSet = projectIds.ToHashSet();
+        var dependencies = await _db.Dependencies.AsNoTracking()
+            .Include(d => d.LinkTypeLookup)
+            .Include(d => d.CriticalityLookup)
+            .Include(d => d.OwnerUser)
+            .Where(d =>
+                (d.SourceEntityType == "Project" && projectIds.Contains(d.SourceEntityId)) ||
+                (d.TargetEntityType == "Project" && projectIds.Contains(d.TargetEntityId)))
+            .OrderBy(d => d.Id)
+            .ToListAsync(cancellationToken);
+
+        var relatedProjectIds = dependencies
+            .SelectMany(d => new[]
+            {
+                string.Equals(d.SourceEntityType, "Project", StringComparison.OrdinalIgnoreCase) ? d.SourceEntityId : 0,
+                string.Equals(d.TargetEntityType, "Project", StringComparison.OrdinalIgnoreCase) ? d.TargetEntityId : 0
+            })
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        var relatedProjects = relatedProjectIds.Count == 0
+            ? new Dictionary<int, (string Title, string BusinessArea)>()
+            : await _db.Projects.AsNoTracking()
+                .Where(p => relatedProjectIds.Contains(p.Id))
+                .Include(p => p.BusinessAreaLookup)
+                .Include(p => p.PrimaryOrganizationalGroup)
+                .ToDictionaryAsync(
+                    p => p.Id,
+                    p => (
+                        Title: p.Title ?? "",
+                        BusinessArea: p.BusinessAreaLookup?.Name
+                            ?? p.PrimaryOrganizationalGroup?.Name
+                            ?? ""),
+                    cancellationToken);
+
+        var row = 2;
+        foreach (var d in dependencies)
+        {
+            var sourceIsProject = string.Equals(d.SourceEntityType, "Project", StringComparison.OrdinalIgnoreCase);
+            var targetIsProject = string.Equals(d.TargetEntityType, "Project", StringComparison.OrdinalIgnoreCase);
+            if (sourceIsProject && projectIdSet.Contains(d.SourceEntityId))
+            {
+                WriteDependencyRow(ws, ref row, d, d.SourceEntityId, "In", d.TargetEntityType, d.TargetEntityId, codeTitle, relatedProjects);
+            }
+
+            if (targetIsProject && projectIdSet.Contains(d.TargetEntityId)
+                && !(sourceIsProject && d.SourceEntityId == d.TargetEntityId))
+            {
+                WriteDependencyRow(ws, ref row, d, d.TargetEntityId, "Out", d.SourceEntityType, d.SourceEntityId, codeTitle, relatedProjects);
+            }
+        }
+
+        FinishSheet(ws, headers.Length);
+    }
+
+    private static void WriteDependencyRow(
+        IXLWorksheet ws,
+        ref int row,
+        Dependency d,
+        int workItemId,
+        string direction,
+        string relatedType,
+        int relatedId,
+        IReadOnlyDictionary<int, (string Code, string Title)> codeTitle,
+        IReadOnlyDictionary<int, (string Title, string BusinessArea)> relatedProjects)
+    {
+        codeTitle.TryGetValue(workItemId, out var ct);
+        var relatedIsProject = string.Equals(relatedType, "Project", StringComparison.OrdinalIgnoreCase);
+        var relatedIsExternal = string.Equals(relatedType, "External", StringComparison.OrdinalIgnoreCase);
+        relatedProjects.TryGetValue(relatedId, out var related);
+        var relatedTitle = relatedIsProject
+            ? related.Title
+            : relatedIsExternal
+                ? (d.Description ?? "")
+                : "";
+        var businessArea = relatedIsProject ? related.BusinessArea : "";
+        var relationship = relatedIsExternal ? "External" : relatedIsProject ? "Internal" : relatedType;
+
+        var col = 1;
+        SetCell(ws, row, ref col, d.Id);
+        SetCell(ws, row, ref col, workItemId);
+        SetCell(ws, row, ref col, ct.Title ?? "");
+        SetCell(ws, row, ref col, ct.Code ?? "");
+        SetCell(ws, row, ref col, direction);
+        SetCell(ws, row, ref col, relationship);
+        SetCell(ws, row, ref col, relatedType);
+        SetCell(ws, row, ref col, relatedIsExternal ? null : relatedId);
+        SetCell(ws, row, ref col, relatedTitle);
+        SetCell(ws, row, ref col, businessArea);
+        SetCell(ws, row, ref col, d.Description);
+        SetCell(ws, row, ref col, d.Status);
+        SetCell(ws, row, ref col, d.LinkTypeLookup?.Label ?? d.DependencyType);
+        SetCell(ws, row, ref col, d.CriticalityLookup?.Label);
+        SetCell(ws, row, ref col, UserDisplay(d.OwnerUser));
+        SetCell(ws, row, ref col, d.Organisation);
+        SetCell(ws, row, ref col, d.DueDate);
+        SetCell(ws, row, ref col, d.CreatedAt);
+        SetCell(ws, row, ref col, d.UpdatedAt);
+        row++;
+    }
+
+    private static void WriteHeaderRow(IXLWorksheet ws, string[] headers)
+    {
+        for (var c = 0; c < headers.Length; c++)
+            ws.Cell(1, c + 1).Value = headers[c];
+        ws.Row(1).Style.Font.Bold = true;
+    }
+
+    private static void FinishSheet(IXLWorksheet ws, int columnCount)
+    {
+        ws.SheetView.FreezeRows(1);
+        if (columnCount > 0)
+            ws.Columns(1, columnCount).AdjustToContents();
     }
 
     private static void WriteBusinessCasesSheet(IXLWorksheet ws, List<BusinessCase> list)

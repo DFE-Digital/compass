@@ -10891,6 +10891,9 @@ namespace Compass.Migrations
                     b.Property<int>("DivisionId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("bit");
+
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 

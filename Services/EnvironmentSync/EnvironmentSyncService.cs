@@ -177,17 +177,9 @@ public sealed partial class EnvironmentSyncService : IEnvironmentSyncService
     switch (direction)
     {
       case EnvironmentSyncDirection.DevToProdServiceRegister:
-        if (info.CurrentIsProduction)
-        {
-          peerDb.Dispose();
-          throw new InvalidOperationException("Service register can only be pushed to production from the development instance.");
-        }
-        if (!info.PeerIsProduction)
-        {
-          peerDb.Dispose();
-          throw new InvalidOperationException("The peer database must be production for service register sync.");
-        }
-        return (_currentDb, peerDb, peerDb, info.CurrentCatalog, info.PeerCatalog);
+        peerDb.Dispose();
+        throw new InvalidOperationException(
+          "Sync to production is not permitted. Production is read-only. Refresh development from production instead.");
 
       case EnvironmentSyncDirection.ProdToDevWorkRaid:
         if (info.CurrentIsProduction)

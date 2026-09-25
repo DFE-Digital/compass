@@ -378,8 +378,9 @@
                             <div class="row">
                                 <div class="col-md-12">
                                     <div class="form-group">
-                                        <label for="bulkDirectorates">Directorates (multiple selection)</label>
-                                        <select class="form-control form-control-sm" id="bulkDirectorates" multiple size="5">
+                                        <label for="bulkDirectorates"><strong>Directorate</strong></label>
+                                        <select class="form-control form-control-sm" id="bulkDirectorates">
+                                            <option value="">— No change —</option>
                                             @{
                                                 var directorateLookups = ViewBag.Directorates as List<Compass.Models.Division> ?? new List<Compass.Models.Division>();
                                             }
@@ -388,11 +389,11 @@
                                                 <option value="@dir.Id">@dir.Name</option>
                                             }
                                         </select>
-                                        <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple. Selected directorates will be added to projects.</small>
+                                        <small class="form-text text-muted">The main directorate where delivery sits.</small>
                                         <div class="form-check mt-2">
                                             <input class="form-check-input" type="checkbox" id="bulkDirectoratesClear" />
                                             <label class="form-check-label" for="bulkDirectoratesClear">
-                                                Clear all directorates
+                                                Clear primary directorate
                                             </label>
                                         </div>
                                     </div>
@@ -444,7 +445,7 @@
                                     <th class="sortable" data-column="Status" tabindex="0" role="button" aria-label="Sort by Status">Status <i class="fas fa-sort sort-icon"></i></th>
                                     <th class="sortable" data-column="ActivityType" tabindex="0" role="button" aria-label="Sort by Activity Type">Activity Type <i class="fas fa-sort sort-icon"></i></th>
                                     <th class="sortable" data-column="Flagship" tabindex="0" role="button" aria-label="Sort by Flagship">Flagship Project <i class="fas fa-sort sort-icon"></i></th>
-                                    <th class="sortable" data-column="Directorates" tabindex="0" role="button" aria-label="Sort by Directorates">Directorates <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="sortable" data-column="Directorates" tabindex="0" role="button" aria-label="Sort by Directorate">Directorate <i class="fas fa-sort sort-icon"></i></th>
                                     <th class="sortable" data-column="SRO" tabindex="0" role="button" aria-label="Sort by SRO">SRO <i class="fas fa-sort sort-icon"></i></th>
                                     <th class="sortable" data-column="Milestones" tabindex="0" role="button" aria-label="Sort by Milestones">Count of Milestones <i class="fas fa-sort sort-icon"></i></th>
                                     <th class="sortable" data-column="PrimaryContact" tabindex="0" role="button" aria-label="Sort by Primary Contact">Primary Contact <i class="fas fa-sort sort-icon"></i></th>
@@ -548,14 +549,24 @@
                                                 }
                                             </td>
                                             <td>
-                                                @if (item.Directorates != null && item.Directorates.Any())
+                                                @if (item.Directorates != null && item.Directorates.Any(d => d.IsPrimary) || (item.Directorates?.Any() == true))
                                                 {
-                                                    <div>
-                                                        @foreach (var directorate in item.Directorates.Select(d => d.Division?.Name).Where(n => !string.IsNullOrEmpty(n)))
-                                                        {
-                                                            <span class="badge badge-secondary mb-1 d-inline-block">@directorate</span>
-                                                        }
-                                                    </div>
+                                                    var primaryName = Compass.Helpers.WorkStrategicAlignmentExport.GetPrimaryDirectorateName(item);
+                                                    if (string.IsNullOrEmpty(primaryName))
+                                                    {
+                                                        primaryName = item.Directorates!
+                                                            .OrderBy(d => d.CreatedAt)
+                                                            .Select(d => d.Division?.Name)
+                                                            .FirstOrDefault(n => !string.IsNullOrEmpty(n));
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(primaryName))
+                                                    {
+                                                        <span class="badge badge-secondary mb-1 d-inline-block">@primaryName</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
                                                 }
                                                 else
                                                 {
@@ -820,7 +831,7 @@
                     clearBusinessArea: $('#bulkBusinessAreaClear').prop('checked'),
                     priority: $('#bulkPriorityClear').prop('checked') ? null : $('#bulkPriority').val() || null,
                     clearPriority: $('#bulkPriorityClear').prop('checked'),
-                    directorateIds: $('#bulkDirectoratesClear').prop('checked') ? [] : $('#bulkDirectorates').val() || [],
+                    directorateId: $('#bulkDirectoratesClear').prop('checked') ? null : ($('#bulkDirectorates').val() || null),
                     clearDirectorates: $('#bulkDirectoratesClear').prop('checked')
                 };
 
@@ -837,7 +848,7 @@
                                 hasSro ||
                                 bulkData.clearBusinessArea || (bulkData.businessArea && String(bulkData.businessArea).trim() !== '') ||
                                 bulkData.clearPriority || (bulkData.priority && String(bulkData.priority).trim() !== '') ||
-                                bulkData.clearDirectorates || (bulkData.directorateIds && bulkData.directorateIds.length > 0);
+                                bulkData.clearDirectorates || (bulkData.directorateId && String(bulkData.directorateId).trim() !== '');
 
                 if (!hasChanges) {
                     alert('Please specify at least one change to apply.');

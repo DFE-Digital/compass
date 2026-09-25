@@ -935,6 +935,8 @@ namespace Compass.Controllers
                     .Include(p => p.Milestones)
                     .Include(p => p.ProjectMissions)
                         .ThenInclude(pm => pm.Mission)
+                    .Include(p => p.ProjectObjectives)
+                        .ThenInclude(po => po.Objective)
                     .Include(p => p.MonthlyUpdates)
                         .ThenInclude(u => u.MonthlyUpdateNarratives)
                     .AsQueryable();
@@ -1068,7 +1070,11 @@ namespace Compass.Controllers
                 headers.AddRange(new[]
                 {
                     "Service Owner",
-                    "Directorates",
+                    "Directorate",
+                    "Additional Directorates",
+                    "Mission Pillars",
+                    "Priority Outcomes",
+                    "Thematic Tags",
                     "Linked Products",
                     "Dependencies In",
                     "Dependencies Out",
@@ -1179,12 +1185,12 @@ namespace Compass.Controllers
                         .ToList() ?? new List<string>();
                     worksheet.Cell(currentRow, col++).Value = string.Join("; ", serviceOwners);
 
-                    // Directorates
-                    var directorates = project.Directorates?
-                        .Select(d => d.Division?.Name ?? string.Empty)
-                        .Where(d => !string.IsNullOrEmpty(d))
-                        .ToList() ?? new List<string>();
-                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
+                    // Directorate (primary) + strategic alignment
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetPrimaryDirectorateName(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetAdditionalDirectorateNames(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetMissionPillarNames(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetPriorityOutcomeNames(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetThematicTagNames(project);
 
                     // Linked Products
                     var products = project.ProjectProducts?
@@ -1431,7 +1437,11 @@ namespace Compass.Controllers
                 headers.AddRange(new[]
                 {
                     "Service Owner",
-                    "Directorates",
+                    "Directorate",
+                    "Additional Directorates",
+                    "Mission Pillars",
+                    "Priority Outcomes",
+                    "Thematic Tags",
                     "Linked Products",
                     "Dependencies In",
                     "Dependencies Out",
@@ -1510,12 +1520,12 @@ namespace Compass.Controllers
                         .ToList() ?? new List<string>();
                     worksheet.Cell(currentRow, col++).Value = string.Join("; ", serviceOwners);
 
-                    // Directorates
-                    var directorates = project.Directorates?
-                        .Select(d => d.Division?.Name ?? string.Empty)
-                        .Where(d => !string.IsNullOrEmpty(d))
-                        .ToList() ?? new List<string>();
-                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
+                    // Directorate (primary) + strategic alignment
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetPrimaryDirectorateName(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetAdditionalDirectorateNames(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetMissionPillarNames(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetPriorityOutcomeNames(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetThematicTagNames(project);
 
                     // Linked Products
                     var products = project.ProjectProducts?
@@ -1634,6 +1644,8 @@ namespace Compass.Controllers
                     .Include(p => p.Milestones)
                     .Include(p => p.ProjectMissions)
                         .ThenInclude(pm => pm.Mission)
+                    .Include(p => p.ProjectObjectives)
+                        .ThenInclude(po => po.Objective)
                     .Include(p => p.MonthlyUpdates)
                         .ThenInclude(u => u.MonthlyUpdateNarratives)
                     .AsQueryable();
@@ -1757,7 +1769,11 @@ namespace Compass.Controllers
                 headers.AddRange(new[]
                 {
                     "Service Owner",
-                    "Directorates",
+                    "Directorate",
+                    "Additional Directorates",
+                    "Mission Pillars",
+                    "Priority Outcomes",
+                    "Thematic Tags",
                     "Linked Products",
                     "Dependencies In",
                     "Dependencies Out",
@@ -1868,12 +1884,12 @@ namespace Compass.Controllers
                         .ToList() ?? new List<string>();
                     worksheet.Cell(currentRow, col++).Value = string.Join("; ", serviceOwners);
 
-                    // Directorates
-                    var directorates = project.Directorates?
-                        .Select(d => d.Division?.Name ?? string.Empty)
-                        .Where(d => !string.IsNullOrEmpty(d))
-                        .ToList() ?? new List<string>();
-                    worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
+                    // Directorate (primary) + strategic alignment
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetPrimaryDirectorateName(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetAdditionalDirectorateNames(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetMissionPillarNames(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetPriorityOutcomeNames(project);
+                    worksheet.Cell(currentRow, col++).Value = Compass.Helpers.WorkStrategicAlignmentExport.GetThematicTagNames(project);
 
                     // Linked Products
                     var products = project.ProjectProducts?
@@ -3523,7 +3539,7 @@ namespace Compass.Controllers
             .ThenBy(at => at.Name)
             .ToListAsync();
 
-        ViewBag.Directorates = await _context.DirectorateLookups
+        ViewBag.Directorates = await _context.Divisions
             .Where(d => d.IsActive)
             .OrderBy(d => d.SortOrder)
             .ThenBy(d => d.Name)
@@ -3865,35 +3881,24 @@ namespace Compass.Controllers
                 }
             }
 
-            // Update Directorates
+            // Update Directorates — single primary; preserve historical non-primary rows
             var selectedDirectorateIds = Request.Form["SelectedDirectorateIds"]
                 .Where(x => !string.IsNullOrEmpty(x) && int.TryParse(x, out _))
                 .Select(int.Parse)
                 .ToList();
 
-                var directoratesToRemove = project.Directorates
-                    .Where(d => !selectedDirectorateIds.Contains(d.DivisionId))
-                    .ToList();
-                foreach (var directorate in directoratesToRemove)
-                {
-                    _context.ProjectDirectorates.Remove(directorate);
-                }
+            // Also accept single-select field name
+            if (selectedDirectorateIds.Count == 0
+                && int.TryParse(Request.Form["SelectedDirectorateId"], out var singleDirectorateId)
+                && singleDirectorateId > 0)
+            {
+                selectedDirectorateIds.Add(singleDirectorateId);
+            }
 
-                var existingDirectorateIds = project.Directorates
-                    .Select(d => d.DivisionId)
-                    .ToList();
-                foreach (var directorateId in selectedDirectorateIds)
-                {
-                    if (!existingDirectorateIds.Contains(directorateId))
-                    {
-                        project.Directorates.Add(new ProjectDirectorate
-                        {
-                            ProjectId = project.Id,
-                            DivisionId = directorateId,
-                            CreatedAt = DateTime.UtcNow
-                        });
-                    }
-                }
+            ProjectDirectorateHelper.ApplySelectedDirectorateIds(
+                project,
+                selectedDirectorateIds,
+                d => _context.ProjectDirectorates.Add(d));
 
             // Update Budget Owners
             var selectedBudgetOwnerIds = Request.Form["SelectedBudgetOwnerIds"]
@@ -7454,7 +7459,7 @@ namespace Compass.Controllers
         // POST: Project/UpdateDirectorates
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateDirectorates(int id, List<int> selectedDirectorateIds)
+        public async Task<IActionResult> UpdateDirectorates(int id, List<int>? selectedDirectorateIds, int? selectedDirectorateId)
         {
             try
             {
@@ -7469,42 +7474,32 @@ namespace Compass.Controllers
                 }
 
                 selectedDirectorateIds ??= new List<int>();
-
-                // Remove existing directorates not in the selection
-                var directoratesToRemove = project.Directorates
-                    .Where(d => !selectedDirectorateIds.Contains(d.DivisionId))
-                    .ToList();
-                foreach (var directorate in directoratesToRemove)
+                if (selectedDirectorateId.HasValue && selectedDirectorateId.Value > 0
+                    && !selectedDirectorateIds.Contains(selectedDirectorateId.Value))
                 {
-                    _context.ProjectDirectorates.Remove(directorate);
+                    selectedDirectorateIds.Insert(0, selectedDirectorateId.Value);
                 }
 
-                // Add new directorates
-                var existingDirectorateIds = project.Directorates
-                    .Select(d => d.DivisionId)
-                    .ToList();
-                foreach (var directorateId in selectedDirectorateIds)
+                if (selectedDirectorateIds.Count > 1)
                 {
-                    if (!existingDirectorateIds.Contains(directorateId))
-                    {
-                        project.Directorates.Add(new ProjectDirectorate
-                        {
-                            ProjectId = project.Id,
-                            DivisionId = directorateId,
-                            CreatedAt = DateTime.UtcNow
-                        });
-                    }
+                    // Enforce single primary going forward; keep extras as non-primary (do not discard)
+                    TempData["WarningMessage"] = "Only one main Directorate can be selected. Additional values were preserved as non-primary.";
                 }
+
+                ProjectDirectorateHelper.ApplySelectedDirectorateIds(
+                    project,
+                    selectedDirectorateIds,
+                    d => _context.ProjectDirectorates.Add(d));
 
                 project.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Directorates updated successfully.";
+                TempData["SuccessMessage"] = "Directorate updated successfully.";
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating directorates");
-                TempData["ErrorMessage"] = "An error occurred while updating Directorates.";
+                TempData["ErrorMessage"] = "An error occurred while updating Directorate.";
             }
 
             var returnTab = Request.Form["returnTab"].ToString();

@@ -37,6 +37,9 @@ public static class AzureSqlEnvironmentMigration
             return;
         }
 
+        ProductionToDevelopmentRefresh.EnsureEnvironmentIsNotProduction(targetEnvironment);
+        ProductionToDevelopmentRefresh.EnsureDifferentDatabases(sourceConn, targetConn);
+
         Console.WriteLine($"Source: Azure SQL ({sourceEnvironment})\nTarget: Azure SQL ({targetEnvironment})\n");
 
         // Build DbContexts
