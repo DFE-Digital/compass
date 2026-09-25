@@ -127,6 +127,7 @@ public partial class ModernWorkService
             {
                 Id = d.Id,
                 DirectorateId = d.DivisionId,
+                IsPrimary = d.IsPrimary,
                 Division = d.Division
             });
         }
@@ -638,7 +639,6 @@ public partial class ModernWorkService
             ("ContactRoleType:2", "Service Owner(s)"),
             ("PrimaryContact", "Primary Contact"),
             ("ContactRoleType:3", "PMO Contacts"),
-            ("Directorates", "Directorate(s)"),
             ("BudgetOwner", "Budget Owner(s)")
         };
         var customKeys = new List<(string Key, string Label)>();
@@ -700,8 +700,7 @@ public partial class ModernWorkService
         var contactsCount =
             work.Contacts.Count +
             (p.PrimaryContactUserId.HasValue ? 1 : 0) +
-            budgetOwnerNames.Count +
-            work.Directorates.Count;
+            budgetOwnerNames.Count;
 
         controller.ViewBag.WorkSideNavMilestoneCount = work.Milestones.Count(m => !m.IsDeleted);
         controller.ViewBag.WorkSideNavMonthlyUpdatesCount =

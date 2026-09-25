@@ -175,32 +175,32 @@
                                 </td>
                             </tr>
                             
-                            <!-- Directorates -->
+                            <!-- Directorate -->
                             <tr>
-                                <td class="font-weight-bold">Directorate(s)</td>
+                                <td class="font-weight-bold">Directorate</td>
                                 <td>
-                            @if (Model.Directorates?.Any() == true)
+                            @{
+                                var primaryDir = Model.Directorates?.FirstOrDefault(d => d.IsPrimary)
+                                    ?? Model.Directorates?.OrderBy(d => d.CreatedAt).FirstOrDefault();
+                            }
+                            @if (primaryDir?.Division != null)
                             {
-                                <div>
-                                    @foreach (var directorate in Model.Directorates.OrderBy(d => d.Division != null ? d.Division.Name : ""))
+                                <div class="mb-1">
+                                    <span class="font-weight-bold">@primaryDir.Division.Name</span>
+                                    @if (!string.IsNullOrEmpty(primaryDir.Division.Description))
                                     {
-                                        @if (directorate.Division != null)
-                                        {
-                                            <div class="mb-1">
-                                                <span class="font-weight-bold">@directorate.Division.Name</span>
-                                                @if (!string.IsNullOrEmpty(directorate.Division.Description))
-                                                {
-                                                    <br />
-                                                    <small class="text-muted">@directorate.Division.Description</small>
-                                                }
-                                            </div>
-                                        }
+                                        <br />
+                                        <small class="text-muted">@primaryDir.Division.Description</small>
                                     }
                                 </div>
+                                @if (Model.Directorates!.Count > 1)
+                                {
+                                    <small class="text-muted">+ @(Model.Directorates.Count - 1) historical mapping(s) preserved</small>
+                                }
                             }
                                     else
                                     {
-                                        <span class="text-muted">No directorates assigned.</span>
+                                        <span class="text-muted">No directorate assigned.</span>
                                     }
                                 </td>
                                 <td class="text-right">
@@ -588,12 +588,12 @@
     </div>
 </div>
 
-<!-- Edit Directorates Modal -->
+<!-- Edit Directorate Modal -->
 <div class="modal fade" id="editDirectoratesModal" tabindex="-1" role="dialog" aria-labelledby="editDirectoratesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="editDirectoratesModalLabel">Edit Directorates</h5>
+                <h5 class="modal-title" id="editDirectoratesModalLabel">Edit Directorate</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -602,29 +602,22 @@
                 <input type="hidden" name="id" value="@Model.Id" />
                 <div class="modal-body">
                     <div class="form-group">
-                        <label class="control-label">Directorate(s)</label>
-                        <div class="border p-3" style="max-height: 300px; overflow-y: auto;">
+                        <label class="control-label" for="selectedDirectorateIdContacts"><strong>Directorate</strong></label>
+                        <select class="form-control" id="selectedDirectorateIdContacts" name="selectedDirectorateId">
+                            <option value="">None</option>
                             @if (ViewBag.Directorates != null)
                             {
+                                var primaryIdContacts = Model.Directorates?.FirstOrDefault(d => d.IsPrimary)?.DivisionId
+                                    ?? Model.Directorates?.OrderBy(d => d.CreatedAt).FirstOrDefault()?.DivisionId;
                                 @foreach (var directorate in ViewBag.Directorates)
                                 {
-                                    var isSelected = Model.Directorates?.Any(d => d.DivisionId == directorate.Id) == true;
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" 
-                                               name="selectedDirectorateIds" value="@directorate.Id" 
-                                               id="directorateModal_@directorate.Id" @(isSelected ? "checked" : "") />
-                                        <label class="form-check-label" for="directorateModal_@directorate.Id">
-                                            @directorate.Name
-                                            @if (!string.IsNullOrEmpty(directorate.Description))
-                                            {
-                                                <small class="text-muted"> - @directorate.Description</small>
-                                            }
-                                        </label>
-                                    </div>
+                                    <option value="@directorate.Id" selected="@(primaryIdContacts == directorate.Id ? "selected" : null)">
+                                        @directorate.Name
+                                    </option>
                                 }
                             }
-                        </div>
-                        <small class="form-text text-muted">Select one or more directorates</small>
+                        </select>
+                        <small class="form-text text-muted">The main directorate where delivery sits.</small>
                     </div>
                 </div>
                 <div class="modal-footer">

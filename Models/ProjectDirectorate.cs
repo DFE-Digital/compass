@@ -21,6 +21,12 @@ public class ProjectDirectorate
     [ForeignKey(nameof(DivisionId))]
     public Division Division { get; set; } = null!;
 
+    /// <summary>
+    /// True for the main directorate responsible for delivery. Historical multi-select
+    /// rows remain with IsPrimary=false so surplus mappings are not discarded.
+    /// </summary>
+    public bool IsPrimary { get; set; }
+
     [Required]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

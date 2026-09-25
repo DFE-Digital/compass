@@ -137,6 +137,7 @@ public class WorkItemDirectorate
 {
     public int Id { get; set; }
     public int DirectorateId { get; set; }
+    public bool IsPrimary { get; set; }
     public Division? Division { get; set; }
     public Compass.Models.Directorate? Directorate { get; set; }
 }
