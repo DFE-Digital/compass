@@ -626,6 +626,7 @@ builder.Services.AddHttpClient<Compass.Services.Fips.ICmdbService, Compass.Servi
 builder.Services.AddHttpClient<Compass.Services.Fips.IStrapiService, Compass.Services.Fips.StrapiService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<Compass.Services.Fips.IFipsSyncOrchestrator, Compass.Services.Fips.FipsSyncOrchestrator>();
+builder.Services.AddScoped<Compass.Services.Fips.FipsNewEntryOwnerEmailService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsCmdbProductSyncService, Compass.Services.Fips.FipsCmdbProductSyncService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsProductWriteService, Compass.Services.Fips.FipsProductWriteService>();
 builder.Services.AddScoped<Compass.Services.Fips.IFipsCompletionBulkImportService, Compass.Services.Fips.FipsCompletionBulkImportService>();

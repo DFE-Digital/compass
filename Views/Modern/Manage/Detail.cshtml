@@ -16,6 +16,18 @@
 @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductMasthead.cshtml", Model)
 @await Html.PartialAsync("_PageDataAccessHint")
 
+@if (TempData["Success"] != null)
+{
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region" aria-labelledby="fips-product-success-title">
+        <div class="govuk-notification-banner__header">
+            <h2 class="govuk-notification-banner__title" id="fips-product-success-title">Success</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+            <p class="govuk-notification-banner__heading">@TempData["Success"]</p>
+        </div>
+    </div>
+}
+
 <div class="fips-product-detail">
 <div class="govuk-grid-row fips-product-detail-layout govuk-!-margin-top-2">
 <div class="govuk-grid-column-one-quarter-from-desktop fips-product-detail-layout__nav">
@@ -30,6 +42,22 @@
     @if (detailTab == "information")
     {
  <div id="d-fips-information" class="tab-pane on" role="tabpanel">
+   @if (Model.CanSetProductActive)
+   {
+     <div class="govuk-summary-card govuk-!-margin-bottom-6" id="fips-product-actions">
+       <div class="govuk-summary-card__title-wrapper">
+         <h2 class="govuk-summary-card__title">Actions</h2>
+       </div>
+       <div class="govuk-summary-card__content">
+         <p class="govuk-body">Set this entry to Active when the additional information is complete and it should appear in Find information about products and services.</p>
+         <form method="post" action="@Url.Action("FipsChangeStatus", "ModernManage", new { id = p.Id })">
+           @Html.AntiForgeryToken()
+           <input type="hidden" name="newStatus" value="@((int)CMDBProductStatus.Active)" />
+           <button type="submit" class="govuk-button govuk-!-margin-bottom-0">Set to Active</button>
+         </form>
+       </div>
+     </div>
+   }
    <div class="govuk-notification-banner govuk-!-margin-bottom-6" role="region" aria-labelledby="fips-cmdb-guidance-title">
      <div class="govuk-notification-banner__header">
        <h2 class="govuk-notification-banner__title" id="fips-cmdb-guidance-title">Important</h2>
@@ -40,6 +68,18 @@
        <p class="govuk-body govuk-!-margin-bottom-0">If they are updated by the CMDB team, it can take up to an hour to appear on this page. Changes are regularly synced automatically during working hours, Monday to Friday.</p>
      </div>
    </div>
+   @if (p.Status == CMDBProductStatus.New)
+   {
+     <div class="govuk-notification-banner govuk-!-margin-bottom-6" role="region" aria-labelledby="fips-new-entry-title">
+       <div class="govuk-notification-banner__header">
+         <h2 class="govuk-notification-banner__title" id="fips-new-entry-title">Important</h2>
+       </div>
+       <div class="govuk-notification-banner__content">
+         <p class="govuk-notification-banner__heading">This entry is New. Complete the additional information before it is made active.</p>
+         <p class="govuk-body govuk-!-margin-bottom-0">Include whether it should appear in <a class="govuk-notification-banner__link" href="https://find-products-services.education.gov.uk" target="_blank" rel="noopener noreferrer">Find information about products and services</a>. People use that service to see the type of product or service, the channels it is provided through, the user groups who use it, and supporting business information.</p>
+       </div>
+     </div>
+   }
    @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductInformationSummary.cshtml", Model)
  </div>
 

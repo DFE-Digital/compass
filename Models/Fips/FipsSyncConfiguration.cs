@@ -10,13 +10,22 @@ public class FipsSyncConfiguration
     public SasConfiguration Sas { get; set; } = new();
     public AissConfiguration Aiss { get; set; } = new();
 
-    /// <summary>When true, Compass runs bulk CMDB → service register sync once per UK day.</summary>
+    /// <summary>When true, Compass runs bulk CMDB → service register sync on the weekday window.</summary>
     public bool DailySyncEnabled { get; set; } = true;
 
-    /// <summary>Hour of the UK day (0–23) to start the scheduled bulk sync. Default 6 (06:00).</summary>
+    /// <summary>Kept for older configuration files. The weekday window below is what the job uses.</summary>
     public int DailySyncHourUk { get; set; } = 6;
 
-    /// <summary>Recipient for the daily sync summary email.</summary>
+    /// <summary>Minutes between scheduled runs inside the weekday window. Default 10.</summary>
+    public int ScheduledSyncIntervalMinutes { get; set; } = 10;
+
+    /// <summary>UK hour the weekday window opens (inclusive). Default 7 (07:00).</summary>
+    public int ScheduledSyncStartHourUk { get; set; } = 7;
+
+    /// <summary>UK hour the weekday window closes (exclusive). Default 18 (18:00).</summary>
+    public int ScheduledSyncEndHourUk { get; set; } = 18;
+
+    /// <summary>Recipient for the sync summary email, sent when a run fails or changes the register.</summary>
     public string DailySyncSummaryEmail { get; set; } = "fips.service@education.gov.uk";
 }
 

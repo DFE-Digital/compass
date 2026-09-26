@@ -85,6 +85,20 @@ public partial class ModernManageController : Controller
         return await _permission.IsOperationConsoleUserAsync(email);
     }
 
+    private async Task<bool> UserIsNamedProductContactAsync(Guid productId, string email, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return false;
+
+        var contactEmails = await _context.CMDBProductContacts.AsNoTracking()
+            .Where(c => c.CMDBProductId == productId && c.UserEmail != null && c.UserEmail != "")
+            .Select(c => c.UserEmail!)
+            .ToListAsync(ct);
+        var actor = email.Trim();
+        return contactEmails.Any(contact =>
+            string.Equals(contact.Trim(), actor, StringComparison.OrdinalIgnoreCase));
+    }
+
     private string CurrentUserEmail =>
         User.Identity?.Name
         ?? User.FindFirst(ClaimTypes.Email)?.Value
@@ -282,6 +296,7 @@ public partial class ModernManageController : Controller
             Product = product,
             CanManage = canManage,
             CanEditInformation = canEditInformation,
+            CanSetProductActive = product.Status == CMDBProductStatus.New && isNamedContact,
             CurrentUserEmail = email,
             NavContext = null,
             EditMode = false,
@@ -506,9 +521,13 @@ public partial class ModernManageController : Controller
         if (disabled != null)
             return disabled;
 
+        var email = CurrentUserEmail;
+        var auditName = User.Identity?.Name ?? email;
         var requireMgr = true;
         IActionResult? opsRedirect = null;
-        if (IsOperationsNav(nc))
+        if (newStatus == CMDBProductStatus.Active && await UserIsNamedProductContactAsync(id, email, ct))
+            requireMgr = false;
+        else if (IsOperationsNav(nc))
         {
             if (!await IsCentralOperationsAdminAsync(ct))
                 return Forbid();
@@ -518,9 +537,6 @@ public partial class ModernManageController : Controller
                 "ModernOperations",
                 new { id });
         }
-
-        var email = CurrentUserEmail;
-        var auditName = User.Identity?.Name ?? email;
         var outcome = await _fipsProductWrite.TryChangeStatusAsync(
             id, email, auditName, requireMgr, newStatus, ct);
 
