@@ -251,7 +251,7 @@
                             </div>
 
                             <div class="form-group @(hasError(nameof(Model.BusinessArea)) ? "form-group--error" : string.Empty)">
-                                <label asp-for="BusinessArea" class="control-label">Business Area</label>
+                                <label asp-for="BusinessArea" class="control-label"><strong>Business area</strong></label>
                                 <small class="form-text text-muted d-block mb-1">Select the business area for this project</small>
                                 <span asp-validation-for="BusinessArea" class="form-error-message"></span>
                                 <select asp-for="BusinessArea" class="form-control @(hasError(nameof(Model.BusinessArea)) ? "form-control--error" : string.Empty)" id="@Html.IdFor(m => m.BusinessArea)">
@@ -485,24 +485,18 @@
                         </div>
                         <div class="card-body">
                             <div class="form-group">
-                                <label class="control-label">Directorate(s)</label>
-                                <small class="form-text text-muted d-block mb-1">Select one or more directorates</small>
-                                <div class="border p-3">
+                                <label class="control-label"><strong>Directorate</strong></label>
+                                <small class="form-text text-muted d-block mb-1">The main directorate where delivery sits.</small>
+                                <select class="form-control" name="SelectedDirectorateId" id="SelectedDirectorateId">
+                                    <option value="">None</option>
                                     @if (ViewBag.Directorates != null)
                                     {
                                         @foreach (var directorate in ViewBag.Directorates)
                                         {
-                                            <div class="form-check">
-                                                <input type="checkbox" class="form-check-input directorate-checkbox" 
-                                                       name="SelectedDirectorateIds" value="@directorate.Id" 
-                                                       id="directorate_@directorate.Id" />
-                                                <label class="form-check-label" for="directorate_@directorate.Id">
-                                                    @directorate.Name
-                                                </label>
-                                            </div>
+                                            <option value="@directorate.Id">@directorate.Name</option>
                                         }
                                     }
-                                </div>
+                                </select>
                             </div>
 
                             <div class="form-group">
@@ -743,13 +737,11 @@
             const isAiInitiative = document.getElementById('@Html.IdFor(m => m.IsAiInitiative)')?.checked ? 'Yes' : 'No';
             const isMultiDept = document.getElementById('isMultiDept')?.checked ? 'Yes' : 'No';
 
-            // Get selected directorates
-            const selectedDirectorates = Array.from(document.querySelectorAll('input[name="SelectedDirectorateIds"]:checked'))
-                .map(cb => {
-                    const label = document.querySelector(`label[for="${cb.id}"]`);
-                    return label ? label.textContent.trim() : '';
-                })
-                .filter(name => name);
+            // Get selected directorate (single)
+            const selectedDirectorateSelect = document.getElementById('SelectedDirectorateId');
+            const selectedDirectorates = (selectedDirectorateSelect && selectedDirectorateSelect.value)
+                ? [selectedDirectorateSelect.options[selectedDirectorateSelect.selectedIndex].text.trim()]
+                : [];
 
             // Get selected budget owners
             const selectedBudgetOwners = Array.from(document.querySelectorAll('input[name="SelectedBudgetOwnerIds"]:checked'))
@@ -843,7 +835,7 @@
             summaryHtml += '<div class="col-md-6">';
             summaryHtml += '<h5 class="mb-3">Organisational</h5>';
             if (selectedDirectorates.length > 0) {
-                summaryHtml += `<p><strong>Directorates:</strong> ${selectedDirectorates.map(d => escapeHtml(d)).join(', ')}</p>`;
+                summaryHtml += `<p><strong>Directorate:</strong> ${escapeHtml(selectedDirectorates[0])}</p>`;
             }
             if (selectedBudgetOwners.length > 0) {
                 summaryHtml += `<p><strong>Budget Owners:</strong> ${selectedBudgetOwners.map(b => escapeHtml(b)).join(', ')}</p>`;
@@ -884,7 +876,7 @@
             },
             organisational: {
                 title: 'Organisational Structure',
-                content: '<p>Define the organisational context for this work item.</p><p><strong>Fields:</strong></p><ul><li>Directorates - Select one or more directorates</li><li>Budget Owners - Select from business areas</li></ul>'
+                content: '<p>Define the organisational context for this work item.</p><p><strong>Fields:</strong></p><ul><li>Directorate - The main directorate where delivery sits</li><li>Budget Owners - Select from business areas</li></ul>'
             },
             status: {
                 title: 'Status',

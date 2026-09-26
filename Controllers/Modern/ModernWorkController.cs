@@ -565,15 +565,10 @@ public partial class ModernWorkController : Controller
             UpdatedAt = now
         });
 
-        foreach (var divId in directorateIds.Distinct())
-        {
-            _context.ProjectDirectorates.Add(new ProjectDirectorate
-            {
-                ProjectId = project.Id,
-                DivisionId = divId,
-                CreatedAt = now
-            });
-        }
+        ProjectDirectorateHelper.ApplySelectedDirectorateIds(
+            project,
+            directorateIds,
+            d => _context.ProjectDirectorates.Add(d));
 
         foreach (var objectiveId in priorityOutcomeIds.Distinct())
         {
@@ -1744,16 +1739,10 @@ public partial class ModernWorkController : Controller
             });
         }
 
-        _context.ProjectDirectorates.RemoveRange(project.Directorates);
-        foreach (var divId in directorateIds.Distinct())
-        {
-            _context.ProjectDirectorates.Add(new ProjectDirectorate
-            {
-                ProjectId = id,
-                DivisionId = divId,
-                CreatedAt = now
-            });
-        }
+        ProjectDirectorateHelper.ApplySelectedDirectorateIds(
+            project,
+            directorateIds,
+            d => _context.ProjectDirectorates.Add(d));
 
         var validTagIds = await _context.WorkItemTagLookups.AsNoTracking()
             .Where(t => t.IsActive && workTagIds.Contains(t.Id))
@@ -3049,7 +3038,11 @@ public partial class ModernWorkController : Controller
         await PopulateWorkCreateViewBagAsync(null, cancellationToken);
         ViewBag.WorkChromeSubPage = true;
         ViewBag.CanEditPriority = await CanEditWorkPriorityAsync(userEmail);
-        ViewBag.SelectedDirectorateIds = work.Directorates?.Select(d => d.DirectorateId).Distinct().ToArray() ?? Array.Empty<int>();
+        var primaryDirectorate = work.Directorates?.FirstOrDefault(d => d.IsPrimary)
+            ?? work.Directorates?.FirstOrDefault();
+        ViewBag.SelectedDirectorateIds = primaryDirectorate == null
+            ? Array.Empty<int>()
+            : new[] { primaryDirectorate.DirectorateId };
         ViewBag.SelectedWorkTagIds = work.Tags?.Select(t => t.Id).ToArray() ?? Array.Empty<int>();
 
         return View("~/Views/Modern/Work/Edit.cshtml", work);
@@ -3186,16 +3179,10 @@ public partial class ModernWorkController : Controller
             }
         }
 
-        _context.ProjectDirectorates.RemoveRange(project.Directorates);
-        foreach (var divId in directorateIds.Distinct())
-        {
-            _context.ProjectDirectorates.Add(new ProjectDirectorate
-            {
-                ProjectId = id,
-                DivisionId = divId,
-                CreatedAt = now
-            });
-        }
+        ProjectDirectorateHelper.ApplySelectedDirectorateIds(
+            project,
+            directorateIds,
+            d => _context.ProjectDirectorates.Add(d));
 
         var validTagIds = await _context.WorkItemTagLookups.AsNoTracking()
             .Where(t => t.IsActive && workTagIds.Contains(t.Id))
@@ -3566,11 +3553,15 @@ public partial class ModernWorkController : Controller
         var directorates = await _context.Divisions.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Name)
             .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
         ViewBag.Directorates = directorates;
-        var selected = await _context.ProjectDirectorates.AsNoTracking()
+        var selectedRows = await _context.ProjectDirectorates.AsNoTracking()
             .Where(pd => pd.ProjectId == projectId)
-            .Select(pd => pd.DivisionId)
-            .ToArrayAsync(cancellationToken);
-        ViewBag.SelectedDirectorateIds = selected;
+            .Select(pd => new { pd.DivisionId, pd.IsPrimary, pd.CreatedAt, pd.Id })
+            .ToListAsync(cancellationToken);
+        var primaryRow = selectedRows.Where(r => r.IsPrimary).OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).FirstOrDefault()
+            ?? selectedRows.OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).FirstOrDefault();
+        ViewBag.SelectedDirectorateIds = primaryRow == null
+            ? Array.Empty<int>()
+            : new[] { primaryRow.DivisionId };
     }
 
     private async Task PopulateGovernanceRoleContactFormAsync(int projectId, int roleTypeId, CancellationToken cancellationToken)
@@ -3690,20 +3681,14 @@ public partial class ModernWorkController : Controller
             if (project == null) return NotFound();
 
             directorateIds ??= Array.Empty<int>();
-            _context.ProjectDirectorates.RemoveRange(project.Directorates);
-            foreach (var divId in directorateIds.Distinct())
-            {
-                _context.ProjectDirectorates.Add(new ProjectDirectorate
-                {
-                    ProjectId = id,
-                    DivisionId = divId,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
+            ProjectDirectorateHelper.ApplySelectedDirectorateIds(
+                project,
+                directorateIds,
+                d => _context.ProjectDirectorates.Add(d));
 
             project.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync(cancellationToken);
-            TempData["SuccessMessage"] = "Directorates updated.";
+            TempData["SuccessMessage"] = "Directorate updated.";
             return RedirectAfterContactChange(id, returnTo);
         }
 

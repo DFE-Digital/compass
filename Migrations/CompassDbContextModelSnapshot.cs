@@ -4957,6 +4957,10 @@ namespace Compass.Migrations
                     b.Property<Guid?>("TriageMeetingId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("TriageMeetingNotes")
+                        .HasMaxLength(-1)
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("TriageOutcome")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
@@ -10890,6 +10894,9 @@ namespace Compass.Migrations
 
                     b.Property<int>("DivisionId")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("bit");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");

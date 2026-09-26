@@ -344,12 +344,36 @@ if (args.Length > 0 && args[0] == "--populate-product-document-ids")
     return;
 }
 
-// Check for Azure SQL → Azure SQL environment migration
+// One-way refresh: read production, replace development. Production is never written.
+if (args.Length > 0 && args[0] == "--refresh-dev-from-production")
+{
+    var dryRun = args.Any(a => a == "--dry-run");
+    string? confirm = null;
+    for (var i = 1; i < args.Length - 1; i++)
+    {
+        if (args[i] == "--confirm")
+            confirm = args[i + 1];
+    }
+
+    if (!dryRun && !string.Equals(confirm, Compass.ProductionToDevelopmentRefresh.ConfirmationPhrase, StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("Refusing to refresh development. Re-run with:");
+        Console.Error.WriteLine($"  dotnet run -- --refresh-dev-from-production --confirm \"{Compass.ProductionToDevelopmentRefresh.ConfirmationPhrase}\"");
+        Console.Error.WriteLine("Add --dry-run to list production row counts without changing development.");
+        Console.Error.WriteLine("Connection strings: COMPASS_PRODUCTION_SQL (read) and COMPASS_DEVELOPMENT_SQL (write), or appsettings.Production.json and appsettings.Development.json.");
+        return;
+    }
+
+    await Compass.ProductionToDevelopmentRefresh.RunAsync(dryRun);
+    return;
+}
+
+// Check for Azure SQL → Azure SQL environment migration. Writing to production is refused.
 if (args.Length > 0 && args[0] == "--migrate-sql")
 {
-    // Usage: --migrate-sql --source Development --target Test|Production
+    // Usage: --migrate-sql --source Production --target Development
     string source = "Development";
-    string target = "Production";
+    string target = "Development";
     bool referenceOnly = false;
 
     for (int i = 1; i < args.Length - 1; i++)
@@ -357,6 +381,14 @@ if (args.Length > 0 && args[0] == "--migrate-sql")
         if (args[i] == "--source") source = args[i + 1];
         if (args[i] == "--target") target = args[i + 1];
         if (args[i] == "--reference-only") referenceOnly = true;
+    }
+
+    if (Compass.ProductionToDevelopmentRefresh.IsProductionEnvironmentName(target))
+    {
+        Console.Error.WriteLine("Refusing to run. Writing to production is not allowed.");
+        Console.Error.WriteLine("To copy production data into development, run:");
+        Console.Error.WriteLine($"  dotnet run -- --refresh-dev-from-production --confirm \"{Compass.ProductionToDevelopmentRefresh.ConfirmationPhrase}\"");
+        return;
     }
 
     await Compass.AzureSqlEnvironmentMigration.RunAsync(source, target, referenceOnly);

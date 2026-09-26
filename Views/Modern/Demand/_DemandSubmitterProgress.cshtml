@@ -1,0 +1,83 @@
+@model Compass.Models.DemandPipeline.DemandPipelineRequest
+@using Compass.Services.DemandPipeline
+@{
+  var canManage = ViewBag.CanManageDemandPipeline as bool? ?? false;
+  var hasExplore = !string.IsNullOrWhiteSpace(Model.ExploreRecommendation)
+    || !string.IsNullOrWhiteSpace(Model.ExploreNotes)
+    || !string.IsNullOrWhiteSpace(Model.ExploreAimClarification);
+  var hasScore = Model.TotalScore.HasValue || !string.IsNullOrWhiteSpace(Model.ScoringAssessmentNotes);
+  var hasTriage = !string.IsNullOrWhiteSpace(Model.TriageOutcome) || !string.IsNullOrWhiteSpace(Model.TriageOutcomeNarrative);
+  string TabUrl(string t) => Url.Action("RequestDetail", "ModernDemand", new { id = Model.Id, tab = t }) ?? "#";
+}
+@if (hasExplore || hasScore || hasTriage)
+{
+<div class="govuk-summary-card govuk-!-margin-bottom-6">
+  <div class="govuk-summary-card__title-wrapper">
+    <h2 class="govuk-summary-card__title">Comments</h2>
+  </div>
+  <div class="govuk-summary-card__content">
+      <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+        @if (hasExplore)
+        {
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Explore</dt>
+            <dd class="govuk-summary-list__value">
+              @if (!string.IsNullOrWhiteSpace(Model.ExploreRecommendation))
+              {
+                <p class="govuk-body"><strong>@Model.ExploreRecommendation</strong></p>
+              }
+              @if (!string.IsNullOrWhiteSpace(Model.ExploreAimClarification))
+              {
+                <p class="govuk-body" style="white-space:pre-wrap;">@Model.ExploreAimClarification</p>
+              }
+              @if (!string.IsNullOrWhiteSpace(Model.ExploreNotes))
+              {
+                <p class="govuk-body govuk-!-margin-bottom-2" style="white-space:pre-wrap;">@Model.ExploreNotes</p>
+              }
+              <p class="govuk-body govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@TabUrl("explore")">View explore</a></p>
+            </dd>
+          </div>
+        }
+        @if (hasScore)
+        {
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Scoring</dt>
+            <dd class="govuk-summary-list__value">
+              @if (Model.TotalScore.HasValue)
+              {
+                <p class="govuk-body"><strong>@Model.TotalScore / 100</strong>@if (!string.IsNullOrWhiteSpace(Model.SuggestedBand)) { <text> · @DemandScoringHelper.BandLabel(Model.SuggestedBand)</text> }</p>
+              }
+              @if (!string.IsNullOrWhiteSpace(Model.ScoringAssessmentNotes))
+              {
+                <p class="govuk-body" style="white-space:pre-wrap;">@Model.ScoringAssessmentNotes</p>
+              }
+              @if (canManage && !string.IsNullOrWhiteSpace(Model.ScoringConcernsNotes))
+              {
+                <p class="govuk-body-s govuk-!-margin-bottom-1">Concerns, visible to Central Operations only.</p>
+                <p class="govuk-body" style="white-space:pre-wrap;">@Model.ScoringConcernsNotes</p>
+              }
+              <p class="govuk-body govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@TabUrl("scoring")">View scoring</a></p>
+            </dd>
+          </div>
+        }
+        @if (hasTriage)
+        {
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Triage</dt>
+            <dd class="govuk-summary-list__value">
+              @if (!string.IsNullOrWhiteSpace(Model.TriageOutcome))
+              {
+                <p class="govuk-body"><strong>@DemandTriageDecisions.Label(Model.TriageOutcome)</strong></p>
+              }
+              @if (!string.IsNullOrWhiteSpace(Model.TriageOutcomeNarrative))
+              {
+                <p class="govuk-body" style="white-space:pre-wrap;">@Model.TriageOutcomeNarrative</p>
+              }
+              <p class="govuk-body govuk-!-margin-bottom-0"><a class="govuk-link govuk-link--no-visited-state" href="@TabUrl("triage")">View triage</a></p>
+            </dd>
+          </div>
+        }
+      </dl>
+  </div>
+</div>
+}

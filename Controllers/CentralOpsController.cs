@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Compass.Attributes;
 using Compass.Data;
+using Compass.Helpers;
 using Compass.Models;
 using Compass.Services;
 using Compass.ViewModels;
@@ -212,6 +213,10 @@ public class BulkUpdateRequest
     public bool ClearBusinessArea { get; set; }
     public string? Priority { get; set; }
     public bool ClearPriority { get; set; }
+    /// <summary>Preferred: single main directorate for delivery.</summary>
+    public int? DirectorateId { get; set; }
+
+    /// <summary>Legacy multi-select payload; only the first id is applied as primary.</summary>
     public List<int>? DirectorateIds { get; set; }
     public bool ClearDirectorates { get; set; }
 }
@@ -1808,6 +1813,8 @@ public class CentralOpsController : Controller
                 .Include(p => p.Milestones)
                 .Include(p => p.ProjectMissions)
                     .ThenInclude(pm => pm.Mission)
+                .Include(p => p.ProjectObjectives)
+                    .ThenInclude(po => po.Objective)
                 .Include(p => p.ProblemStatements)
                 .Where(p => !p.IsDeleted);
 
@@ -1941,10 +1948,14 @@ public class CentralOpsController : Controller
             headers.AddRange(new[]
             {
                 "Service Owner",
-                "Directorates",
+                WorkStrategicAlignmentExport.DirectorateColumn,
+                WorkStrategicAlignmentExport.AdditionalDirectoratesColumn,
                 "Linked Products",
                 "Dependencies In",
                 "Dependencies Out",
+                WorkStrategicAlignmentExport.MissionPillarsColumn,
+                WorkStrategicAlignmentExport.PriorityOutcomesColumn,
+                WorkStrategicAlignmentExport.ThematicTagsColumn,
                 "Strategic Alignment",
                 "Governance",
                 "Team",
@@ -2030,12 +2041,9 @@ public class CentralOpsController : Controller
                     .ToList() ?? new List<string>();
                 worksheet.Cell(currentRow, col++).Value = string.Join("; ", serviceOwners);
 
-                // Directorates
-                var directorates = project.Directorates?
-                    .Select(d => d.Division?.Name ?? string.Empty)
-                    .Where(d => !string.IsNullOrEmpty(d))
-                    .ToList() ?? new List<string>();
-                worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
+                // Directorate (primary) + preserved additional mappings
+                worksheet.Cell(currentRow, col++).Value = WorkStrategicAlignmentExport.GetPrimaryDirectorateName(project);
+                worksheet.Cell(currentRow, col++).Value = WorkStrategicAlignmentExport.GetAdditionalDirectorateNames(project);
 
                 // Linked Products
                 var products = project.ProjectProducts?
@@ -2056,7 +2064,12 @@ public class CentralOpsController : Controller
                     .ToList() ?? new List<string>();
                 worksheet.Cell(currentRow, col++).Value = string.Join("; ", dependenciesOut);
 
-                // Strategic Alignment
+                // Strategic alignment columns (human-readable multi-values)
+                worksheet.Cell(currentRow, col++).Value = WorkStrategicAlignmentExport.GetMissionPillarNames(project);
+                worksheet.Cell(currentRow, col++).Value = WorkStrategicAlignmentExport.GetPriorityOutcomeNames(project);
+                worksheet.Cell(currentRow, col++).Value = WorkStrategicAlignmentExport.GetThematicTagNames(project);
+
+                // Strategic Alignment (legacy combined narrative column — kept for consumers)
                 var strategicItems = new List<string>();
                 if (!string.IsNullOrEmpty(project.StrategicObjectives))
                 {
@@ -2175,6 +2188,8 @@ public class CentralOpsController : Controller
                 .Include(p => p.Milestones)
                 .Include(p => p.ProjectMissions)
                     .ThenInclude(pm => pm.Mission)
+                .Include(p => p.ProjectObjectives)
+                    .ThenInclude(po => po.Objective)
                 .Where(p => !p.IsDeleted && p.Status != "Cancelled" && p.Status != "Completed");
 
             // Apply filters (same as AllWork)
@@ -2281,10 +2296,14 @@ public class CentralOpsController : Controller
             headers.AddRange(new[]
             {
                 "Service Owner",
-                "Directorates",
+                WorkStrategicAlignmentExport.DirectorateColumn,
+                WorkStrategicAlignmentExport.AdditionalDirectoratesColumn,
                 "Linked Products",
                 "Dependencies In",
                 "Dependencies Out",
+                WorkStrategicAlignmentExport.MissionPillarsColumn,
+                WorkStrategicAlignmentExport.PriorityOutcomesColumn,
+                WorkStrategicAlignmentExport.ThematicTagsColumn,
                 "Strategic Alignment",
                 "Governance",
                 "Team",
@@ -2360,12 +2379,8 @@ public class CentralOpsController : Controller
                     .ToList() ?? new List<string>();
                 worksheet.Cell(currentRow, col++).Value = string.Join("; ", serviceOwners);
 
-                // Directorates
-                var directorates = project.Directorates?
-                    .Select(d => d.Division?.Name ?? string.Empty)
-                    .Where(d => !string.IsNullOrEmpty(d))
-                    .ToList() ?? new List<string>();
-                worksheet.Cell(currentRow, col++).Value = string.Join("; ", directorates);
+                worksheet.Cell(currentRow, col++).Value = WorkStrategicAlignmentExport.GetPrimaryDirectorateName(project);
+                worksheet.Cell(currentRow, col++).Value = WorkStrategicAlignmentExport.GetAdditionalDirectorateNames(project);
 
                 // Linked Products
                 var products = project.ProjectProducts?
@@ -2386,7 +2401,11 @@ public class CentralOpsController : Controller
                     .ToList() ?? new List<string>();
                 worksheet.Cell(currentRow, col++).Value = string.Join("; ", dependenciesOut);
 
-                // Strategic Alignment
+                worksheet.Cell(currentRow, col++).Value = WorkStrategicAlignmentExport.GetMissionPillarNames(project);
+                worksheet.Cell(currentRow, col++).Value = WorkStrategicAlignmentExport.GetPriorityOutcomeNames(project);
+                worksheet.Cell(currentRow, col++).Value = WorkStrategicAlignmentExport.GetThematicTagNames(project);
+
+                // Strategic Alignment (legacy combined column)
                 var strategicItems = new List<string>();
                 if (!string.IsNullOrEmpty(project.StrategicObjectives))
                 {
@@ -2552,7 +2571,7 @@ public class CentralOpsController : Controller
             .ThenBy(at => at.Name)
             .ToListAsync();
         
-        ViewBag.Directorates = await _context.DirectorateLookups
+        ViewBag.Directorates = await _context.Divisions
             .Where(d => d.IsActive)
             .OrderBy(d => d.SortOrder)
             .ThenBy(d => d.Name)
@@ -3608,39 +3627,26 @@ public class CentralOpsController : Controller
                     }
                 }
 
-                // Update Directorates
-                if (request.ClearDirectorates || (request.DirectorateIds != null && request.DirectorateIds.Count > 0))
+                // Update Directorates (single primary; surplus historical rows preserved)
+                if (request.ClearDirectorates || request.DirectorateId.HasValue || (request.DirectorateIds != null && request.DirectorateIds.Count > 0))
                 {
                     if (request.ClearDirectorates)
                     {
-                        var existingDirectorates = project.Directorates.ToList();
-                        foreach (var dir in existingDirectorates)
-                        {
-                            _context.ProjectDirectorates.Remove(dir);
-                        }
+                        // Clear primary only — do not delete historical junction rows
+                        ProjectDirectorateHelper.SetPrimaryDirectorate(project, null);
                         projectUpdated = true;
                     }
-                    else if (request.DirectorateIds != null && request.DirectorateIds.Count > 0)
+                    else
                     {
-                        // Get existing directorate IDs
-                        var existingDirectorateIds = project.Directorates
-                            .Select(d => d.DivisionId)
-                            .ToList();
-
-                        // Add new directorates
-                        foreach (var directorateId in request.DirectorateIds)
+                        var primaryId = request.DirectorateId
+                            ?? request.DirectorateIds?.FirstOrDefault();
+                        if (primaryId.HasValue && primaryId.Value > 0)
                         {
-                            if (!existingDirectorateIds.Contains(directorateId))
-                            {
-                                var newDirectorate = new ProjectDirectorate
-                                {
-                                    ProjectId = project.Id,
-                                    DivisionId = directorateId,
-                                    CreatedAt = DateTime.UtcNow
-                                };
-                                _context.ProjectDirectorates.Add(newDirectorate);
-                                projectUpdated = true;
-                            }
+                            ProjectDirectorateHelper.SetPrimaryDirectorate(
+                                project,
+                                primaryId.Value,
+                                d => _context.ProjectDirectorates.Add(d));
+                            projectUpdated = true;
                         }
                     }
                 }

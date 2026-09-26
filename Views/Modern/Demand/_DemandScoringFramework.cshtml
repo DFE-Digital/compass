@@ -7,7 +7,8 @@
   var po = Model.PriorityOutcomeName;
   var mp = Model.MissionPillarName;
   var port = Model.PortfolioName;
-  var canEdit = demand.Status == "Scoring" || demand.Status == "Active";
+  var canManage = ViewBag.CanManageDemandPipeline as bool? ?? false;
+  var canEdit = canManage && (demand.Status == "Scoring" || demand.Status == "Active");
   var hasOutcome = demand.TotalScore.HasValue && !string.IsNullOrEmpty(demand.SuggestedBand);
   var s1 = demand.ScoreStrategic ?? 0;
   var s2 = demand.ScoreUrgency ?? 0;
@@ -219,7 +220,9 @@
  <h2 class="govuk-error-summary__title" id="scoring-review-error-title">There is a problem</h2>
  <div class="govuk-error-summary__body"><ul class="govuk-list govuk-error-summary__list" id="scoring-review-error-list"></ul></div>
             </div>
- <h2 class="dfe-c-heading-m">Score review</h2>
+ <header class="demand-scoring-section__head govuk-!-margin-bottom-3">
+ <h2 class="govuk-heading-m demand-scoring-section__heading">Score review</h2>
+ </header>
  <h3 class="govuk-heading-s">Section totals</h3>
  <dl class="govuk-summary-list">
  <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S1 Strategic</dt><dd class="govuk-summary-list__value"><span id="sumStrategic">@s1</span> / @Model.MaxForLegacy("Strategic")</dd></div>
@@ -257,8 +260,10 @@
     }
     else
     {
- <div class="dfe-c-card dfe-c-card--plain govuk-!-margin-bottom-3">
- <h2 class="dfe-c-heading-m">Prioritisation scorecard</h2>
+ <div class="demand-scoring-step-panel govuk-!-margin-bottom-3">
+ <header class="demand-scoring-section__head govuk-!-margin-bottom-3">
+ <h2 class="govuk-heading-m demand-scoring-section__heading">Prioritisation scorecard</h2>
+ </header>
  <dl class="govuk-summary-list">
  <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S1 Strategic</dt><dd class="govuk-summary-list__value">@s1 / @Model.MaxForLegacy("Strategic")</dd></div>
  <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">S2 Urgency</dt><dd class="govuk-summary-list__value">@s2 / @Model.MaxForLegacy("Urgency")</dd></div>
@@ -269,13 +274,18 @@
         </dl>
         @if (hasOutcome && !string.IsNullOrWhiteSpace(demand.ScoringAssessmentNotes))
         {
- <h3 class="govuk-heading-s govuk-!-margin-top-4">Scorer notes</h3>
+ <h3 class="govuk-heading-s govuk-!-margin-top-4">Assessment notes</h3>
  <p class="govuk-body" style="white-space:pre-wrap;">@demand.ScoringAssessmentNotes</p>
-          @if (!string.IsNullOrWhiteSpace(demand.ScoringConcernsNotes))
+          @if (canManage && !string.IsNullOrWhiteSpace(demand.ScoringConcernsNotes))
           {
  <h3 class="govuk-heading-s">Concerns</h3>
+ <p class="govuk-body-s govuk-!-margin-bottom-2">Visible to Central Operations only.</p>
  <p class="govuk-body" style="white-space:pre-wrap;">@demand.ScoringConcernsNotes</p>
           }
+        }
+        @if (!hasOutcome)
+        {
+ <p class="govuk-body govuk-!-margin-bottom-0">Scoring has not been completed yet.</p>
         }
       </div>
     }

@@ -4847,31 +4847,23 @@ public class DdtReportsController : Controller
                 return Json(new { success = false, message = "Project not found." });
             }
 
-            // Remove all existing Directorates (user wants just 1)
-            var existingDirectorates = project.Directorates.ToList();
-            foreach (var directorate in existingDirectorates)
-            {
-                _context.ProjectDirectorates.Remove(directorate);
-            }
-
-            string? directorateName = null;
+            // Set single primary Directorate; preserve surplus historical rows
             if (directorateLookupId.HasValue)
             {
                 var division = await _context.Divisions.FindAsync(directorateLookupId.Value);
-                if (division != null && division.IsActive)
+                if (division == null || !division.IsActive)
                 {
-                    project.Directorates.Add(new ProjectDirectorate
-                    {
-                        ProjectId = project.Id,
-                        DivisionId = directorateLookupId.Value,
-                        CreatedAt = DateTime.UtcNow
-                    });
-                    directorateName = division.Name;
+                    return Json(new { success = false, message = "Directorate not found." });
                 }
             }
 
+            Compass.Helpers.ProjectDirectorateHelper.SetPrimaryDirectorate(project, directorateLookupId);
+
             project.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+
+            var directorateName = project.Directorates?
+                .FirstOrDefault(d => d.IsPrimary)?.Division?.Name;
 
             var projectTitle = project.Title;
             var successMessage = directorateName != null

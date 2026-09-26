@@ -1,0 +1,117 @@
+@model Compass.ViewModels.Modern.TriageMeetingPackViewModel
+@using Compass.Models.Modern.Work
+@using Compass.Services.DemandPipeline
+@using Compass.ViewModels.Modern
+@{
+  var meeting = Model.Meeting;
+  ViewData["Title"] = string.IsNullOrWhiteSpace(meeting.Name) ? "Triage meeting" : meeting.Name;
+  var when = meeting.MeetingDate?.ToString("dddd d MMMM yyyy") ?? "Date to be confirmed";
+  if (!string.IsNullOrWhiteSpace(meeting.StartTime) || !string.IsNullOrWhiteSpace(meeting.EndTime))
+    when += $" · {(meeting.StartTime ?? "").Trim()}–{(meeting.EndTime ?? "").Trim()}";
+}
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernDemand")">Demand</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Triage", "ModernDemand")">Triage</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@(string.IsNullOrWhiteSpace(meeting.Name) ? "Meeting" : meeting.Name)</li>
+}
+
+<div id="sc-demand-meeting-pack" class="demand-meeting-pack modern-work-page">
+  <p class="demand-meeting-pack__toolbar govuk-body">
+    <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Triage", "ModernDemand", new { meetingId = meeting.Id })">Back to triage</a>
+  </p>
+  @{
+    var lede = await Html.PartialAsync("_GovukBodyParagraph", "Items assigned to this meeting, in score order, for presenting in the triage session.");
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Triage meeting",
+    Title = string.IsNullOrWhiteSpace(meeting.Name) ? "Triage meeting" : meeting.Name,
+    Lede = lede
+  })
+
+  <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">When</dt>
+      <dd class="govuk-summary-list__value">@when</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Location</dt>
+      <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(meeting.Location) ? "—" : meeting.Location)</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Chair</dt>
+      <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(meeting.Chair) ? "—" : meeting.Chair)</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Items</dt>
+      <dd class="govuk-summary-list__value">@Model.Demands.Count</dd>
+    </div>
+  </dl>
+
+  @if (Model.Demands.Count == 0)
+  {
+    <p class="govuk-body">No demands are assigned to this meeting yet.</p>
+  }
+  else
+  {
+    var n = 0;
+    foreach (var d in Model.Demands)
+    {
+      n++;
+      <article class="govuk-summary-card govuk-!-margin-bottom-6 demand-meeting-pack__item">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">@n. @d.Title</h2>
+          <ul class="govuk-summary-card__actions">
+            <li class="govuk-summary-card__action">
+              <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = d.Id, tab = "triage" })">Open demand</a>
+            </li>
+          </ul>
+        </div>
+        <div class="govuk-summary-card__content">
+          <dl class="govuk-summary-list">
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Reference</dt>
+              <dd class="govuk-summary-list__value">@d.Reference</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Status</dt>
+              <dd class="govuk-summary-list__value"><span class="@WorkBadgeCss.DemandPipelineStatusBadgeClass(d.Status)">@d.Status</span></dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Score</dt>
+              <dd class="govuk-summary-list__value">@(d.TotalScore?.ToString() ?? "Not scored")@if (!string.IsNullOrWhiteSpace(d.SuggestedBand)) { <text> · @DemandScoringHelper.BandLabel(d.SuggestedBand)</text> }</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Submitted by</dt>
+              <dd class="govuk-summary-list__value">@(d.SubmittedBy ?? "—")</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">Request</dt>
+              <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@(string.IsNullOrWhiteSpace(d.Description) ? "—" : d.Description)</dd>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(d.ExploreRecommendation) || !string.IsNullOrWhiteSpace(d.ExploreNotes))
+            {
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Explore</dt>
+                <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@if (!string.IsNullOrWhiteSpace(d.ExploreRecommendation)) { <text><strong>@d.ExploreRecommendation</strong><br /></text> }@(d.ExploreNotes ?? "")</dd>
+              </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(d.ScoringAssessmentNotes))
+            {
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Scoring notes</dt>
+                <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@d.ScoringAssessmentNotes</dd>
+              </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(d.TriageOutcome) || !string.IsNullOrWhiteSpace(d.TriageOutcomeNarrative))
+            {
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Triage</dt>
+                <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">@DemandTriageDecisions.Label(d.TriageOutcome)@if (!string.IsNullOrWhiteSpace(d.TriageOutcomeNarrative)) { <text><br />@d.TriageOutcomeNarrative</text> }</dd>
+              </div>
+            }
+          </dl>
+        </div>
+      </article>
+    }
+  }
+</div>

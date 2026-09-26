@@ -84,7 +84,7 @@ public static class WorkRegisterExcelExport
         IEnumerable<Milestone> milestones,
         IReadOnlyDictionary<int, string> workItemTitleByProjectId)
     {
-        var headers = new[] { "Milestone Id", "Work item", "Milestone name", "Due date", "Actual date", "Status", "Created at" };
+        var headers = new[] { "Milestone Id", "Work item id", "Work item", "Milestone name", "Due date", "Actual date", "Status", "RAG", "Created at" };
         for (var c = 0; c < headers.Length; c++)
             worksheet.Cell(1, c + 1).Value = headers[c];
         worksheet.Row(1).Style.Font.Bold = true;
@@ -98,12 +98,14 @@ public static class WorkRegisterExcelExport
                 : "";
 
             worksheet.Cell(row, 1).Value = m.Id;
-            worksheet.Cell(row, 2).Value = workItemTitle;
-            worksheet.Cell(row, 3).Value = m.Name ?? "";
-            worksheet.Cell(row, 4).Value = m.DueDate;
-            worksheet.Cell(row, 5).Value = m.ActualDate;
-            worksheet.Cell(row, 6).Value = m.Status ?? "";
-            worksheet.Cell(row, 7).Value = m.CreatedAt;
+            worksheet.Cell(row, 2).Value = projectId > 0 ? projectId : "";
+            worksheet.Cell(row, 3).Value = workItemTitle;
+            worksheet.Cell(row, 4).Value = m.Name ?? "";
+            worksheet.Cell(row, 5).Value = m.DueDate;
+            worksheet.Cell(row, 6).Value = m.ActualDate;
+            worksheet.Cell(row, 7).Value = m.Status ?? "";
+            worksheet.Cell(row, 8).Value = m.RagStatusLookup?.Name ?? "";
+            worksheet.Cell(row, 9).Value = m.CreatedAt;
             row++;
         }
 

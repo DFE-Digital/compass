@@ -1,0 +1,101 @@
+@model Compass.Models.DemandPipeline.DemandPipelineRequest
+@{
+  var linked = ViewBag.LinkedWorkItem as Project;
+  var canLink = ViewBag.CanLinkDemandWorkItem as bool? ?? false;
+  var searchUrl = Url.Action("ExploreSearchWork", "ModernDemand") ?? "";
+  var nonce = Context.Items["Nonce"]?.ToString() ?? "";
+}
+<div class="govuk-summary-card govuk-!-margin-bottom-6">
+  <div class="govuk-summary-card__title-wrapper">
+    <h2 class="govuk-summary-card__title">Work item</h2>
+  </div>
+  <div class="govuk-summary-card__content">
+    @if (linked != null)
+    {
+      <dl class="govuk-summary-list govuk-!-margin-bottom-4">
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Linked work item</dt>
+          <dd class="govuk-summary-list__value">
+            <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "ModernWork", new { id = linked.Id })">@linked.ProjectCode — @linked.Title</a>
+          </dd>
+        </div>
+      </dl>
+      @if (canLink)
+      {
+        <form method="post" asp-controller="ModernDemand" asp-action="RequestUnlinkWorkItem" asp-route-id="@Model.Id">
+          @Html.AntiForgeryToken()
+          <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">Remove link</button>
+        </form>
+      }
+    }
+    else if (canLink)
+    {
+      <p class="govuk-body">Create a work item from this request, or link one that already exists. The demand and the work item point at each other.</p>
+      <form method="post" asp-controller="ModernDemand" asp-action="RequestCreateWorkItem" asp-route-id="@Model.Id" class="govuk-!-margin-bottom-4">
+        @Html.AntiForgeryToken()
+        <button type="submit" class="govuk-button govuk-!-margin-bottom-0">Create work item from this request</button>
+      </form>
+      <form method="post" asp-controller="ModernDemand" asp-action="RequestLinkWorkItem" asp-route-id="@Model.Id" id="demand-link-work-form">
+        @Html.AntiForgeryToken()
+        <div class="govuk-form-group govuk-!-margin-bottom-2">
+          <label class="govuk-label" for="demand-link-work-search">Link an existing work item</label>
+          <div class="govuk-hint" id="demand-link-work-hint">Search by title or code, then choose one.</div>
+          <input class="govuk-input" id="demand-link-work-search" type="search" autocomplete="off" aria-describedby="demand-link-work-hint" />
+        </div>
+        <ul class="govuk-list govuk-!-margin-bottom-3" id="demand-link-work-results" hidden></ul>
+        <input type="hidden" name="projectId" id="demand-link-work-id" value="" />
+      </form>
+    }
+    else
+    {
+      <p class="govuk-body govuk-!-margin-bottom-0">No work item is linked to this request.</p>
+    }
+  </div>
+</div>
+@if (linked == null && canLink)
+{
+  <script nonce="@nonce">
+    (function () {
+      var input = document.getElementById('demand-link-work-search');
+      var list = document.getElementById('demand-link-work-results');
+      var form = document.getElementById('demand-link-work-form');
+      var idField = document.getElementById('demand-link-work-id');
+      if (!input || !list || !form || !idField) return;
+      var timer = null;
+      input.addEventListener('input', function () {
+        clearTimeout(timer);
+        var q = input.value.trim();
+        if (q.length < 2) { list.hidden = true; list.innerHTML = ''; return; }
+        timer = setTimeout(function () {
+          fetch('@searchUrl?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              list.innerHTML = '';
+              var results = (data && data.results) || [];
+              if (!results.length) { list.hidden = true; return; }
+              results.forEach(function (item) {
+                var li = document.createElement('li');
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'govuk-link govuk-link--no-visited-state';
+                btn.style.background = 'none';
+                btn.style.border = '0';
+                btn.style.padding = '0';
+                btn.style.cursor = 'pointer';
+                btn.style.font = 'inherit';
+                btn.textContent = item.label || item.title;
+                btn.addEventListener('click', function () {
+                  idField.value = item.projectId;
+                  form.submit();
+                });
+                li.appendChild(btn);
+                list.appendChild(li);
+              });
+              list.hidden = false;
+            })
+            .catch(function () { list.hidden = true; });
+        }, 250);
+      });
+    })();
+  </script>
+}

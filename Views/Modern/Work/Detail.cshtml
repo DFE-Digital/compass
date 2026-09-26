@@ -181,6 +181,27 @@
  <dd class="govuk-summary-list__value">@activityTypeName</dd>
           </div>
  <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
+ <dt class="govuk-summary-list__key">Directorate</dt>
+ <dd class="govuk-summary-list__value">
+              @{
+                var overviewDirectorates = Model.Directorates?.Where(d => d.Division != null).ToList() ?? new List<WorkItemDirectorate>();
+                var overviewPrimaryDirectorate = overviewDirectorates.FirstOrDefault(d => d.IsPrimary) ?? overviewDirectorates.FirstOrDefault();
+              }
+              @if (overviewPrimaryDirectorate?.Division != null)
+              {
+                @overviewPrimaryDirectorate.Division.Name
+                @if (!string.IsNullOrEmpty(overviewPrimaryDirectorate.Division.Description))
+                {
+                  <br /><span class="govuk-hint govuk-!-margin-bottom-0">@overviewPrimaryDirectorate.Division.Description</span>
+                }
+              }
+              else
+              {
+                <text>—</text>
+              }
+            </dd>
+          </div>
+ <div class="govuk-summary-list__row govuk-summary-list__row--no-actions">
  <dt class="govuk-summary-list__key">Business area</dt>
  <dd class="govuk-summary-list__value">@portfolioName</dd>
           </div>
@@ -334,7 +355,7 @@
  <h2 class="govuk-summary-card__title">Dependencies</h2>
         </div>
  <div class="govuk-summary-card__content">
- @if (linkedDemand != null) { <dl class="dfe-c-kv"><dt>Demand</dt><dd><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "Demand", new { id = linkedDemand.Id })">@linkedDemand.Reference →</a></dd></dl> }
+ @if (linkedDemand != null) { <dl class="govuk-summary-list govuk-!-margin-bottom-3"><div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Demand request</dt><dd class="govuk-summary-list__value"><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("RequestDetail", "ModernDemand", new { id = linkedDemand.Id, tab = "request" })">@linkedDemand.Reference — @linkedDemand.Title</a></dd></div></dl> }
  @if (linkedBusinessCase != null) { <dl class="dfe-c-kv"><dt>Business case</dt><dd><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("Detail", "Horizon", new { id = linkedBusinessCase.Id })">@linkedBusinessCase.BusinessCaseId →</a></dd></dl> }
  <p class="govuk-body govuk-!-margin-bottom-0"><a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-dependencies" class="govuk-link govuk-link--no-visited-state">Dependencies</a> and <a href="@(Url.Action("Detail", "ModernWork", new { id = Model.Id }))#wd-assumptions" class="govuk-link govuk-link--no-visited-state">assumptions</a> are managed on this work item.</p>
         </div>

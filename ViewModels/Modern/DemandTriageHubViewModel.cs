@@ -10,7 +10,11 @@ public class DemandTriageHubViewModel
 
     public Guid? SelectedMeetingId { get; set; }
 
+    public DemandPipelineTriageMeeting? SelectedMeeting { get; set; }
+
     public List<DemandPipelineRequest>? MeetingDemands { get; set; }
+
+    public Guid? SelectedDemandId { get; set; }
 }
 
 public class TriageMeetingRowViewModel
@@ -18,4 +22,11 @@ public class TriageMeetingRowViewModel
     public DemandPipelineTriageMeeting Meeting { get; set; } = null!;
 
     public int DemandCount { get; set; }
+}
+
+public class TriageMeetingPackViewModel
+{
+    public DemandPipelineTriageMeeting Meeting { get; set; } = null!;
+
+    public List<DemandPipelineRequest> Demands { get; set; } = new();
 }

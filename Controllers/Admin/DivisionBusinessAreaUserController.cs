@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
@@ -12,21 +13,26 @@ namespace Compass.Controllers.Admin
     [Authorize]
     public class DivisionBusinessAreaUserController : Controller
     {
+        private const string ReportsDivisionsCacheKey = "reports_divisions";
+
         private readonly CompassDbContext _context;
         private readonly ILogger<DivisionBusinessAreaUserController> _logger;
         private readonly IPermissionService _permissionService;
         private readonly IUserDirectoryService _userDirectoryService;
+        private readonly IMemoryCache _cache;
 
         public DivisionBusinessAreaUserController(
             CompassDbContext context,
             ILogger<DivisionBusinessAreaUserController> logger,
             IPermissionService permissionService,
-            IUserDirectoryService userDirectoryService)
+            IUserDirectoryService userDirectoryService,
+            IMemoryCache cache)
         {
             _context = context;
             _logger = logger;
             _permissionService = permissionService;
             _userDirectoryService = userDirectoryService;
+            _cache = cache;
         }
 
         private string GetUserEmail()
@@ -416,7 +422,7 @@ namespace Compass.Controllers.Admin
                     // Check if name already exists
                     if (await _context.Divisions.AnyAsync(d => d.Name == division.Name))
                     {
-                        TempData["ErrorMessage"] = "A division with this name already exists.";
+                        TempData["ErrorMessage"] = "A directorate with this name already exists.";
                         return View("~/Views/Admin/DivisionBusinessAreaUser/CreateDivision.cshtml", division);
                     }
 
@@ -424,14 +430,15 @@ namespace Compass.Controllers.Admin
                     division.UpdatedAt = DateTime.UtcNow;
                     _context.Add(division);
                     await _context.SaveChangesAsync();
+                    _cache.Remove(ReportsDivisionsCacheKey);
 
-                    TempData["SuccessMessage"] = $"Division '{division.Name}' has been created successfully.";
+                    TempData["SuccessMessage"] = $"Directorate '{division.Name}' has been created successfully.";
                     return RedirectToAction(nameof(Index));
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error creating division");
-                    TempData["ErrorMessage"] = "An error occurred while creating the division. Please try again.";
+                    _logger.LogError(ex, "Error creating directorate");
+                    TempData["ErrorMessage"] = "An error occurred while creating the directorate. Please try again.";
                 }
             }
 
@@ -495,14 +502,15 @@ namespace Compass.Controllers.Admin
                     existingDivision.UpdatedAt = DateTime.UtcNow;
 
                     await _context.SaveChangesAsync();
+                    _cache.Remove(ReportsDivisionsCacheKey);
 
-                    TempData["SuccessMessage"] = $"Division '{division.Name}' has been updated successfully.";
+                    TempData["SuccessMessage"] = $"Directorate '{division.Name}' has been updated successfully.";
                     return RedirectToAction(nameof(Index));
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error updating division");
-                    TempData["ErrorMessage"] = "An error occurred while updating the division. Please try again.";
+                    _logger.LogError(ex, "Error updating directorate");
+                    TempData["ErrorMessage"] = "An error occurred while updating the directorate. Please try again.";
                 }
             }
 

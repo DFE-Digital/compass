@@ -804,7 +804,7 @@ public static class ApiCatalogue
                     Method: "GET",
                     Path: "/api/v1/ServiceRegister/products",
                     Scope: "ServiceRegister:read",
-                    Description: "Paged FIPS/CMDB product list with rich filters. Each row includes channels and types from the service register entry. numericId bypasses status filters (used by onboarding search).",
+                    Description: "Paged FIPS/CMDB product list with rich filters. Each row includes channels and types from the service register entry. uniqueId (alias numericId) looks up one product by its numeric Compass id and ignores status filters.",
                     QueryParams: new[]
                     {
                         ("page", "integer", "Page number (default 1)"),
@@ -812,7 +812,8 @@ public static class ApiCatalogue
                         ("status", "string[]", "New / Active / Inactive / Rejected"),
                         ("enterpriseOnly", "boolean", "Enterprise-flagged only"),
                         ("excludeEnterprise", "boolean", "Exclude enterprise-flagged"),
-                        ("numericId", "integer", "Filter by numeric CMDB id (ignores status)"),
+                        ("uniqueId", "integer", "Filter by numeric Compass uniqueId (ignores status)"),
+                        ("numericId", "integer", "Alias of uniqueId (kept for existing clients)"),
                         ("categoryIds", "integer[]", "Filter by categorisation item ids"),
                         ("channelIds", "integer[]", "Filter by FIPS channel ids"),
                         ("typeIds", "integer[]", "Filter by FIPS type ids"),
@@ -861,8 +862,8 @@ public static class ApiCatalogue
                     Method: "GET",
                     Path: "/api/v1/ServiceRegister/products/{id}",
                     Scope: "ServiceRegister:read",
-                    Description: "Single FIPS/CMDB product with channels, types, categorisations and contacts.",
-                    RouteParams: new[] { ("id", "guid", "Product UUID") },
+                    Description: "Single FIPS/CMDB product with channels, types, categorisations and contacts. {id} is the Compass GUID or the numeric uniqueId (for example /products/2491).",
+                    RouteParams: new[] { ("id", "guid or integer", "Product UUID or uniqueId") },
                     ResponseExample: """
 {
   "data": {
@@ -933,8 +934,8 @@ public static class ApiCatalogue
                     Method: "GET",
                     Path: "/api/v1/ServiceRegister/fips/user-groups",
                     Scope: "ServiceRegister:read",
-                    Description: "FIPS user groups lookup (root groups with children and synonyms).",
-                    ResponseExample: "[ { \"id\": 1, \"name\": \"Teachers\", \"children\": [], \"synonyms\": [\"Classroom teachers\"] } ]"),
+                    Description: "FIPS user groups lookup. Every group is returned, nested under its parent to every level, with parentId, synonyms, and the same tree on children and childGroups.",
+                    ResponseExample: "[ { \"id\": 13, \"parentId\": null, \"name\": \"Social care workforce\", \"children\": [ { \"id\": 20, \"parentId\": 13, \"name\": \"Social worker\", \"children\": [ { \"id\": 21, \"parentId\": 20, \"name\": \"Chief Social Worker for Children and Families\", \"children\": [], \"synonyms\": [] } ], \"synonyms\": [] } ], \"synonyms\": [] } ]"),
                 new(
                     Id: "sr-fips-roles",
                     Method: "GET",

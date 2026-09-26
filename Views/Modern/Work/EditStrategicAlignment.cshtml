@@ -11,7 +11,9 @@
     var selectedWorkTagIds = (int[])ViewBag.SelectedWorkTagIds ?? Array.Empty<int>();
     var selectedPo = work.PriorityOutcomes?.Select(po => po.PriorityOutcomeId).ToHashSet() ?? new HashSet<int>();
     var selectedMp = work.MissionPillars?.Select(mp => mp.MissionPillarId).ToHashSet() ?? new HashSet<int>();
-    var selectedDir = work.Directorates?.Select(d => d.DirectorateId).ToHashSet() ?? new HashSet<int>();
+    var selectedPrimaryDirectorate = work.Directorates?.FirstOrDefault(d => d.IsPrimary)
+        ?? work.Directorates?.FirstOrDefault();
+    var selectedPrimaryDirectorateId = selectedPrimaryDirectorate?.DirectorateId;
     var cancelUrl = Url.Action("Detail", "ModernWork", new { id = Model.Id }) + "#wd-strategic-alignment";
     ViewData["Title"] = "Edit strategic alignment";
 }
@@ -85,23 +87,31 @@
             }
           </fieldset>
 
- <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
- <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Directorates</legend>
- <div class="govuk-hint govuk-!-margin-bottom-3">Select the directorates involved in delivering this work.</div>
- <div class="govuk-checkboxes" data-module="govuk-checkboxes">
-              @foreach (var d in directorates)
-              {
- <div class="govuk-checkboxes__item">
- <input class="govuk-checkboxes__input" id="dir_@d.Id" name="DirectorateIds" type="checkbox" value="@d.Id" @(selectedDir.Contains(d.Id) ? "checked" : "") />
- <label class="govuk-label govuk-checkboxes__label" for="dir_@d.Id">@d.Name</label>
-                </div>
-              }
-            </div>
+ <div class="govuk-form-group govuk-!-margin-bottom-6">
+ <label class="govuk-label govuk-label--m" for="dir-primary">Directorate</label>
+ <div class="govuk-hint" id="dir-hint">The main directorate where delivery sits.</div>
             @if (!directorates.Any())
             {
  <p class="govuk-body govuk-!-margin-bottom-0">No directorates configured.</p>
             }
-          </fieldset>
+            else
+            {
+ <select class="govuk-select govuk-!-width-full" id="dir-primary" name="DirectorateIds" aria-describedby="dir-hint">
+ <option value="">None</option>
+                @foreach (var d in directorates)
+                {
+                  if (selectedPrimaryDirectorateId == d.Id)
+                  {
+ <option value="@d.Id" selected>@d.Name</option>
+                  }
+                  else
+                  {
+ <option value="@d.Id">@d.Name</option>
+                  }
+                }
+              </select>
+            }
+          </div>
 
  <fieldset id="edit-flagship" class="govuk-fieldset govuk-!-margin-bottom-6">
  <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Thematic tags</legend>

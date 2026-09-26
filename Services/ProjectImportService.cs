@@ -603,6 +603,7 @@ public class ProjectImportService : IProjectImportService
                     {
                         ProjectId = project.Id,
                         DivisionId = directorate.Id,
+                        IsPrimary = true,
                         CreatedAt = DateTime.UtcNow
                     });
                 }
