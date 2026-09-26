@@ -17,15 +17,18 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
 
     private readonly CompassDbContext _db;
     private readonly ICmdbService _cmdb;
+    private readonly FipsNewEntryOwnerEmailService _newEntryEmails;
     private readonly ILogger<FipsCmdbProductSyncService> _logger;
 
     public FipsCmdbProductSyncService(
         CompassDbContext db,
         ICmdbService cmdb,
+        FipsNewEntryOwnerEmailService newEntryEmails,
         ILogger<FipsCmdbProductSyncService> logger)
     {
         _db = db;
         _cmdb = cmdb;
+        _newEntryEmails = newEntryEmails;
         _logger = logger;
     }
 
@@ -68,6 +71,7 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
         _db.FipsSyncHistories.Add(history);
         await _db.SaveChangesAsync(cancellationToken);
         var historyId = history.Id;
+        result.HistoryId = historyId;
 
         try
         {
@@ -120,9 +124,11 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
                         try
                         {
                             var users = await _cmdb.GetServiceOfferingUsersAsync(entry);
-                            if (!idByCmdbId.TryGetValue(sysKey, out var existingId))
+                            var isNew = !idByCmdbId.TryGetValue(sysKey, out var existingId);
+                            CMDBProduct product;
+                            if (isNew)
                             {
-                                var product = new CMDBProduct
+                                product = new CMDBProduct
                                 {
                                     CMDBID = sysKey,
                                     Status = CMDBProductStatus.New,
@@ -132,11 +138,19 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
                                     UpdatedBy = email
                                 };
                                 _db.CMDBProducts.Add(product);
+                            }
+                            else
+                            {
+                                product = await _db.CMDBProducts
+                                    .Include(p => p.Contacts)
+                                    .FirstAsync(p => p.Id == existingId, cancellationToken);
+                            }
+
+                            var applied = await ApplyCmdbEntryToTrackedProductAsync(
+                                product, entry, users, rules, roleByName, email, now, cancellationToken);
+                            if (isNew)
+                            {
                                 result.Created++;
-                                var statusSet = await ApplyCmdbEntryToTrackedProductAsync(
-                                    product, entry, users, rules, roleByName, email, now, cancellationToken);
-                                if (statusSet)
-                                    result.StatusSetByRules++;
                                 idByCmdbId[sysKey] = product.Id;
                                 result.CreatedProducts.Add(new FipsCmdbSyncedProduct
                                 {
@@ -145,16 +159,27 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
                                     Status = product.Status
                                 });
                             }
+                            else if (applied.Changed)
+                            {
+                                result.Updated++;
+                            }
                             else
                             {
-                                var product = await _db.CMDBProducts
-                                    .Include(p => p.Contacts)
-                                    .FirstAsync(p => p.Id == existingId, cancellationToken);
-                                result.Updated++;
-                                var statusSet = await ApplyCmdbEntryToTrackedProductAsync(
-                                    product, entry, users, rules, roleByName, email, now, cancellationToken);
-                                if (statusSet)
-                                    result.StatusSetByRules++;
+                                result.Unchanged++;
+                            }
+
+                            if (applied.StatusSetByRule)
+                                result.StatusSetByRules++;
+                            if (applied.Changed)
+                            {
+                                result.Changes.Add(new FipsCmdbProductChange
+                                {
+                                    Id = product.Id,
+                                    SysId = sysKey,
+                                    Title = product.Title,
+                                    Kind = isNew ? "Created" : "Updated",
+                                    Fields = applied.Fields
+                                });
                             }
                         }
                         catch (Exception ex)
@@ -175,11 +200,13 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
             result.NewStatusCount = await _db.CMDBProducts
                 .CountAsync(p => p.Status == CMDBProductStatus.New, cancellationToken);
 
+            await NotifyNewEntriesAsync(cancellationToken);
             await FinalizeHistoryAsync(historyId, FipsCmdbCompassSyncHistory.StatusCompleted, result, null, now, cancellationToken);
             return result;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            await NotifyNewEntriesAsync(CancellationToken.None);
             await FinalizeHistoryAsync(historyId, FipsCmdbCompassSyncHistory.StatusFailed, result, ex.ToString(), now, cancellationToken);
             throw;
         }
@@ -248,6 +275,22 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
         return running.Any(h => h.StartedAt >= staleBefore);
     }
 
+    private async Task NotifyNewEntriesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _newEntryEmails.SendPendingAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not send new service register entry emails");
+        }
+    }
+
     private async Task FinalizeHistoryAsync(
         int historyId,
         string status,
@@ -279,6 +322,7 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
                 result.SkippedNoSysId,
                 result.StatusSetByRules,
                 result.Errors,
+                result.Unchanged,
                 result.NewStatusCount,
                 errorSamples = result.ErrorSamples,
                 created = result.CreatedProducts.Select(p => new
@@ -286,6 +330,19 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
                     id = p.Id,
                     title = p.Title,
                     status = p.Status.ToString()
+                }),
+                changes = result.Changes.Select(change => new
+                {
+                    id = change.Id,
+                    sysId = change.SysId,
+                    title = change.Title,
+                    kind = change.Kind,
+                    fields = change.Fields.Select(field => new
+                    {
+                        field = field.Field,
+                        from = field.From,
+                        to = field.To
+                    })
                 })
             }, CmdbSnapshotJsonOptions);
 
@@ -370,16 +427,18 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
             var rules = await LoadActiveRulesAsync(cancellationToken);
             var roleByName = await LoadRoleMapAsync(cancellationToken);
 
-            var statusSet = await ApplyCmdbEntryToTrackedProductAsync(
+            var applied = await ApplyCmdbEntryToTrackedProductAsync(
                 product, entry, users, rules, roleByName, email, now, cancellationToken);
 
             return new FipsCmdbSingleProductSyncResult
             {
                 Success = true,
-                Message = statusSet
-                    ? "Product updated from CMDB. Status was set by a sync rule."
-                    : "Product updated from CMDB.",
-                StatusSetByRule = statusSet
+                Message = !applied.Changed
+                    ? "Product already matches CMDB. No changes were saved."
+                    : applied.StatusSetByRule
+                        ? "Product updated from CMDB. Status was set by a sync rule."
+                        : "Product updated from CMDB.",
+                StatusSetByRule = applied.StatusSetByRule
             };
         }
         catch (Exception ex)
@@ -406,8 +465,15 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
         return roleRows.ToDictionary(r => r.Name, r => r.Id, StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>Applies CMDB row to an already-tracked product and saves. Returns true if a sync rule set status.</summary>
-    private async Task<bool> ApplyCmdbEntryToTrackedProductAsync(
+    private sealed class CmdbApplyOutcome
+    {
+        public bool StatusSetByRule { get; init; }
+        public bool Changed { get; init; }
+        public List<FipsCmdbFieldChange> Fields { get; init; } = [];
+    }
+
+    /// <summary>Applies CMDB row to an already-tracked product and saves when mapped fields differ.</summary>
+    private async Task<CmdbApplyOutcome> ApplyCmdbEntryToTrackedProductAsync(
         CMDBProduct product,
         CmdbEntry entry,
         CmdbServiceUsers users,
@@ -417,47 +483,168 @@ public class FipsCmdbProductSyncService : IFipsCmdbProductSyncService
         DateTime updatedUtc,
         CancellationToken cancellationToken)
     {
+        var isNew = _db.Entry(product).State == EntityState.Added;
         var title = string.IsNullOrWhiteSpace(entry.Name)
             ? "Untitled service offering"
             : entry.Name.Trim();
         if (title.Length > 300)
             title = title[..300];
 
-        product.Title = title;
-        product.CMDBDescription = entry.Description;
-        product.UpdatedAt = updatedUtc;
-        product.UpdatedBy = updatedByEmail;
-
+        var description = string.IsNullOrWhiteSpace(entry.Description) ? null : entry.Description.Trim();
         var entryJson = string.IsNullOrEmpty(entry.RecordJson)
             ? JsonSerializer.Serialize(entry, CmdbSnapshotJsonOptions)
             : entry.RecordJson;
-        product.LastCmdbSnapshotJson = entryJson;
-
-        if (product.Contacts.Count > 0)
-        {
-            _db.CMDBProductContacts.RemoveRange(product.Contacts);
-            product.Contacts.Clear();
-        }
-
-        AddContact(product, roleByName, "Service Owner", users.ServiceOwner, canManage: true);
-        AddContact(product, roleByName, "Product manager", users.ProductManager, canManage: false);
-        AddContact(product, roleByName, "Delivery Manager", users.DeliveryManager, canManage: false);
-        AddContact(product, roleByName, "Information Asset Owner", users.InformationAssetOwner, canManage: false);
-        AddContact(product, roleByName, "Senior Responsible Officer", users.SeniorResponsibleOwner, canManage: false);
 
         var ruleStatus = FipsCmdbSyncRuleEvaluator.EvaluateFirstStatusMatch(
             rules, entry, entryJson, product, title, _logger);
-        var statusSet = ruleStatus.HasValue;
-        if (statusSet)
-            product.Status = ruleStatus!.Value;
+        var status = ruleStatus ?? product.Status;
+        var statusSet = ruleStatus.HasValue && ruleStatus.Value != product.Status;
+        var enterprise = product.IsEnterpriseService
+                         || FipsCmdbSyncRuleEvaluator.EvaluateSetsEnterpriseService(
+                             rules, entry, entryJson, product, title, _logger);
 
-        if (FipsCmdbSyncRuleEvaluator.EvaluateSetsEnterpriseService(
-                rules, entry, entryJson, product, title, _logger))
-            product.IsEnterpriseService = true;
+        var intendedContacts = BuildIntendedContacts(roleByName, users);
+        var roleIdToName = roleByName
+            .GroupBy(pair => pair.Value)
+            .ToDictionary(group => group.Key, group => group.First().Key);
+        var beforeContacts = FormatContacts(product.Contacts.Select(contact => (
+            roleIdToName.TryGetValue(contact.FipsContactRoleId, out var roleName) ? roleName : "Contact",
+            contact.UserName,
+            contact.UserEmail)));
+        var afterContacts = FormatContacts(intendedContacts.Select(contact => (
+            contact.Role,
+            contact.User.Name,
+            (string?)contact.User.Email)));
+        var fields = BuildFieldChanges(
+            isNew,
+            product,
+            title,
+            description,
+            status,
+            enterprise,
+            beforeContacts,
+            afterContacts);
+
+        if (!isNew && fields.Count == 0)
+            return new CmdbApplyOutcome();
+
+        product.Title = title;
+        product.CMDBDescription = description;
+        product.UpdatedAt = updatedUtc;
+        product.UpdatedBy = updatedByEmail;
+        product.Status = status;
+        product.IsEnterpriseService = enterprise;
+        product.LastCmdbSnapshotJson = entryJson;
+        if (isNew && status != CMDBProductStatus.New)
+            product.NewOwnerCompletionEmailSentAt = updatedUtc;
+
+        if (!string.Equals(beforeContacts, afterContacts, StringComparison.Ordinal))
+        {
+            if (product.Contacts.Count > 0)
+            {
+                _db.CMDBProductContacts.RemoveRange(product.Contacts);
+                product.Contacts.Clear();
+            }
+
+            foreach (var contact in intendedContacts)
+                AddContact(product, roleByName, contact.Role, contact.User, contact.CanManage);
+        }
 
         await _db.SaveChangesAsync(cancellationToken);
-        return statusSet;
+        return new CmdbApplyOutcome
+        {
+            StatusSetByRule = statusSet,
+            Changed = true,
+            Fields = fields
+        };
     }
+
+    private static List<FipsCmdbFieldChange> BuildFieldChanges(
+        bool isNew,
+        CMDBProduct product,
+        string title,
+        string? description,
+        CMDBProductStatus status,
+        bool enterprise,
+        string beforeContacts,
+        string afterContacts)
+    {
+        var fields = new List<FipsCmdbFieldChange>();
+        if (isNew)
+        {
+            fields.Add(new FipsCmdbFieldChange { Field = "Title", To = title });
+            if (!string.IsNullOrWhiteSpace(description))
+                fields.Add(new FipsCmdbFieldChange { Field = "CMDB description", To = description });
+            fields.Add(new FipsCmdbFieldChange { Field = "Status", To = status.ToString() });
+            if (enterprise)
+                fields.Add(new FipsCmdbFieldChange { Field = "Enterprise service", To = "Yes" });
+            if (!string.IsNullOrWhiteSpace(afterContacts))
+                fields.Add(new FipsCmdbFieldChange { Field = "Contacts", To = afterContacts });
+            return fields;
+        }
+
+        AddField(fields, "Title", product.Title, title);
+        AddField(fields, "CMDB description", product.CMDBDescription, description);
+        AddField(fields, "Status", product.Status.ToString(), status.ToString());
+        AddField(fields, "Enterprise service", product.IsEnterpriseService ? "Yes" : "No", enterprise ? "Yes" : "No");
+        AddField(fields, "Contacts", beforeContacts, afterContacts);
+        return fields;
+    }
+
+    private static void AddField(List<FipsCmdbFieldChange> fields, string name, string? from, string? to)
+    {
+        var left = Normalize(from);
+        var right = Normalize(to);
+        if (string.Equals(left, right, StringComparison.Ordinal))
+            return;
+
+        fields.Add(new FipsCmdbFieldChange
+        {
+            Field = name,
+            From = string.IsNullOrEmpty(left) ? null : left,
+            To = string.IsNullOrEmpty(right) ? null : right
+        });
+    }
+
+    private static string Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
+
+    private static List<(string Role, CmdbUser User, bool CanManage)> BuildIntendedContacts(
+        IReadOnlyDictionary<string, int> roleByName,
+        CmdbServiceUsers users)
+    {
+        var contacts = new List<(string Role, CmdbUser User, bool CanManage)>();
+        AddIntended(contacts, roleByName, "Service Owner", users.ServiceOwner, canManage: true);
+        AddIntended(contacts, roleByName, "Product manager", users.ProductManager, canManage: false);
+        AddIntended(contacts, roleByName, "Delivery Manager", users.DeliveryManager, canManage: false);
+        AddIntended(contacts, roleByName, "Information Asset Owner", users.InformationAssetOwner, canManage: false);
+        AddIntended(contacts, roleByName, "Senior Responsible Officer", users.SeniorResponsibleOwner, canManage: false);
+        return contacts;
+    }
+
+    private static void AddIntended(
+        List<(string Role, CmdbUser User, bool CanManage)> contacts,
+        IReadOnlyDictionary<string, int> roleByName,
+        string roleName,
+        CmdbUser? user,
+        bool canManage)
+    {
+        if (user == null || string.IsNullOrWhiteSpace(user.Email) || !roleByName.ContainsKey(roleName))
+            return;
+        contacts.Add((roleName, user, canManage));
+    }
+
+    private static string FormatContacts(IEnumerable<(string Role, string? Name, string? Email)> contacts) =>
+        string.Join("; ", contacts
+            .Select(contact =>
+            {
+                var email = contact.Email?.Trim() ?? "";
+                var name = contact.Name?.Trim();
+                var who = string.IsNullOrWhiteSpace(name) ? email : $"{name} <{email}>";
+                return $"{contact.Role}: {who}";
+            })
+            .Where(line => line.Length > 0)
+            .OrderBy(line => line, StringComparer.OrdinalIgnoreCase));
 
     private static void AddContact(
         CMDBProduct product,

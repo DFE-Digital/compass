@@ -51,18 +51,21 @@ public sealed class FipsCmdbDailySyncService : IFipsCmdbDailySyncService
         if (!config.DailySyncEnabled)
             return FipsCmdbDailySyncOutcome.Disabled;
 
+        if (!FipsCmdbSyncSchedule.IsInsideWindow(UkDateTime.Now(), config))
+            return FipsCmdbDailySyncOutcome.OutsideWindow;
+
         if (!await IsFipsRegisterOnAsync(cancellationToken))
         {
-            _logger.LogInformation("Skipping daily CMDB sync because the FIPS service register feature is off.");
+            _logger.LogInformation("Skipping scheduled CMDB sync because the FIPS service register feature is off.");
             return FipsCmdbDailySyncOutcome.FeatureOff;
         }
 
         var due = await GetScheduledRunDueStateAsync(cancellationToken);
-        if (due == FipsCmdbDailySyncOutcome.AlreadyRanToday)
-            return FipsCmdbDailySyncOutcome.AlreadyRanToday;
+        if (due == FipsCmdbDailySyncOutcome.AlreadyRanThisSlot)
+            return FipsCmdbDailySyncOutcome.AlreadyRanThisSlot;
         if (due == FipsCmdbDailySyncOutcome.Busy)
         {
-            _logger.LogInformation("Scheduled daily CMDB sync waiting because another bulk sync is already running.");
+            _logger.LogInformation("Scheduled CMDB sync waiting because another bulk sync is already running.");
             return FipsCmdbDailySyncOutcome.Busy;
         }
 
@@ -83,16 +86,17 @@ public sealed class FipsCmdbDailySyncService : IFipsCmdbDailySyncService
         catch (Exception ex)
         {
             error = ex;
-            _logger.LogError(ex, "Scheduled daily CMDB sync failed");
+            _logger.LogError(ex, "Scheduled CMDB sync failed");
         }
 
         if (result is { AlreadyRunning: true })
         {
-            _logger.LogInformation("Scheduled daily CMDB sync skipped because another bulk sync is already running.");
+            _logger.LogInformation("Scheduled CMDB sync skipped because another bulk sync is already running.");
             return FipsCmdbDailySyncOutcome.Busy;
         }
 
-        await SendSummaryEmailAsync(result, error, cancellationToken);
+        if (error != null || result == null || result.Created > 0 || result.Updated > 0 || result.Errors > 0)
+            await SendSummaryEmailAsync(result, error, cancellationToken);
 
         return error != null || result == null
             ? FipsCmdbDailySyncOutcome.Failed
@@ -110,22 +114,30 @@ public sealed class FipsCmdbDailySyncService : IFipsCmdbDailySyncService
 
     private async Task<FipsCmdbDailySyncOutcome> GetScheduledRunDueStateAsync(CancellationToken cancellationToken)
     {
-        var (startUtc, endUtc) = UkDateTime.TodayRangeUtc();
+        var config = _options.Value;
+        var interval = FipsCmdbSyncSchedule.IntervalMinutes(config);
+        var slotStartUk = FipsCmdbSyncSchedule.CurrentSlotStartUk(UkDateTime.Now(), interval);
+        var slotStartUtc = UkDateTime.ToUtc(slotStartUk);
         var staleBefore = DateTime.UtcNow.AddHours(-2);
-        var todayRuns = await _db.FipsSyncHistories.AsNoTracking()
+        var scheduledBy = new[]
+        {
+            FipsCmdbCompassSyncHistory.ScheduledInitiatedBy,
+            FipsCmdbCompassSyncHistory.LegacyScheduledInitiatedBy
+        };
+        var slotRuns = await _db.FipsSyncHistories.AsNoTracking()
             .Where(h => h.SyncType == FipsCmdbCompassSyncHistory.SyncType
-                        && h.InitiatedBy == FipsCmdbCompassSyncHistory.ScheduledInitiatedBy
-                        && h.StartedAt >= startUtc
-                        && h.StartedAt < endUtc)
+                        && h.InitiatedBy != null
+                        && scheduledBy.Contains(h.InitiatedBy)
+                        && h.StartedAt >= slotStartUtc)
             .Select(h => new { h.Status, h.StartedAt })
             .ToListAsync(cancellationToken);
 
-        if (todayRuns.Any(h =>
+        if (slotRuns.Any(h =>
                 h.Status == FipsCmdbCompassSyncHistory.StatusCompleted
                 || h.Status == FipsCmdbCompassSyncHistory.StatusFailed))
-            return FipsCmdbDailySyncOutcome.AlreadyRanToday;
+            return FipsCmdbDailySyncOutcome.AlreadyRanThisSlot;
 
-        if (todayRuns.Any(h =>
+        if (slotRuns.Any(h =>
                 h.Status == FipsCmdbCompassSyncHistory.StatusRunning
                 && h.StartedAt >= staleBefore))
             return FipsCmdbDailySyncOutcome.Busy;
@@ -141,15 +153,15 @@ public sealed class FipsCmdbDailySyncService : IFipsCmdbDailySyncService
         var recipient = _options.Value.DailySyncSummaryEmail?.Trim();
         if (string.IsNullOrWhiteSpace(recipient))
         {
-            _logger.LogWarning("Daily CMDB sync summary email skipped — FipsSync:DailySyncSummaryEmail is empty.");
+            _logger.LogWarning("CMDB sync summary email skipped — FipsSync:DailySyncSummaryEmail is empty.");
             return;
         }
 
         var ukNow = UkDateTime.Now();
         var envLabel = _environment.IsProduction() ? null : _environment.EnvironmentName;
-        var subject = error != null
-            ? AppendEnvironment($"CMDB sync failed — {ukNow:d MMMM yyyy}", envLabel)
-            : AppendEnvironment($"CMDB sync summary — {ukNow:d MMMM yyyy}", envLabel);
+        var subject = error != null || result?.Errors > 0
+            ? AppendEnvironment($"CMDB sync issues — {ukNow:d MMMM yyyy HH:mm}", envLabel)
+            : AppendEnvironment($"CMDB sync summary — {ukNow:d MMMM yyyy HH:mm}", envLabel);
         var body = BuildEmailBody(result, error);
 
         var send = await _notificationService.SendEmailAsync(
@@ -167,11 +179,11 @@ public sealed class FipsCmdbDailySyncService : IFipsCmdbDailySyncService
             body,
             send.Success,
             send.ErrorMessage,
-            $"cmdb-sync:{ukNow:yyyy-MM-dd}",
+            $"cmdb-sync:{ukNow:yyyy-MM-dd-HH-mm}",
             cancellationToken);
 
         if (!send.Success)
-            _logger.LogWarning("Daily CMDB sync summary email was not sent: {Error}", send.ErrorMessage);
+            _logger.LogWarning("CMDB sync summary email was not sent: {Error}", send.ErrorMessage);
     }
 
     private string BuildEmailBody(FipsCmdbProductSyncResult? result, Exception? error)
@@ -179,18 +191,21 @@ public sealed class FipsCmdbDailySyncService : IFipsCmdbDailySyncService
         var baseUrl = ResolvePublicBaseUrl();
         var newTabUrl = $"{baseUrl}/modern/operations/service-register?tab=new";
         var settingsUrl = $"{baseUrl}/modern/operations/service-register/sync-settings";
+        var runsUrl = result?.HistoryId is int historyId
+            ? $"{baseUrl}/modern/operations/service-register/sync-settings/runs/{historyId}"
+            : $"{baseUrl}/modern/operations/service-register/sync-settings/runs";
         var sb = new StringBuilder();
 
         if (error != null)
         {
-            sb.AppendLine("The daily CMDB sync to the COMPASS service register failed.");
+            sb.AppendLine("The scheduled CMDB sync to the COMPASS service register failed.");
             sb.AppendLine();
             sb.AppendLine($"Error: {error.Message}");
             sb.AppendLine();
         }
         else
         {
-            sb.AppendLine("The daily CMDB sync to the COMPASS service register has finished.");
+            sb.AppendLine("The scheduled CMDB sync to the COMPASS service register has finished.");
             sb.AppendLine();
         }
 
@@ -205,6 +220,7 @@ public sealed class FipsCmdbDailySyncService : IFipsCmdbDailySyncService
             sb.AppendLine($"Updated: {result.Updated}");
             sb.AppendLine($"Status set by sync rules: {result.StatusSetByRules}");
             sb.AppendLine($"Skipped (retired in Compass): {result.SkippedRetired}");
+            sb.AppendLine($"Unchanged: {result.Unchanged}");
             sb.AppendLine($"Skipped (no sys_id): {result.SkippedNoSysId}");
             sb.AppendLine($"Errors: {result.Errors}");
             sb.AppendLine();
@@ -251,6 +267,9 @@ public sealed class FipsCmdbDailySyncService : IFipsCmdbDailySyncService
             }
         }
 
+        sb.AppendLine("Sync run report:");
+        sb.AppendLine(runsUrl);
+        sb.AppendLine();
         sb.AppendLine("Sync settings:");
         sb.AppendLine(settingsUrl);
         return sb.ToString().TrimEnd();

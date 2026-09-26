@@ -6,7 +6,8 @@ public static class FipsCmdbCompassSyncHistory
     public const string SyncType = "CMDB to Compass";
     public const string SourceEnvironment = "CMDB";
     public const string TargetEnvironment = "Compass";
-    public const string ScheduledInitiatedBy = "Scheduled daily job";
+    public const string ScheduledInitiatedBy = "Scheduled sync";
+    public const string LegacyScheduledInitiatedBy = "Scheduled daily job";
     public const string StatusRunning = "Running";
     public const string StatusCompleted = "Completed";
     public const string StatusFailed = "Failed";

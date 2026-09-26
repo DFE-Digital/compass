@@ -1888,6 +1888,107 @@ public class ModernOperationsController : Controller
         return View("~/Views/Modern/Operations/ServiceRegisterSyncSettings.cshtml", vm);
     }
 
+    [HttpGet("service-register/sync-settings/runs")]
+    public async Task<IActionResult> ServiceRegisterSyncRuns(string? show, int page = 1, CancellationToken ct = default)
+    {
+        var blocked = await FipsDatabaseDisabledRedirectAsync();
+        if (blocked != null)
+            return blocked;
+
+        SetNav("operations-service-register");
+        var filter = NormalizeSyncRunFilter(show);
+        var query = FilteredSyncRuns(filter);
+        var total = await query.CountAsync(ct);
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)SyncRunPageSize));
+        var currentPage = Math.Clamp(page < 1 ? 1 : page, 1, totalPages);
+        var runs = await query
+            .OrderByDescending(h => h.StartedAt)
+            .ThenByDescending(h => h.Id)
+            .Skip((currentPage - 1) * SyncRunPageSize)
+            .Take(SyncRunPageSize)
+            .Select(h => new ServiceRegisterSyncRunRow
+            {
+                Id = h.Id,
+                StartedAt = h.StartedAt,
+                CompletedAt = h.CompletedAt,
+                DurationSeconds = h.DurationSeconds,
+                Status = h.Status,
+                InitiatedBy = h.InitiatedBy,
+                ProductsCreated = h.ProductsCreated,
+                ProductsUpdated = h.ProductsUpdated,
+                ProductsSkipped = h.ProductsSkipped,
+                ErrorsEncountered = h.ErrorsEncountered
+            })
+            .ToListAsync(ct);
+
+        var subNav = await FipsProductListingHelper.BuildSubNavModelAsync(_db, "sync", CurrentUserEmail, ct);
+        return View("~/Views/Modern/Operations/ServiceRegisterSyncRuns.cshtml", new ServiceRegisterSyncRunsViewModel
+        {
+            SubNav = subNav,
+            Filter = filter,
+            TotalCount = total,
+            Runs = runs,
+            Pagination = new GovUkPaginationViewModel
+            {
+                CurrentPage = currentPage,
+                TotalPages = totalPages,
+                NavigationAriaLabel = "Sync run pages",
+                PageUrl = p => Url.Action(nameof(ServiceRegisterSyncRuns), new { show = filter == "all" ? null : filter, page = p }) ?? "#"
+            }
+        });
+    }
+
+    [HttpGet("service-register/sync-settings/runs/{id:int}")]
+    public async Task<IActionResult> ServiceRegisterSyncRun(int id, CancellationToken ct)
+    {
+        var blocked = await FipsDatabaseDisabledRedirectAsync();
+        if (blocked != null)
+            return blocked;
+
+        SetNav("operations-service-register");
+        var row = await _db.FipsSyncHistories.AsNoTracking()
+            .Where(h => h.Id == id && h.SyncType == FipsCmdbCompassSyncHistory.SyncType)
+            .Select(h => new
+            {
+                h.Id,
+                h.StartedAt,
+                h.CompletedAt,
+                h.DurationSeconds,
+                h.Status,
+                h.InitiatedBy,
+                h.ProductsCreated,
+                h.ProductsUpdated,
+                h.ProductsSkipped,
+                h.ErrorsEncountered,
+                h.ErrorDetails,
+                h.ActionsLog
+            })
+            .FirstOrDefaultAsync(ct);
+        if (row == null)
+            return NotFound();
+
+        var subNav = await FipsProductListingHelper.BuildSubNavModelAsync(_db, "sync", CurrentUserEmail, ct);
+        return View("~/Views/Modern/Operations/ServiceRegisterSyncRun.cshtml", new ServiceRegisterSyncRunDetailViewModel
+        {
+            SubNav = subNav,
+            ErrorDetails = row.ErrorDetails,
+            Report = FipsCmdbSyncRunReport.Parse(row.ActionsLog),
+            Run = new ServiceRegisterSyncRunRow
+            {
+                Id = row.Id,
+                StartedAt = row.StartedAt,
+                CompletedAt = row.CompletedAt,
+                DurationSeconds = row.DurationSeconds,
+                Status = row.Status,
+                InitiatedBy = row.InitiatedBy,
+                ProductsCreated = row.ProductsCreated,
+                ProductsUpdated = row.ProductsUpdated,
+                ProductsSkipped = row.ProductsSkipped,
+                ErrorsEncountered = row.ErrorsEncountered
+            }
+        });
+    }
+
     [HttpGet("service-register/cmdb-sync-rules")]
     public IActionResult ServiceRegisterCmdbRulesLegacy() =>
         RedirectToAction(nameof(ServiceRegisterSyncSettings));
@@ -2169,9 +2270,8 @@ public class ModernOperationsController : Controller
         var subNav = await FipsProductListingHelper.BuildSubNavModelAsync(
             _db, "sync", CurrentUserEmail, ct);
         var lastRun = await _fipsCmdbProductSync.GetLastBulkRunAsync(ct);
-        var hour = _configuration.GetValue<int>("FipsSync:DailySyncHourUk", 6);
-        if (hour is < 0 or > 23)
-            hour = 6;
+        var syncConfig = new FipsSyncConfiguration();
+        _configuration.GetSection("FipsSync").Bind(syncConfig);
 
         return new ServiceRegisterSyncSettingsViewModel
         {
@@ -2185,13 +2285,36 @@ public class ModernOperationsController : Controller
                 : UkDateTime.FormatUk(lastRun.CompletedAtUtc ?? lastRun.StartedAtUtc),
             LastBulkSyncByDisplay = FormatBulkSyncInitiatedBy(lastRun?.InitiatedBy),
             LastBulkSyncStatusDisplay = string.IsNullOrWhiteSpace(lastRun?.Status) ? null : lastRun.Status,
-            DailySyncEnabled = _configuration.GetValue<bool>("FipsSync:DailySyncEnabled", true),
-            DailySyncScheduleDisplay = $"{hour:00}:00 (UK)",
+            DailySyncEnabled = syncConfig.DailySyncEnabled,
+            DailySyncScheduleDisplay = FipsCmdbSyncSchedule.Describe(syncConfig),
             DailySyncSummaryEmail = string.IsNullOrWhiteSpace(_configuration["FipsSync:DailySyncSummaryEmail"])
                 ? "fips.service@education.gov.uk"
                 : _configuration["FipsSync:DailySyncSummaryEmail"]!.Trim()
         };
     }
+
+    private const int SyncRunPageSize = 25;
+
+    private IQueryable<FipsSyncHistory> FilteredSyncRuns(string filter)
+    {
+        var query = _db.FipsSyncHistories.AsNoTracking()
+            .Where(h => h.SyncType == FipsCmdbCompassSyncHistory.SyncType);
+        return filter switch
+        {
+            "completed" => query.Where(h => h.Status == FipsCmdbCompassSyncHistory.StatusCompleted),
+            "failed" => query.Where(h => h.Status == FipsCmdbCompassSyncHistory.StatusFailed),
+            "issues" => query.Where(h =>
+                h.Status == FipsCmdbCompassSyncHistory.StatusFailed || h.ErrorsEncountered > 0),
+            _ => query
+        };
+    }
+
+    private static string NormalizeSyncRunFilter(string? show) =>
+        show?.Trim().ToLowerInvariant() switch
+        {
+            "completed" or "failed" or "issues" => show.Trim().ToLowerInvariant(),
+            _ => "all"
+        };
 
     private static string FormatBulkSyncInitiatedBy(string? initiatedBy)
     {
