@@ -2965,6 +2965,47 @@ public partial class ModernAdminController : Controller
         return RedirectToAction("Index", new { panel = "fips-channels" });
     }
 
+    [HttpGet("fips/channel/{id:int}/edit")]
+    public async Task<IActionResult> FipsChannelEdit(int id)
+    {
+        var guard = await RequireFipsDatabaseAdminAsync();
+        if (guard != null)
+            return guard;
+
+        var entity = await _context.FipsChannels.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        if (entity == null)
+            return NotFound();
+
+        return View("~/Views/Modern/Admin/FipsLookupEdit.cshtml", ChannelEditModel(entity));
+    }
+
+    [HttpPost("fips/channel/{id:int}/edit")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> FipsUpdateChannel(int id, string name, string? description, int displayOrder)
+    {
+        var guard = await RequireFipsDatabaseAdminAsync();
+        if (guard != null)
+            return guard;
+
+        var entity = await _context.FipsChannels.FindAsync(id);
+        if (entity == null)
+            return NotFound();
+
+        if (!TryReadFipsLookupEdit(name, description, out var cleanedName, out var cleanedDescription, out var errorField, out var errorMessage))
+        {
+            ModelState.AddModelError(errorField, errorMessage);
+            return View("~/Views/Modern/Admin/FipsLookupEdit.cshtml", ChannelEditModel(entity, name, description, displayOrder));
+        }
+
+        entity.Name = cleanedName;
+        entity.Description = cleanedDescription;
+        entity.DisplayOrder = displayOrder;
+
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Channel \"{entity.Name}\" updated.";
+        return RedirectToAction(nameof(FipsChannelEdit), new { id });
+    }
+
     [HttpPost("fips/channel/{id:int}/toggle")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> FipsToggleChannel(int id)
@@ -2975,6 +3016,11 @@ public partial class ModernAdminController : Controller
 
         var e = await _context.FipsChannels.FindAsync(id);
         if (e != null) { e.Active = !e.Active; await _context.SaveChangesAsync(); }
+
+        var referer = Request.Headers.Referer.ToString();
+        if (referer.Contains("/fips/channel/", StringComparison.OrdinalIgnoreCase))
+            return RedirectToAction(nameof(FipsChannelEdit), new { id });
+
         return RedirectToAction("Index", new { panel = "fips-channels" });
     }
 
@@ -2992,6 +3038,47 @@ public partial class ModernAdminController : Controller
         return RedirectToAction("Index", new { panel = "fips-types" });
     }
 
+    [HttpGet("fips/type/{id:int}/edit")]
+    public async Task<IActionResult> FipsTypeEdit(int id)
+    {
+        var guard = await RequireFipsDatabaseAdminAsync();
+        if (guard != null)
+            return guard;
+
+        var entity = await _context.FipsTypes.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        if (entity == null)
+            return NotFound();
+
+        return View("~/Views/Modern/Admin/FipsLookupEdit.cshtml", TypeEditModel(entity));
+    }
+
+    [HttpPost("fips/type/{id:int}/edit")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> FipsUpdateType(int id, string name, string? description, int displayOrder)
+    {
+        var guard = await RequireFipsDatabaseAdminAsync();
+        if (guard != null)
+            return guard;
+
+        var entity = await _context.FipsTypes.FindAsync(id);
+        if (entity == null)
+            return NotFound();
+
+        if (!TryReadFipsLookupEdit(name, description, out var cleanedName, out var cleanedDescription, out var errorField, out var errorMessage))
+        {
+            ModelState.AddModelError(errorField, errorMessage);
+            return View("~/Views/Modern/Admin/FipsLookupEdit.cshtml", TypeEditModel(entity, name, description, displayOrder));
+        }
+
+        entity.Name = cleanedName;
+        entity.Description = cleanedDescription;
+        entity.DisplayOrder = displayOrder;
+
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Type \"{entity.Name}\" updated.";
+        return RedirectToAction(nameof(FipsTypeEdit), new { id });
+    }
+
     [HttpPost("fips/type/{id:int}/toggle")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> FipsToggleType(int id)
@@ -3002,7 +3089,87 @@ public partial class ModernAdminController : Controller
 
         var e = await _context.FipsTypes.FindAsync(id);
         if (e != null) { e.Active = !e.Active; await _context.SaveChangesAsync(); }
+
+        var referer = Request.Headers.Referer.ToString();
+        if (referer.Contains("/fips/type/", StringComparison.OrdinalIgnoreCase))
+            return RedirectToAction(nameof(FipsTypeEdit), new { id });
+
         return RedirectToAction("Index", new { panel = "fips-types" });
+    }
+
+    private static AdminFipsLookupEditViewModel ChannelEditModel(
+        FipsChannel entity,
+        string? name = null,
+        string? description = null,
+        int? displayOrder = null) =>
+        new()
+        {
+            Id = entity.Id,
+            Name = name ?? entity.Name,
+            Description = description ?? entity.Description,
+            DisplayOrder = displayOrder ?? entity.DisplayOrder,
+            IsActive = entity.Active,
+            Panel = "fips-channels",
+            ListLabel = "Channels",
+            SingularLabel = "channel",
+            SaveAction = "FipsUpdateChannel",
+            ToggleAction = "FipsToggleChannel"
+        };
+
+    private static AdminFipsLookupEditViewModel TypeEditModel(
+        FipsType entity,
+        string? name = null,
+        string? description = null,
+        int? displayOrder = null) =>
+        new()
+        {
+            Id = entity.Id,
+            Name = name ?? entity.Name,
+            Description = description ?? entity.Description,
+            DisplayOrder = displayOrder ?? entity.DisplayOrder,
+            IsActive = entity.Active,
+            Panel = "fips-types",
+            ListLabel = "Types",
+            SingularLabel = "type",
+            SaveAction = "FipsUpdateType",
+            ToggleAction = "FipsToggleType"
+        };
+
+    private static bool TryReadFipsLookupEdit(
+        string? name,
+        string? description,
+        out string cleanedName,
+        out string? cleanedDescription,
+        out string errorField,
+        out string errorMessage)
+    {
+        cleanedName = name?.Trim() ?? "";
+        cleanedDescription = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        errorField = "";
+        errorMessage = "";
+
+        if (string.IsNullOrWhiteSpace(cleanedName))
+        {
+            errorField = "name";
+            errorMessage = "Enter a name";
+            return false;
+        }
+
+        if (cleanedName.Length > 450)
+        {
+            errorField = "name";
+            errorMessage = "Name must be 450 characters or fewer";
+            return false;
+        }
+
+        if (cleanedDescription is { Length: > 450 })
+        {
+            errorField = "description";
+            errorMessage = "Description must be 450 characters or fewer";
+            return false;
+        }
+
+        return true;
     }
 
     [HttpPost("fips/business-area/add")]

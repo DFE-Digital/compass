@@ -145,7 +145,24 @@ public class AdminFipsSimplePanelModel
     public List<AdminLookupRow> Rows { get; set; } = new();
     public string AddActionUrl { get; set; } = "";
     public string ToggleActionName { get; set; } = "";
+    public string EditActionName { get; set; } = "";
     public string EntityLabel { get; set; } = "item";
+}
+
+public class AdminFipsLookupEditViewModel
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public int DisplayOrder { get; set; }
+    public bool IsActive { get; set; } = true;
+    public string Panel { get; set; } = "";
+    public string ListLabel { get; set; } = "";
+    public string SingularLabel { get; set; } = "item";
+    public string SaveAction { get; set; } = "";
+    public string ToggleAction { get; set; } = "";
+
+    public string PageHeading => $"Edit {SingularLabel}";
 }
 
 /// <summary>FIPS business areas: read-only mirror of Admin → Business areas.</summary>

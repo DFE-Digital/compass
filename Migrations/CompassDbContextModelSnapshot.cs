@@ -6533,6 +6533,9 @@ namespace Compass.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("NewOwnerCompletionEmailSentAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("OtherDepartments")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(max)");

@@ -22,6 +22,22 @@ public sealed class FipsCmdbSyncedProduct
     public CMDBProductStatus Status { get; init; }
 }
 
+public sealed class FipsCmdbFieldChange
+{
+    public string Field { get; set; } = "";
+    public string? From { get; set; }
+    public string? To { get; set; }
+}
+
+public sealed class FipsCmdbProductChange
+{
+    public Guid Id { get; set; }
+    public string SysId { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Kind { get; set; } = "";
+    public List<FipsCmdbFieldChange> Fields { get; set; } = [];
+}
+
 public sealed class FipsCmdbBulkSyncRunInfo
 {
     public DateTime StartedAtUtc { get; init; }
@@ -44,7 +60,10 @@ public sealed class FipsCmdbProductSyncResult
     /// <summary>Rows whose status was set by an active <see cref="FipsCmdbSyncRule"/> during this run.</summary>
     public int StatusSetByRules { get; set; }
     public int Errors { get; set; }
+    public int Unchanged { get; set; }
+    public int? HistoryId { get; set; }
     public List<string> ErrorSamples { get; } = new();
+    public List<FipsCmdbProductChange> Changes { get; } = new();
     /// <summary>Products created in this run (after rules). Use <see cref="NewProductsNeedingInfo"/> for entries still New.</summary>
     public List<FipsCmdbSyncedProduct> CreatedProducts { get; } = new();
     /// <summary>Count of service-register rows in New status after this run.</summary>

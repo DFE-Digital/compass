@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace Compass.Services;
 
-/// <summary>Runs bulk CMDB → service register sync once per UK day and emails a summary.</summary>
+/// <summary>Runs bulk CMDB → service register sync every 10 minutes, 7am–6pm UK, Monday to Friday.</summary>
 public sealed class FipsCmdbDailySyncHostedService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -24,15 +24,15 @@ public sealed class FipsCmdbDailySyncHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (UkDateTime.Now().TimeOfDay >= GetRunAtUkTimeOfDay())
-            await RunJobSafelyAsync(stoppingToken);
-
         while (!stoppingToken.IsCancellationRequested)
         {
-            var delay = GetDelayUntilNextUkRunTime();
+            if (FipsCmdbSyncSchedule.IsInsideWindow(UkDateTime.Now(), _options.CurrentValue))
+                await RunJobSafelyAsync(stoppingToken);
+
+            var delay = GetDelayUntilNextWake();
             var nextRunUk = UkDateTime.Now().Add(delay);
             _logger.LogInformation(
-                "CMDB daily sync next run at {NextRunUk:yyyy-MM-dd HH:mm} UK (in {Delay})",
+                "CMDB sync next run at {NextRunUk:yyyy-MM-dd HH:mm} UK (in {Delay})",
                 nextRunUk,
                 delay);
 
@@ -44,42 +44,11 @@ public sealed class FipsCmdbDailySyncHostedService : BackgroundService
             {
                 break;
             }
-
-            await RunJobSafelyAsync(stoppingToken);
         }
     }
 
     private async Task RunJobSafelyAsync(CancellationToken stoppingToken)
     {
-        FipsCmdbDailySyncOutcome outcome;
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var service = scope.ServiceProvider.GetRequiredService<IFipsCmdbDailySyncService>();
-            outcome = await service.RunDailySyncIfDueAsync(stoppingToken);
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-            return;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Scheduled daily CMDB sync job failed");
-            return;
-        }
-
-        if (outcome != FipsCmdbDailySyncOutcome.Busy)
-            return;
-
-        try
-        {
-            await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken);
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-            return;
-        }
-
         try
         {
             using var scope = _scopeFactory.CreateScope();
@@ -92,27 +61,15 @@ public sealed class FipsCmdbDailySyncHostedService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Scheduled daily CMDB sync retry after busy lock failed");
+            _logger.LogError(ex, "Scheduled CMDB sync job failed");
         }
     }
 
-    private TimeSpan GetRunAtUkTimeOfDay()
-    {
-        var hour = _options.CurrentValue.DailySyncHourUk;
-        if (hour is < 0 or > 23)
-            hour = 6;
-        return TimeSpan.FromHours(hour);
-    }
-
-    private TimeSpan GetDelayUntilNextUkRunTime()
+    private TimeSpan GetDelayUntilNextWake()
     {
         var nowUk = UkDateTime.Now();
-        var nextRunUk = nowUk.Date + GetRunAtUkTimeOfDay();
-        if (nowUk >= nextRunUk)
-            nextRunUk = nextRunUk.AddDays(1);
-
-        var nextRunUtc = UkDateTime.ToUtc(nextRunUk);
-        var delay = nextRunUtc - DateTime.UtcNow;
-        return delay > TimeSpan.Zero ? delay : TimeSpan.FromMinutes(1);
+        var nextRunUk = FipsCmdbSyncSchedule.NextWakeUk(nowUk, _options.CurrentValue);
+        var delay = UkDateTime.ToUtc(nextRunUk) - DateTime.UtcNow;
+        return delay > TimeSpan.Zero ? delay : TimeSpan.FromSeconds(15);
     }
 }

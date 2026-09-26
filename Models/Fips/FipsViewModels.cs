@@ -177,6 +177,9 @@ public class FipsProductDetailViewModel
 
     /// <summary>User is listed as a contact on this service register product (any role), or is an operations console editor.</summary>
     public bool CanEditInformation { get; set; }
+
+    /// <summary>Named contact on a New entry, who can set the status to Active from this page.</summary>
+    public bool CanSetProductActive { get; set; }
     public string? CurrentUserEmail { get; set; }
 
     /// <summary>Same completion logic as the FIPS product list &quot;Data completion&quot; column.</summary>

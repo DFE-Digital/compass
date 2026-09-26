@@ -6,7 +6,8 @@ public enum FipsCmdbDailySyncOutcome
 {
     Disabled,
     FeatureOff,
-    AlreadyRanToday,
+    OutsideWindow,
+    AlreadyRanThisSlot,
     Busy,
     Due,
     Completed,

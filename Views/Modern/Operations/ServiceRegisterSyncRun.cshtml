@@ -1,0 +1,180 @@
+@model ServiceRegisterSyncRunDetailViewModel
+@using Compass.Helpers
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = "Sync run";
+    var run = Model.Run;
+    var report = Model.Report;
+    string BadgeClass(string status) => status.Equals("Completed", StringComparison.OrdinalIgnoreCase)
+        ? "dfe-f-badge dfe-f-badge--small dfe-f-badge--green"
+        : status.Equals("Failed", StringComparison.OrdinalIgnoreCase)
+            ? "dfe-f-badge dfe-f-badge--small dfe-f-badge--red"
+            : "dfe-f-badge dfe-f-badge--small";
+    string Duration(int? seconds)
+    {
+        if (seconds is not int value || value < 0)
+            return "—";
+        if (value < 60)
+            return $"{value}s";
+        return $"{value / 60}m {value % 60}s";
+    }
+    string Show(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+}
+
+@section Breadcrumbs {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernOperations")">Operations</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceRegister", "ModernOperations")">Service register</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceRegisterSyncSettings", "ModernOperations")">Sync</a></li>
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceRegisterSyncRuns", "ModernOperations")">Runs</a></li>
+    <li class="govuk-breadcrumbs__list-item" aria-current="page">Run @run.Id</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Sync run",
+    Title = UkDateTime.FormatUk(run.StartedAt),
+    Lede = await Html.PartialAsync("_GovukBodyParagraph", "Changes saved on the service register by this CMDB sync.")
+})
+
+@await Html.PartialAsync("_ServiceRegisterSubNav", Model.SubNav)
+
+<p class="govuk-body">
+    <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("ServiceRegisterSyncRuns", "ModernOperations")">All sync runs</a>
+</p>
+
+<div class="govuk-summary-card govuk-!-margin-bottom-6">
+    <div class="govuk-summary-card__title-wrapper">
+        <h2 class="govuk-summary-card__title">This run</h2>
+    </div>
+    <div class="govuk-summary-card__content">
+        <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Result</dt>
+                <dd class="govuk-summary-list__value"><span class="@BadgeClass(run.Status)">@run.Status</span></dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Run by</dt>
+                <dd class="govuk-summary-list__value">@Show(run.InitiatedBy)</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Finished</dt>
+                <dd class="govuk-summary-list__value">@(run.CompletedAt.HasValue ? UkDateTime.FormatUk(run.CompletedAt.Value) : "—")</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Duration</dt>
+                <dd class="govuk-summary-list__value">@Duration(run.DurationSeconds)</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Created</dt>
+                <dd class="govuk-summary-list__value">@run.ProductsCreated</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Updated</dt>
+                <dd class="govuk-summary-list__value">@run.ProductsUpdated</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Unchanged</dt>
+                <dd class="govuk-summary-list__value">@report.Unchanged</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Skipped</dt>
+                <dd class="govuk-summary-list__value">@run.ProductsSkipped</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Errors</dt>
+                <dd class="govuk-summary-list__value">@run.ErrorsEncountered</dd>
+            </div>
+        </dl>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorDetails))
+{
+    <div class="govuk-error-summary govuk-!-margin-bottom-6" role="alert">
+        <h2 class="govuk-error-summary__title">This run failed</h2>
+        <div class="govuk-error-summary__body">
+            <p class="govuk-body govuk-!-margin-bottom-0" style="white-space:pre-wrap;">@Model.ErrorDetails</p>
+        </div>
+    </div>
+}
+
+@if (report.ErrorSamples.Count > 0)
+{
+    <h2 class="govuk-heading-m">Issues</h2>
+    <ul class="govuk-list govuk-list--bullet">
+        @foreach (var sample in report.ErrorSamples)
+        {
+            <li>@sample</li>
+        }
+    </ul>
+}
+
+<h2 class="govuk-heading-m">Changes</h2>
+@if (report.Changes.Count == 0)
+{
+    <p class="govuk-body">This run did not record any product changes.</p>
+}
+else
+{
+    <table class="govuk-table">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Product</th>
+                <th scope="col" class="govuk-table__header">Change</th>
+                <th scope="col" class="govuk-table__header">What changed</th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            @foreach (var change in report.Changes)
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">
+                        @if (change.Id != Guid.Empty)
+                        {
+                            <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("FipsProduct", "ModernManage", new { id = change.Id })">@(string.IsNullOrWhiteSpace(change.Title) ? "Untitled service" : change.Title)</a>
+                        }
+                        else
+                        {
+                            @(string.IsNullOrWhiteSpace(change.Title) ? "Untitled service" : change.Title)
+                        }
+                        @if (!string.IsNullOrWhiteSpace(change.SysId))
+                        {
+                            <div class="govuk-body-s govuk-!-margin-bottom-0">@change.SysId</div>
+                        }
+                    </td>
+                    <td class="govuk-table__cell">@Show(change.Kind)</td>
+                    <td class="govuk-table__cell">
+                        @if (change.Fields.Count == 0)
+                        {
+                            <span>—</span>
+                        }
+                        else
+                        {
+                            <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+                                @foreach (var field in change.Fields)
+                                {
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">@field.Field</dt>
+                                        <dd class="govuk-summary-list__value" style="white-space:pre-wrap;">
+                                            @if (string.IsNullOrWhiteSpace(field.From))
+                                            {
+                                                @Show(field.To)
+                                            }
+                                            else
+                                            {
+                                                <span>@field.From</span>
+                                                <span aria-hidden="true"> → </span>
+                                                <span class="govuk-visually-hidden"> changed to </span>
+                                                <span>@Show(field.To)</span>
+                                            }
+                                        </dd>
+                                    </div>
+                                }
+                            </dl>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
