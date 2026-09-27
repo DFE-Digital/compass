@@ -1,13 +1,18 @@
 @model FipsProductsViewModel
 @using Compass.Models.Fips
+@using Compass.Models.ServiceDataModels
+@using Compass.Services.ServiceDataModels
 @{
     var products = Model.Products;
     var detailAction = ViewData["ServiceRegisterProductDetailAction"] as string ?? "FipsProduct";
     var detailController = ViewData["ServiceRegisterProductDetailController"] as string ?? "ModernManage";
     var showBulkCheckbox = ViewData["ServiceRegisterTableBulkMode"] as bool? == true;
     var showStatusColumn = ViewData["ServiceRegisterTableShowStatus"] as bool? == true;
+    var showCensusColumns = ViewData["ServiceRegisterShowCensusColumns"] as bool? == true;
     var tableCaption = ViewData["ServiceRegisterTableCaption"] as string ?? "Products";
     var tableWrapperClass = ViewData["ServiceRegisterTableWrapperClass"] as string ?? "fips-manage-products-table";
+    var emptyMessage = ViewData["ServiceRegisterCensusEmptyMessage"] as string
+        ?? "No products in this list.";
 }
 
 @functions {
@@ -28,12 +33,27 @@
         CMDBProductStatus.Rejected => "dfe-c-tag--red",
         _ => "dfe-c-tag--grey"
     };
+
+    string CensusBadgeClass(bool hasAssignment, ServiceDataModelAssignmentStatus? status)
+    {
+        if (!hasAssignment || status == null)
+            return "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey";
+        return status.Value switch
+        {
+            ServiceDataModelAssignmentStatus.Reviewed => "dfe-f-badge dfe-f-badge--small dfe-f-badge--green",
+            ServiceDataModelAssignmentStatus.Submitted => "dfe-f-badge dfe-f-badge--small dfe-f-badge--blue",
+            ServiceDataModelAssignmentStatus.ChangesRequested => "dfe-f-badge dfe-f-badge--small dfe-f-badge--red",
+            ServiceDataModelAssignmentStatus.Withdrawn or ServiceDataModelAssignmentStatus.NotApplicable =>
+                "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey",
+            _ => "dfe-f-badge dfe-f-badge--small"
+        };
+    }
 }
 
 @if (products.Count == 0)
 {
     <div class="govuk-inset-text">
-        <p class="govuk-body govuk-!-margin-bottom-0">No products in this list.</p>
+        <p class="govuk-body govuk-!-margin-bottom-0">@emptyMessage</p>
     </div>
 }
 else
@@ -73,6 +93,15 @@ else
                     <th scope="col" class="govuk-table__header service-register-products-table__channel-col" aria-sort="none">
                         <button type="button" class="dfe-f-table-sort-button">Channel</button>
                     </th>
+                    @if (showCensusColumns)
+                    {
+                        <th scope="col" class="govuk-table__header" aria-sort="none">
+                            <button type="button" class="dfe-f-table-sort-button">Census status</button>
+                        </th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+                            <button type="button" class="dfe-f-table-sort-button">Progress</button>
+                        </th>
+                    }
                     <th scope="col" class="govuk-table__header service-register-products-table__owner-col" aria-sort="none">
                         <button type="button" class="dfe-f-table-sort-button">Service owner</button>
                     </th>
@@ -81,6 +110,10 @@ else
             <tbody class="govuk-table__body">
             @foreach (var p in products)
             {
+                var productHref = Url.Action(detailAction, detailController, new { id = p.Id, tab = showCensusColumns ? "census" : null });
+                var rowHref = showCensusColumns && p.HasCensusAssignment && p.CensusAssignmentId.HasValue
+                    ? Url.Action("Assignment", "ModernCensus", new { assignmentId = p.CensusAssignmentId.Value })
+                    : productHref;
                 <tr class="govuk-table__row">
                     @if (showBulkCheckbox)
                     {
@@ -94,9 +127,13 @@ else
                         </td>
                     }
                     <td class="govuk-table__cell service-register-products-table__product-col">
-                        <a href="@Url.Action(detailAction, detailController, new { id = p.Id })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@p.Title</a>
+                        <a href="@rowHref" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@p.Title</a>
                         <div class="dfe-c-body-s dfe-c-text-muted service-register-products-table__product-meta">
                             @(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)
+                            @if (showCensusColumns && p.CensusPublishedAvailable == false)
+                            {
+                                <text> · Census not published yet</text>
+                            }
                         </div>
                     </td>
                     @if (showStatusColumn)
@@ -108,6 +145,15 @@ else
                     <td class="govuk-table__cell service-register-products-table__phase-col">@(p.PhaseName ?? "—")</td>
                     <td class="govuk-table__cell service-register-products-table__type-col">@(string.IsNullOrWhiteSpace(p.TypesDisplay) ? "—" : p.TypesDisplay)</td>
                     <td class="govuk-table__cell service-register-products-table__channel-col">@(string.IsNullOrWhiteSpace(p.ChannelsDisplay) ? "—" : p.ChannelsDisplay)</td>
+                    @if (showCensusColumns)
+                    {
+                        <td class="govuk-table__cell">
+                            <span class="@CensusBadgeClass(p.HasCensusAssignment, p.CensusStatus)">@(p.CensusStatusLabel ?? CensusWorkListBuilder.FormatStatusLabel(p.CensusStatus))</span>
+                        </td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">
+                            @(p.CensusFieldCompletionPercent.HasValue ? $"{p.CensusFieldCompletionPercent:0}%" : "—")
+                        </td>
+                    }
                     <td class="govuk-table__cell service-register-products-table__owner-col">@(p.ServiceOwner ?? "—")</td>
                 </tr>
             }

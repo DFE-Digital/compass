@@ -1,0 +1,417 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.ServiceCensusAnalysisReportViewModel
+@using Compass.Models
+@using Compass.ViewModels.Modern
+@using Compass.ViewModels.Modern.ServiceDataModels
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Service census analysis";
+    ViewBag.CensusReportActive = "analysis";
+    var filters = Model.Filters;
+    var searchAndFilter = ViewBag.SearchAndFilter as SearchAndFilterViewModel;
+    var calculatedDisplay = Model.CalculatedUtc.ToString("d MMM yyyy HH:mm");
+
+    object BaseRoute(
+        string? themeStableKey = null,
+        string? fieldStableKey = null,
+        string? optionKey = null,
+        Guid? productId = null,
+        int? page = null,
+        bool clearTheme = false,
+        bool clearField = false,
+        bool clearOption = false,
+        bool clearProduct = false) => new
+    {
+        modelId = filters.ModelId,
+        directorateId = filters.DirectorateId,
+        businessAreaId = filters.BusinessAreaId,
+        productStatus = filters.ProductStatus,
+        phaseId = filters.PhaseId,
+        typeId = filters.TypeId,
+        ownerEmail = filters.OwnerEmail,
+        search = filters.Search,
+        themeStableKey = clearTheme ? null : (themeStableKey ?? filters.ThemeStableKey),
+        fieldStableKey = clearField ? null : (fieldStableKey ?? filters.FieldStableKey),
+        optionKey = clearOption ? null : (optionKey ?? filters.OptionKey),
+        productId = clearProduct ? null : (productId ?? filters.ProductId),
+        page = page
+    };
+
+    string AnalysisUrl(
+        string? themeStableKey = null,
+        string? fieldStableKey = null,
+        string? optionKey = null,
+        Guid? productId = null,
+        int? page = null,
+        bool clearTheme = false,
+        bool clearField = false,
+        bool clearOption = false,
+        bool clearProduct = false) =>
+        Url.Action("ServiceCensusAnalysis", "ModernReporting",
+            BaseRoute(themeStableKey, fieldStableKey, optionKey, productId, page, clearTheme, clearField, clearOption, clearProduct))
+        ?? "#";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceCensus", "ModernReporting")">Service census</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Analysis</li>
+}
+
+<div class="mr-dash">
+@{
+  var mrHeaderLede = await Html.PartialAsync("_ReportingMutedBodyLede",
+    $"Analysis of saved census answers across shared base themes, including in-progress returns. Population: {Model.PopulationLabel}. Figures calculated at {calculatedDisplay} UTC.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Service census",
+  Title = "Analysis",
+  Lede = mrHeaderLede
+})
+
+@await Html.PartialAsync("~/Views/Modern/Reporting/_ServiceCensusSectionNav.cshtml")
+
+@if (searchAndFilter != null)
+{
+  <div class="govuk-!-margin-bottom-4">
+    @await Html.PartialAsync("_SearchAndFilter", searchAndFilter)
+  </div>
+}
+
+<section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="census-analysis-population-heading">
+  <h2 id="census-analysis-population-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Population</h2>
+  <div class="dfe-f-card-grid govuk-!-margin-bottom-4">
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+      <p class="govuk-body-s dfe-f-stat-card__label">Answered services</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.AnsweredServiceCount</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Services in scope</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.ScopedServiceCount</p>
+    </div>
+  </div>
+  <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-0">
+    Analysis uses saved answers (including in progress). It is not the same as portfolio completion % on the overview.
+  </p>
+</section>
+
+@if (Model.ViewMode == ServiceCensusAnalysisViewMode.Themes)
+{
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="census-analysis-themes-heading">
+    <h2 id="census-analysis-themes-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Themes</h2>
+    <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">Each theme shows how many services have answered at least one question. Open a theme to see its metrics.</p>
+
+    @if (Model.Themes.Count == 0)
+    {
+      <div class="govuk-inset-text">
+        <p class="govuk-body govuk-!-margin-bottom-0">No shared census themes are available yet.</p>
+      </div>
+    }
+    else if (Model.AnsweredServiceCount == 0)
+    {
+      <div class="govuk-inset-text">
+        <p class="govuk-body govuk-!-margin-bottom-0">Nobody in your filter has saved census answers yet. Themes are listed so you can still explore the structure.</p>
+      </div>
+    }
+
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Census themes</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Theme</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Metrics</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Services answered</button></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var theme in Model.Themes)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-!-font-weight-bold" href="@AnalysisUrl(themeStableKey: theme.StableKey, clearField: true, clearOption: true, clearProduct: true)">@theme.Name</a>
+              </td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@theme.MetricCount</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@theme.AnsweredServiceCount</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+}
+else if (Model.ViewMode == ServiceCensusAnalysisViewMode.Theme && Model.SelectedTheme != null)
+{
+  var theme = Model.SelectedTheme;
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="census-analysis-theme-heading">
+    <p class="govuk-body-s govuk-!-margin-bottom-2">
+      <a class="govuk-link" href="@AnalysisUrl(clearTheme: true, clearField: true, clearOption: true, clearProduct: true)">All themes</a>
+    </p>
+    <h2 id="census-analysis-theme-heading" class="govuk-heading-m govuk-!-margin-bottom-2">@theme.Name</h2>
+    <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">
+      @theme.AnsweredServiceCount @(theme.AnsweredServiceCount == 1 ? "service has" : "services have") answered at least one question in this theme.
+    </p>
+
+    @if (theme.Metrics.Count == 0)
+    {
+      <div class="govuk-inset-text">
+        <p class="govuk-body govuk-!-margin-bottom-0">No reportable metrics in this theme.</p>
+      </div>
+    }
+    else
+    {
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+          <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Metrics in @theme.Name</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Metric</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Type</button></th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Answered</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Summary</button></th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var metric in theme.Metrics)
+            {
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">
+                  <a class="govuk-link govuk-!-font-weight-bold" href="@AnalysisUrl(themeStableKey: theme.StableKey, fieldStableKey: metric.StableKey, clearOption: true, clearProduct: true)">@metric.Label</a>
+                </td>
+                <td class="govuk-table__cell">@metric.FieldType</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@metric.AnsweredServiceCount</td>
+                <td class="govuk-table__cell">@metric.SummaryText</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+}
+else if (Model.ViewMode == ServiceCensusAnalysisViewMode.Metric && Model.SelectedMetric != null)
+{
+  var metric = Model.SelectedMetric;
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="census-analysis-metric-heading">
+    <p class="govuk-body-s govuk-!-margin-bottom-2">
+      <a class="govuk-link" href="@AnalysisUrl(clearTheme: true, clearField: true, clearOption: true, clearProduct: true)">All themes</a>
+      <span class="govuk-!-margin-left-1 govuk-!-margin-right-1">/</span>
+      <a class="govuk-link" href="@AnalysisUrl(themeStableKey: metric.ThemeStableKey, clearField: true, clearOption: true, clearProduct: true)">@metric.ThemeName</a>
+    </p>
+    <h2 id="census-analysis-metric-heading" class="govuk-heading-m govuk-!-margin-bottom-2">@metric.Label</h2>
+    <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">
+      @metric.AnsweredServiceCount @(metric.AnsweredServiceCount == 1 ? "service has" : "services have") answered this question in the current filter.
+    </p>
+
+    @if (metric.AnsweredServiceCount == 0)
+    {
+      <div class="govuk-inset-text">
+        <p class="govuk-body govuk-!-margin-bottom-0">Nobody in your filter has answered this question yet.</p>
+      </div>
+    }
+    else if (metric.AggregationKind == "choice" || metric.AggregationKind == "linked")
+    {
+      <h3 class="govuk-heading-s">@(metric.AggregationKind == "linked" ? "Most common linked items" : "Option breakdown")</h3>
+      @if (metric.Options.Count == 0)
+      {
+        <div class="govuk-inset-text">
+          <p class="govuk-body govuk-!-margin-bottom-0">No options to show.</p>
+        </div>
+      }
+      else
+      {
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <caption class="govuk-visually-hidden">Option counts for @metric.Label</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Option</button></th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Count</button></th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">%</button></th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var opt in metric.Options)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    @if (opt.Count > 0)
+                    {
+                      <a class="govuk-link" href="@AnalysisUrl(themeStableKey: metric.ThemeStableKey, fieldStableKey: metric.StableKey, optionKey: opt.OptionKey, clearProduct: true, page: 1)">@opt.Label</a>
+                    }
+                    else
+                    {
+                      @opt.Label
+                    }
+                  </td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric">@opt.Count</td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric">@(opt.Percent.HasValue ? $"{opt.Percent:0.#}%" : "—")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+    else if (metric.AggregationKind == "number")
+    {
+      <div class="dfe-f-card-grid govuk-!-margin-bottom-4">
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+          <p class="govuk-body-s dfe-f-stat-card__label">Count</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(metric.NumberCount ?? 0)</p>
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+          <p class="govuk-body-s dfe-f-stat-card__label">Average</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(metric.NumberAverage?.ToString("0.##") ?? "—")</p>
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+          <p class="govuk-body-s dfe-f-stat-card__label">Min</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(metric.NumberMin?.ToString("0.##") ?? "—")</p>
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+          <p class="govuk-body-s dfe-f-stat-card__label">Max</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(metric.NumberMax?.ToString("0.##") ?? "—")</p>
+        </div>
+      </div>
+
+      <h3 class="govuk-heading-s">Services</h3>
+      @await Html.PartialAsync("~/Views/Modern/Reporting/_ServiceCensusAnalysisProductTable.cshtml", new ServiceCensusAnalysisProductTableModel {
+        Products = metric.NumberProducts,
+        TotalCount = metric.ProductTotalCount,
+        Page = metric.ProductPage,
+        PageSize = metric.ProductPageSize,
+        TotalPages = metric.ProductTotalPages,
+        ShowAnswer = true,
+        PageUrl = p => AnalysisUrl(themeStableKey: metric.ThemeStableKey, fieldStableKey: metric.StableKey, clearOption: true, clearProduct: true, page: p)
+      })
+    }
+    else
+    {
+      <h3 class="govuk-heading-s">Answered values</h3>
+      <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">Text answers are listed, not averaged. Open a value to see which products gave it.</p>
+      @if (metric.TextValues.Count == 0)
+      {
+        <div class="govuk-inset-text">
+          <p class="govuk-body govuk-!-margin-bottom-0">No text answers to show.</p>
+        </div>
+      }
+      else
+      {
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <caption class="govuk-visually-hidden">Text values for @metric.Label</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Value</button></th>
+                <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Services</button></th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var row in metric.TextValues)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    <a class="govuk-link" href="@AnalysisUrl(themeStableKey: metric.ThemeStableKey, fieldStableKey: metric.StableKey, optionKey: row.ValueKey, clearProduct: true, page: 1)">@row.DisplayValue</a>
+                  </td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric">@row.ServiceCount</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  </section>
+}
+else if (Model.ViewMode == ServiceCensusAnalysisViewMode.OptionProducts && Model.OptionDrill != null)
+{
+  var drill = Model.OptionDrill;
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="census-analysis-option-heading">
+    <p class="govuk-body-s govuk-!-margin-bottom-2">
+      <a class="govuk-link" href="@AnalysisUrl(clearTheme: true, clearField: true, clearOption: true, clearProduct: true)">All themes</a>
+      <span class="govuk-!-margin-left-1 govuk-!-margin-right-1">/</span>
+      <a class="govuk-link" href="@AnalysisUrl(themeStableKey: drill.ThemeStableKey, clearField: true, clearOption: true, clearProduct: true)">@drill.ThemeName</a>
+      <span class="govuk-!-margin-left-1 govuk-!-margin-right-1">/</span>
+      <a class="govuk-link" href="@AnalysisUrl(themeStableKey: drill.ThemeStableKey, fieldStableKey: drill.FieldStableKey, clearOption: true, clearProduct: true)">@drill.FieldLabel</a>
+    </p>
+    <h2 id="census-analysis-option-heading" class="govuk-heading-m govuk-!-margin-bottom-2">@drill.OptionLabel</h2>
+    <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">
+      @drill.ProductTotalCount @(drill.ProductTotalCount == 1 ? "service" : "services") gave this answer.
+    </p>
+
+    @await Html.PartialAsync("~/Views/Modern/Reporting/_ServiceCensusAnalysisProductTable.cshtml", new ServiceCensusAnalysisProductTableModel {
+      Products = drill.Products,
+      TotalCount = drill.ProductTotalCount,
+      Page = drill.ProductPage,
+      PageSize = drill.ProductPageSize,
+      TotalPages = drill.ProductTotalPages,
+      ShowAnswer = true,
+      PageUrl = p => AnalysisUrl(themeStableKey: drill.ThemeStableKey, fieldStableKey: drill.FieldStableKey, optionKey: drill.OptionKey, clearProduct: true, page: p)
+    })
+  </section>
+}
+else if (Model.ViewMode == ServiceCensusAnalysisViewMode.ProductDetail && Model.ProductDetail != null)
+{
+  var product = Model.ProductDetail;
+  <section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="census-analysis-product-heading">
+    <p class="govuk-body-s govuk-!-margin-bottom-2">
+      <a class="govuk-link" href="@AnalysisUrl(clearProduct: true, clearOption: true)">Back to analysis</a>
+      <span class="govuk-!-margin-left-2">
+        <a class="govuk-link" href="@Url.Action("Assignment", "ModernCensus", new { assignmentId = product.AssignmentId })">Open census assignment</a>
+      </span>
+    </p>
+    <h2 id="census-analysis-product-heading" class="govuk-heading-m govuk-!-margin-bottom-1">@product.ProductTitle</h2>
+    <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-4">
+      @(string.IsNullOrWhiteSpace(product.PhaseName) ? "—" : product.PhaseName)
+      @if (!string.IsNullOrWhiteSpace(product.BusinessAreasDisplay))
+      {
+        <text> · @product.BusinessAreasDisplay</text>
+      }
+      @if (!string.IsNullOrWhiteSpace(product.DirectoratesDisplay))
+      {
+        <text> · @product.DirectoratesDisplay</text>
+      }
+    </p>
+
+    @foreach (var theme in product.Themes)
+    {
+      <h3 class="govuk-heading-s">@theme.Name</h3>
+      @if (theme.Answers.All(a => !a.HasAnswer))
+      {
+        <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-4">No answers saved in this theme.</p>
+      }
+      else
+      {
+        <div class="dfe-f-table-wrapper govuk-!-margin-bottom-4" data-module="dfe-f-table">
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <caption class="govuk-visually-hidden">Answers for @theme.Name</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Question</th>
+                <th scope="col" class="govuk-table__header">Answer</th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var answer in theme.Answers)
+              {
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell"><strong>@answer.Label</strong></td>
+                  <td class="govuk-table__cell">@(answer.HasAnswer ? answer.DisplayValue : "—")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  </section>
+}
+</div>
+
+@section Styles {
+  @await Html.PartialAsync("_MrReportCoreStyles")
+}

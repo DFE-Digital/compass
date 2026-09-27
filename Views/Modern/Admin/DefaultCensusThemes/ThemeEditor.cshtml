@@ -1,0 +1,513 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.DefaultCensusThemeEditorViewModel
+@using Compass.Models.ServiceDataModels
+@using Compass.ViewModels.Modern
+@using Compass.ViewModels.Modern.ServiceDataModels
+@using Microsoft.AspNetCore.Html
+@{
+    string FormatFieldType(ServiceDataModelFieldType t) => t switch
+    {
+        ServiceDataModelFieldType.MultilineText => "Multiline text",
+        ServiceDataModelFieldType.YesNo => "Yes / no",
+        ServiceDataModelFieldType.SingleChoice => "Single choice",
+        ServiceDataModelFieldType.MultipleChoice => "Multiple choice",
+        ServiceDataModelFieldType.PersonOrTeamReference => "Person or team reference",
+        ServiceDataModelFieldType.ServiceRelationship => "Service relationship",
+        ServiceDataModelFieldType.Services => "Services",
+        ServiceDataModelFieldType.ServiceLines => "Service lines",
+        ServiceDataModelFieldType.Lookup => "Lookup",
+        _ => t.ToString()
+    };
+
+    var overview = Model.Overview;
+    var theme = Model.SelectedTheme;
+    ViewData["Title"] = Model.IsCreateMode
+        ? "Create theme — Default census themes"
+        : $"{theme?.Name ?? "Theme"} — Default census themes";
+    var overviewUrl = Url.Action("Index", "ModernAdminDefaultCensusThemes") ?? "#";
+    var themes = overview.Themes.OrderBy(g => g.SortOrder).ThenBy(g => g.Name).ToList();
+    var fields = theme?.Fields.OrderBy(f => f.SortOrder).ThenBy(f => f.Label).ToList()
+                 ?? new List<ServiceDataModelFieldViewModel>();
+    var sideNav = new DefaultCensusThemeSideNavViewModel
+    {
+        SelectedThemeId = theme?.Id,
+        IsCreateMode = Model.IsCreateMode,
+        IsOverviewCurrent = false,
+        CanManage = overview.CanManage,
+        Themes = themes
+    };
+    var canManage = overview.CanManage;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@overviewUrl">Default census themes</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@(Model.IsCreateMode ? "Create theme" : theme?.Name)</li>
+}
+
+<div class="admin-hub" id="sc-admin-default-theme-editor">
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Default census themes",
+    Title = Model.IsCreateMode ? "Create theme" : (theme?.Name ?? "Theme"),
+    Lede = new HtmlString(Model.IsCreateMode
+      ? "<p class=\"govuk-body govuk-!-margin-bottom-0\">Add a theme to the shared base set. Every census inherits this definition.</p>"
+      : $"<p class=\"govuk-body govuk-!-margin-bottom-0\"><code>{theme?.StableKey}</code>{(theme?.IsDisabled == true ? " · <span class=\"dfe-f-badge dfe-f-badge--small dfe-f-badge--grey\">Disabled</span>" : "")} · Edits apply to all censuses.</p>")
+  })
+
+  @if (ViewBag.AdminError != null)
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1rem;">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="sdm-theme-ok">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="sdm-theme-ok">Success</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+  <div class="govuk-grid-row notification-settings-layout">
+    <div class="govuk-grid-column-one-quarter-from-desktop notification-settings-layout__nav">
+      <div class="dfe-f-u-sticky govuk-!-margin-bottom-4" style="--dfe-f-sticky-top: 1rem;">
+        @await Html.PartialAsync("~/Views/Modern/Admin/DefaultCensusThemes/_ThemeEditorSideNav.cshtml", sideNav)
+      </div>
+    </div>
+    <div class="govuk-grid-column-three-quarters-from-desktop">
+      @if (Model.IsCreateMode)
+      {
+        <div class="dfe-c-card govuk-!-margin-bottom-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);">
+          <h2 class="govuk-heading-m govuk-!-margin-top-0">New theme</h2>
+          @if (!canManage)
+          {
+            <p class="govuk-body">You do not have permission to create themes.</p>
+          }
+          else
+          {
+            <form method="post" action="@Url.Action("AddTheme", "ModernAdminDefaultCensusThemes")" novalidate>
+              @Html.AntiForgeryToken()
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="theme-Name">Name</label>
+                <input class="govuk-input govuk-!-width-one-half" id="theme-Name" name="Name" type="text" maxlength="200" value="@Model.CreateInput.Name" required />
+              </div>
+              <div class="govuk-form-group">
+                <label class="govuk-label">Stable key</label>
+                <div class="govuk-hint">Generated from the name when you save. Permanent and unique — cannot be changed later.</div>
+                <p class="govuk-body govuk-!-margin-bottom-0"><code class="dfe-c-text-muted">—</code></p>
+              </div>
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="theme-Guidance">Guidance</label>
+                <div class="govuk-hint" id="theme-Guidance-hint">You can use Markdown for formatting (for example bold, lists and links).</div>
+                <textarea class="govuk-textarea govuk-!-width-two-thirds" id="theme-Guidance" name="Guidance" rows="3" maxlength="1000" aria-describedby="theme-Guidance-hint">@Model.CreateInput.Guidance</textarea>
+              </div>
+              <input type="hidden" name="SortOrder" value="@Model.CreateInput.SortOrder" />
+              <div class="govuk-button-group">
+                <button type="submit" class="govuk-button">Create theme</button>
+                <a class="govuk-link govuk-!-margin-left-2" href="@overviewUrl">Cancel</a>
+              </div>
+            </form>
+          }
+        </div>
+      }
+      else if (theme != null)
+      {
+        @if (canManage)
+        {
+          <div class="dfe-c-card govuk-!-margin-bottom-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);">
+            <h2 class="govuk-heading-m govuk-!-margin-top-0">Theme details</h2>
+            <form method="post" action="@Url.Action("UpdateTheme", "ModernAdminDefaultCensusThemes", new { themeId = theme.Id })" novalidate>
+              @Html.AntiForgeryToken()
+              <div class="govuk-form-group">
+                <label class="govuk-label">Stable key</label>
+                <div class="govuk-hint">Permanent identifier. Generated from the original name and cannot be changed.</div>
+                <p class="govuk-body govuk-!-margin-bottom-0"><code>@theme.StableKey</code></p>
+              </div>
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="edit-Name">Name</label>
+                <input class="govuk-input govuk-!-width-one-half" id="edit-Name" name="Name" type="text" maxlength="200" value="@theme.Name" required />
+              </div>
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="edit-Guidance">Guidance</label>
+                <div class="govuk-hint" id="edit-Guidance-hint">You can use Markdown for formatting (for example bold, lists and links).</div>
+                <textarea class="govuk-textarea govuk-!-width-two-thirds" id="edit-Guidance" name="Guidance" rows="3" maxlength="1000" aria-describedby="edit-Guidance-hint">@theme.Guidance</textarea>
+              </div>
+              <input type="hidden" name="SortOrder" value="@theme.SortOrder" />
+              <button type="submit" class="govuk-button">Save theme</button>
+            </form>
+            <form method="post" action="@Url.Action("DisableTheme", "ModernAdminDefaultCensusThemes", new { themeId = theme.Id })" class="govuk-!-margin-top-3">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="disabled" value="@(theme.IsDisabled ? "false" : "true")" />
+              <input type="hidden" name="returnTo" value="theme" />
+              <button type="submit" class="govuk-button @(theme.IsDisabled ? "" : "govuk-button--warning")">
+                @(theme.IsDisabled ? "Re-enable theme" : "Disable theme")
+              </button>
+            </form>
+          </div>
+        }
+        else
+        {
+          <p class="govuk-body">@(theme.Guidance ?? "No guidance.")</p>
+        }
+
+        <h2 class="govuk-heading-m">Questions</h2>
+        <p class="govuk-hint">Reorder, add, amend or disable questions in this shared theme. Changes apply to every census and recalculate completion for services already answering.</p>
+
+        @if (fields.Count == 0)
+        {
+          <p class="govuk-body dfe-c-text-muted">No questions in this theme yet.</p>
+        }
+        else
+        {
+          @for (var i = 0; i < fields.Count; i++)
+          {
+            var field = fields[i];
+            <div class="govuk-summary-card govuk-!-margin-bottom-4" id="field-@field.Id">
+              <div class="govuk-summary-card__title-wrapper">
+                <h3 class="govuk-summary-card__title">
+                  @field.Label
+                  @if (field.IsDisabled)
+                  {
+                    <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Disabled</span>
+                  }
+                </h3>
+                @if (canManage)
+                {
+                  <ul class="govuk-summary-card__actions">
+                    @if (i > 0)
+                    {
+                      var upOrder = fields.Select(f => f.Id).ToList();
+                      (upOrder[i], upOrder[i - 1]) = (upOrder[i - 1], upOrder[i]);
+                      <li class="govuk-summary-card__action">
+                        <form method="post" action="@Url.Action("ReorderFields", "ModernAdminDefaultCensusThemes", new { themeId = theme.Id })" class="govuk-!-margin-bottom-0">
+                          @Html.AntiForgeryToken()
+                          @foreach (var oid in upOrder)
+                          {
+                            <input type="hidden" name="orderedIds" value="@oid" />
+                          }
+                          <button type="submit" class="govuk-link">Move up</button>
+                        </form>
+                      </li>
+                    }
+                    @if (i < fields.Count - 1)
+                    {
+                      var downOrder = fields.Select(f => f.Id).ToList();
+                      (downOrder[i], downOrder[i + 1]) = (downOrder[i + 1], downOrder[i]);
+                      <li class="govuk-summary-card__action">
+                        <form method="post" action="@Url.Action("ReorderFields", "ModernAdminDefaultCensusThemes", new { themeId = theme.Id })" class="govuk-!-margin-bottom-0">
+                          @Html.AntiForgeryToken()
+                          @foreach (var oid in downOrder)
+                          {
+                            <input type="hidden" name="orderedIds" value="@oid" />
+                          }
+                          <button type="submit" class="govuk-link">Move down</button>
+                        </form>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+              <div class="govuk-summary-card__content">
+                @if (canManage)
+                {
+                  <form method="post" action="@Url.Action("UpdateField", "ModernAdminDefaultCensusThemes", new { themeId = theme.Id, fieldId = field.Id })">
+                    @Html.AntiForgeryToken()
+                    <div class="govuk-grid-row">
+                      <div class="govuk-grid-column-one-half">
+                        <div class="govuk-form-group">
+                          <label class="govuk-label">Stable key</label>
+                          <div class="govuk-hint">Permanent. Generated from the original label and cannot be changed.</div>
+                          <p class="govuk-body govuk-!-margin-bottom-0"><code>@field.StableKey</code></p>
+                        </div>
+                        <div class="govuk-form-group">
+                          <label class="govuk-label" for="field-label-@field.Id">Label</label>
+                          <input class="govuk-input" id="field-label-@field.Id" name="Label" type="text" maxlength="300" value="@field.Label" required />
+                        </div>
+                        <div class="govuk-form-group">
+                          <label class="govuk-label" for="field-type-@field.Id">Type</label>
+                          <select class="govuk-select" id="field-type-@field.Id" name="FieldType">
+                            @foreach (ServiceDataModelFieldType t in Enum.GetValues(typeof(ServiceDataModelFieldType)))
+                            {
+                              var label = FormatFieldType(t);
+                              if (field.FieldType == t)
+                              {
+                                <option value="@((int)t)" selected>@label</option>
+                              }
+                              else
+                              {
+                                <option value="@((int)t)">@label</option>
+                              }
+                            }
+                          </select>
+                        </div>
+                        @if (field.FieldType is ServiceDataModelFieldType.Text or ServiceDataModelFieldType.MultilineText)
+                        {
+                          <div class="govuk-form-group">
+                            <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                              <div class="govuk-checkboxes__item">
+                                <input class="govuk-checkboxes__input" id="field-allow-multi-@field.Id" name="AllowMultiple" type="checkbox" value="true" @(field.AllowMultiple ? "checked" : null) />
+                                <label class="govuk-label govuk-checkboxes__label" for="field-allow-multi-@field.Id">Allow multiple</label>
+                              </div>
+                            </div>
+                            <div class="govuk-hint">When set, respondents can add several text values as a list. Stored as a JSON array of strings.</div>
+                            <input type="hidden" name="AllowMultiple" value="false" />
+                          </div>
+                        }
+                        @if (field.FieldType == ServiceDataModelFieldType.Lookup)
+                        {
+                          <div class="govuk-form-group">
+                            <label class="govuk-label" for="field-lookup-@field.Id">Admin lookup</label>
+                            <div class="govuk-hint">Respondents see this lookup’s current values. Changing the lookup updates options everywhere.</div>
+                            <select class="govuk-select" id="field-lookup-@field.Id" name="OptionsLookupKey" required>
+                              <option value="">Select a lookup</option>
+                              @foreach (var lookup in Compass.Services.ServiceDataModels.CensusAdminLookupOptions.BindableLookups)
+                              {
+                                if (string.Equals(field.OptionsLookupKey, lookup.Key, StringComparison.OrdinalIgnoreCase))
+                                {
+                                  <option value="@lookup.Key" selected>@lookup.DisplayName (@lookup.Key)</option>
+                                }
+                                else
+                                {
+                                  <option value="@lookup.Key">@lookup.DisplayName (@lookup.Key)</option>
+                                }
+                              }
+                            </select>
+                          </div>
+                          <div class="govuk-form-group">
+                            <fieldset class="govuk-fieldset">
+                              <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Selection</legend>
+                              <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
+                                <div class="govuk-radios__item">
+                                  <input class="govuk-radios__input" id="field-lookup-single-@field.Id" name="AllowMultiple" type="radio" value="false" @(!field.AllowMultiple ? "checked" : null) />
+                                  <label class="govuk-label govuk-radios__label" for="field-lookup-single-@field.Id">Single select</label>
+                                </div>
+                                <div class="govuk-radios__item">
+                                  <input class="govuk-radios__input" id="field-lookup-multi-@field.Id" name="AllowMultiple" type="radio" value="true" @(field.AllowMultiple ? "checked" : null) />
+                                  <label class="govuk-label govuk-radios__label" for="field-lookup-multi-@field.Id">Multiple select</label>
+                                </div>
+                              </div>
+                            </fieldset>
+                          </div>
+                        }
+                        else if (field.FieldType is ServiceDataModelFieldType.SingleChoice or ServiceDataModelFieldType.MultipleChoice)
+                        {
+                          <div class="govuk-form-group">
+                            <label class="govuk-label" for="field-lookup-@field.Id">Options from admin lookup</label>
+                            <div class="govuk-hint">When set, respondent options come from this lookup’s current values. Leave blank to use the explicit options below.</div>
+                            <select class="govuk-select" id="field-lookup-@field.Id" name="OptionsLookupKey">
+                              <option value="">None — use configured options</option>
+                              @foreach (var lookup in Compass.Services.ServiceDataModels.CensusAdminLookupOptions.BindableLookups)
+                              {
+                                if (string.Equals(field.OptionsLookupKey, lookup.Key, StringComparison.OrdinalIgnoreCase))
+                                {
+                                  <option value="@lookup.Key" selected>@lookup.DisplayName (@lookup.Key)</option>
+                                }
+                                else
+                                {
+                                  <option value="@lookup.Key">@lookup.DisplayName (@lookup.Key)</option>
+                                }
+                              }
+                            </select>
+                          </div>
+                          <input type="hidden" name="AllowMultiple" value="false" />
+                        }
+                        else if (field.FieldType is not (ServiceDataModelFieldType.Text or ServiceDataModelFieldType.MultilineText))
+                        {
+                          <input type="hidden" name="AllowMultiple" value="false" />
+                        }
+                        <div class="govuk-form-group">
+                          <label class="govuk-label" for="field-visibility-@field.Id">Conditional visibility (JSON)</label>
+                          <div class="govuk-hint">Optional. Example: {"fieldKey":"has-url","equals":"Yes"}</div>
+                          <input class="govuk-input" id="field-visibility-@field.Id" name="VisibilityRuleJson" type="text" maxlength="2000" value="@field.VisibilityRuleJson" />
+                        </div>
+                      </div>
+                      <div class="govuk-grid-column-one-half">
+                        <div class="govuk-form-group">
+                          <label class="govuk-label" for="field-guidance-@field.Id">Guidance</label>
+                          <div class="govuk-hint" id="field-guidance-hint-@field.Id">You can use Markdown for formatting (for example bold, lists and links).</div>
+                          <textarea class="govuk-textarea" id="field-guidance-@field.Id" name="Guidance" rows="3" maxlength="2000" aria-describedby="field-guidance-hint-@field.Id">@field.Guidance</textarea>
+                        </div>
+                        <div class="govuk-form-group">
+                          <label class="govuk-label" for="field-canonical-@field.Id">Canonical attribute key</label>
+                          <input class="govuk-input" id="field-canonical-@field.Id" name="CanonicalAttributeKey" type="text" maxlength="100" value="@field.CanonicalAttributeKey" />
+                        </div>
+                        <input type="hidden" name="SortOrder" value="@field.SortOrder" />
+                        <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                          <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="field-mand-@field.Id" name="IsMandatory" type="checkbox" value="true" @(field.IsMandatory ? "checked" : null) />
+                            <label class="govuk-label govuk-checkboxes__label" for="field-mand-@field.Id">Mandatory</label>
+                          </div>
+                          <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="field-count-@field.Id" name="CountsTowardsCompletion" type="checkbox" value="true" @(field.CountsTowardsCompletion ? "checked" : null) />
+                            <label class="govuk-label govuk-checkboxes__label" for="field-count-@field.Id">Counts towards completion</label>
+                          </div>
+                          <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" id="field-report-@field.Id" name="IsReportable" type="checkbox" value="true" @(field.IsReportable ? "checked" : null) />
+                            <label class="govuk-label govuk-checkboxes__label" for="field-report-@field.Id">Reportable</label>
+                          </div>
+                        </div>
+                        <input type="hidden" name="IsMandatory" value="false" />
+                        <input type="hidden" name="CountsTowardsCompletion" value="false" />
+                        <input type="hidden" name="IsReportable" value="false" />
+                      </div>
+                    </div>
+                    <div class="govuk-button-group">
+                      <button type="submit" class="govuk-button">Save question</button>
+                    </div>
+                  </form>
+                  <form method="post" action="@Url.Action("DisableField", "ModernAdminDefaultCensusThemes", new { themeId = theme.Id, fieldId = field.Id })" class="govuk-!-margin-bottom-3">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="disabled" value="@(field.IsDisabled ? "false" : "true")" />
+                    <button type="submit" class="govuk-button @(field.IsDisabled ? "" : "govuk-button--warning")">
+                      @(field.IsDisabled ? "Re-enable question" : "Disable question")
+                    </button>
+                  </form>
+
+                  @if (field.FieldType is ServiceDataModelFieldType.SingleChoice or ServiceDataModelFieldType.MultipleChoice)
+                  {
+                    <h4 class="govuk-heading-s">Options</h4>
+                    @if (!string.IsNullOrWhiteSpace(field.OptionsLookupKey))
+                    {
+                      <p class="govuk-hint">Bound to admin lookup <code>@field.OptionsLookupKey</code>. Respondents see that lookup’s current values. Explicit options below are a fallback only when the lookup is empty.</p>
+                    }
+                    @if (field.Options.Count == 0)
+                    {
+                      <p class="govuk-body-s">No explicit options configured.</p>
+                    }
+                    else
+                    {
+                      <ul class="govuk-list govuk-list--bullet">
+                        @foreach (var opt in field.Options.OrderBy(o => o.SortOrder))
+                        {
+                          <li>@opt.Label (<code>@opt.ValueKey</code>)</li>
+                        }
+                      </ul>
+                    }
+                    <form method="post" action="@Url.Action("AddFieldOption", "ModernAdminDefaultCensusThemes", new { fieldId = field.Id, themeId = theme.Id })">
+                      @Html.AntiForgeryToken()
+                      <div class="govuk-grid-row">
+                        <div class="govuk-grid-column-one-third">
+                          <label class="govuk-label govuk-label--s" for="opt-key-@field.Id">Value key</label>
+                          <input class="govuk-input" id="opt-key-@field.Id" name="ValueKey" type="text" maxlength="100" required />
+                        </div>
+                        <div class="govuk-grid-column-one-third">
+                          <label class="govuk-label govuk-label--s" for="opt-label-@field.Id">Label</label>
+                          <input class="govuk-input" id="opt-label-@field.Id" name="Label" type="text" maxlength="300" required />
+                        </div>
+                        <div class="govuk-grid-column-one-third">
+                          <label class="govuk-label govuk-label--s" for="opt-sort-@field.Id">Sort</label>
+                          <input class="govuk-input govuk-input--width-4" id="opt-sort-@field.Id" name="SortOrder" type="number" value="0" />
+                          <button type="submit" class="govuk-button govuk-!-margin-top-2">Add option</button>
+                        </div>
+                      </div>
+                    </form>
+                  }
+                  else if (field.FieldType == ServiceDataModelFieldType.Lookup)
+                  {
+                    <p class="govuk-hint">Lookup options come from <code>@(field.OptionsLookupKey ?? "—")</code> (@(field.AllowMultiple ? "multiple select" : "single select")). Hand-entered options are not used for Lookup fields.</p>
+                  }
+                }
+                else
+                {
+                  <p class="govuk-body-s"><code>@field.StableKey</code> · @field.FieldType · @(field.IsMandatory ? "Mandatory" : "Optional")</p>
+                }
+              </div>
+            </div>
+          }
+        }
+
+        @if (canManage)
+        {
+          <div class="dfe-c-card govuk-!-margin-bottom-4" style="border:1px solid var(--grey-2);padding:1.25rem 1.5rem;background:var(--white);">
+            <h3 class="govuk-heading-s govuk-!-margin-top-0">Add question</h3>
+            <form method="post" action="@Url.Action("AddField", "ModernAdminDefaultCensusThemes", new { themeId = theme.Id })">
+              @Html.AntiForgeryToken()
+              <div class="govuk-grid-row">
+                <div class="govuk-grid-column-one-half">
+                  <div class="govuk-form-group">
+                    <label class="govuk-label" for="new-field-label">Label</label>
+                    <input class="govuk-input" id="new-field-label" name="Label" type="text" maxlength="300" required />
+                  </div>
+                  <div class="govuk-form-group">
+                    <label class="govuk-label">Stable key</label>
+                    <div class="govuk-hint">Generated from the label when you save. Permanent and unique across the catalogue.</div>
+                    <p class="govuk-body govuk-!-margin-bottom-0"><code class="dfe-c-text-muted">—</code></p>
+                  </div>
+                  <div class="govuk-form-group">
+                    <label class="govuk-label" for="new-field-type">Type</label>
+                    <select class="govuk-select" id="new-field-type" name="FieldType">
+                      @foreach (ServiceDataModelFieldType t in Enum.GetValues(typeof(ServiceDataModelFieldType)))
+                      {
+                        <option value="@((int)t)">@FormatFieldType(t)</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="govuk-form-group">
+                    <label class="govuk-label" for="new-field-lookup">Options from admin lookup</label>
+                    <div class="govuk-hint">Required for Lookup. Optional for single/multiple choice.</div>
+                    <select class="govuk-select" id="new-field-lookup" name="OptionsLookupKey">
+                      <option value="">None — use configured options</option>
+                      @foreach (var lookup in Compass.Services.ServiceDataModels.CensusAdminLookupOptions.BindableLookups)
+                      {
+                        <option value="@lookup.Key">@lookup.DisplayName (@lookup.Key)</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="govuk-form-group">
+                    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                      <div class="govuk-checkboxes__item">
+                        <input class="govuk-checkboxes__input" id="new-field-allow-multi" name="AllowMultiple" type="checkbox" value="true" />
+                        <label class="govuk-label govuk-checkboxes__label" for="new-field-allow-multi">Allow multiple</label>
+                      </div>
+                    </div>
+                    <div class="govuk-hint">For Text / Multiline text: multi-value list. For Lookup: multiple select.</div>
+                    <input type="hidden" name="AllowMultiple" value="false" />
+                  </div>
+                  <div class="govuk-form-group">
+                    <label class="govuk-label" for="new-field-visibility">Conditional visibility (JSON)</label>
+                    <input class="govuk-input" id="new-field-visibility" name="VisibilityRuleJson" type="text" maxlength="2000" />
+                  </div>
+                </div>
+                <div class="govuk-grid-column-one-half">
+                  <div class="govuk-form-group">
+                    <label class="govuk-label" for="new-field-guidance">Guidance</label>
+                    <div class="govuk-hint" id="new-field-guidance-hint">You can use Markdown for formatting (for example bold, lists and links).</div>
+                    <textarea class="govuk-textarea" id="new-field-guidance" name="Guidance" rows="3" maxlength="2000" aria-describedby="new-field-guidance-hint"></textarea>
+                  </div>
+                  <div class="govuk-form-group">
+                    <label class="govuk-label" for="new-field-canonical">Canonical attribute key</label>
+                    <input class="govuk-input" id="new-field-canonical" name="CanonicalAttributeKey" type="text" maxlength="100" />
+                  </div>
+                  <input type="hidden" name="SortOrder" value="0" />
+                  <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                    <div class="govuk-checkboxes__item">
+                      <input class="govuk-checkboxes__input" id="new-field-mand" name="IsMandatory" type="checkbox" value="true" />
+                      <label class="govuk-label govuk-checkboxes__label" for="new-field-mand">Mandatory</label>
+                    </div>
+                    <div class="govuk-checkboxes__item">
+                      <input class="govuk-checkboxes__input" id="new-field-count" name="CountsTowardsCompletion" type="checkbox" value="true" checked />
+                      <label class="govuk-label govuk-checkboxes__label" for="new-field-count">Counts towards completion</label>
+                    </div>
+                    <div class="govuk-checkboxes__item">
+                      <input class="govuk-checkboxes__input" id="new-field-report" name="IsReportable" type="checkbox" value="true" checked />
+                      <label class="govuk-label govuk-checkboxes__label" for="new-field-report">Reportable</label>
+                    </div>
+                  </div>
+                  <input type="hidden" name="IsMandatory" value="false" />
+                  <input type="hidden" name="CountsTowardsCompletion" value="false" />
+                  <input type="hidden" name="IsReportable" value="false" />
+                </div>
+              </div>
+              <button type="submit" class="govuk-button">Add question</button>
+            </form>
+          </div>
+        }
+      }
+    </div>
+  </div>
+</div>

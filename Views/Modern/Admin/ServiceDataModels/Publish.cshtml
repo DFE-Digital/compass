@@ -1,0 +1,62 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.ServiceDataModelPublishInput
+@using Compass.ViewModels.Modern
+@using Compass.ViewModels.Modern.ServiceDataModels
+@using Microsoft.AspNetCore.Html
+@{
+    var detail = ViewBag.ModelDetail as ServiceDataModelDetailViewModel;
+    ViewData["Title"] = detail == null ? "Publish model" : $"Publish {detail.Name}";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdminServiceDataModels")">Service data models</a></li>
+  @if (detail != null)
+  {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernAdminServiceDataModels", new { id = detail.Id })">@detail.Name</a></li>
+  }
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Publish</li>
+}
+
+<div class="admin-hub" id="sc-admin-sdm-publish">
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Administration",
+    Title = detail == null ? "Publish model" : $"Publish {detail.Name}",
+    Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Publishing creates an immutable version and assigns it to applicable services. For standing models, existing open assignments move onto the new version with answers retained.</p>")
+  })
+
+  @if (ViewBag.AdminError != null)
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+
+  @if (detail != null)
+  {
+    <p class="govuk-body">Draft version: <strong>@(detail.DraftVersionNumber?.ToString() ?? "none")</strong> · Groups: <strong>@detail.GroupCount</strong> · Fields: <strong>@detail.FieldCount</strong></p>
+
+    <form method="post" action="@Url.Action("Publish", "ModernAdminServiceDataModels", new { id = detail.Id })">
+      @Html.AntiForgeryToken()
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="ChangeSummary">Change summary</label>
+        <textarea class="govuk-textarea govuk-!-width-two-thirds" id="ChangeSummary" name="ChangeSummary" rows="3" maxlength="1000">@Model.ChangeSummary</textarea>
+      </div>
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="PeriodLabel">Period label (optional)</label>
+        <div class="govuk-hint">Only for repeatable or period-based models. Leave blank for standing models such as Service Census.</div>
+        <input class="govuk-input govuk-!-width-one-third" id="PeriodLabel" name="PeriodLabel" type="text" maxlength="100" value="@Model.PeriodLabel" />
+      </div>
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="DueDays">Due days after publish (optional)</label>
+        <div class="govuk-hint">Leave blank for no deadline. Missing due dates are not treated as overdue.</div>
+        <input class="govuk-input govuk-input--width-5" id="DueDays" name="DueDays" type="number" value="@Model.DueDays" />
+      </div>
+      <button type="submit" class="govuk-button">Publish version</button>
+      <p class="govuk-body govuk-!-margin-top-2">
+        <a class="govuk-link" href="@Url.Action("Detail", "ModernAdminServiceDataModels", new { id = detail.Id })">Cancel</a>
+      </p>
+    </form>
+  }
+</div>

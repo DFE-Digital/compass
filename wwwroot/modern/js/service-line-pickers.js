@@ -2,6 +2,7 @@
  * Autocomplete + removable table rows for Service line form (FIPS products + work items).
  * Expects a root .js-service-line-pick with data-sl-search-url, data-sl-field-name (ProductIds | ProjectIds),
  * data-sl-confirm-title, data-sl-confirm-body (for DfE confirm modal),
+ * optional data-sl-min-one="true" (hide Remove when only one row remains — census lists),
  * and child elements: .js-sl-search, .js-sl-results, tbody.js-sl-selected.
  */
 (function () {
@@ -22,6 +23,7 @@
             this.searchUrl = root.dataset.slSearchUrl || "";
             this.fieldName = root.dataset.slFieldName || "ProductIds";
             this.isGuid = (root.dataset.slIdKind || "guid") === "guid";
+            this.minOne = root.dataset.slMinOne === "true";
             this.confirmTitle = root.dataset.slConfirmTitle || "Remove item?";
             this.confirmBody =
                 root.dataset.slConfirmBody ||
@@ -52,16 +54,45 @@
                 e.preventDefault();
                 const row = removeEl.closest("tr");
                 if (!row || !this.selectedEl?.contains(row)) return;
+                const rowCount = this.selectedEl.querySelectorAll("tr").length;
+                if (this.minOne && rowCount <= 1) return;
+
+                const labelEl = row.querySelector(".govuk-table__cell");
+                let label = "";
+                if (labelEl) {
+                    const clone = labelEl.cloneNode(true);
+                    clone.querySelectorAll("input, .dfe-c-text-muted, .modern-work-table__meta").forEach((n) => n.remove());
+                    label = (clone.textContent || "").trim();
+                }
+                const body = label
+                    ? 'This will remove "' + label + '" from the list. You can add it again before saving.'
+                    : this.confirmBody;
+
                 const doRemove = () => {
+                    if (this.minOne && this.selectedEl.querySelectorAll("tr").length <= 1) return;
                     row.remove();
+                    this.syncRemoveVisibility();
                 };
                 if (typeof window.showConfirmModal === "function") {
-                    window.showConfirmModal(this.confirmTitle, this.confirmBody, doRemove);
+                    window.showConfirmModal(this.confirmTitle, body, doRemove);
                 } else {
                     doRemove();
                 }
             });
             document.addEventListener("click", this.boundDocClick);
+            this.syncRemoveVisibility();
+        }
+
+        syncRemoveVisibility() {
+            if (!this.selectedEl || !this.minOne) return;
+            const rows = this.selectedEl.querySelectorAll("tr");
+            const showRemove = rows.length > 1;
+            rows.forEach((tr) => {
+                const rem = tr.querySelector(".js-sl-remove");
+                if (!rem) return;
+                if (showRemove) rem.removeAttribute("hidden");
+                else rem.setAttribute("hidden", "");
+            });
         }
 
         destroy() {
@@ -263,6 +294,7 @@
             tr.appendChild(tdName);
             tr.appendChild(tdAct);
             this.selectedEl.appendChild(tr);
+            this.syncRemoveVisibility();
         }
 
         hideResults() {

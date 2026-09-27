@@ -1,0 +1,46 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.ServiceDataModelThemeEditorSideNavViewModel
+@{
+  var listId = "sdm-theme-side-nav-list";
+  var overviewUrl = Url.Action("Detail", "ModernAdminServiceDataModels", new { id = Model.ModelId }) ?? "#";
+  var createUrl = Url.Action("CreateTheme", "ModernAdminServiceDataModels", new { id = Model.ModelId }) ?? "#";
+}
+
+<nav class="dfe-f-side-navigation sdm-theme-side-nav"
+     aria-label="Service data model themes"
+     data-module="dfe-f-side-navigation">
+  <button type="button"
+          class="dfe-f-side-navigation__toggle"
+          aria-controls="@listId"
+          aria-expanded="false">
+    Themes
+  </button>
+  <ul id="@listId" class="dfe-f-side-navigation__list" hidden>
+    <li class="dfe-f-side-navigation__item@(Model.IsOverviewCurrent ? " dfe-f-side-navigation__item--current" : "")">
+      <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline"
+         href="@overviewUrl"
+         @(Model.IsOverviewCurrent ? Html.Raw("aria-current=\"page\"") : null)>Overview</a>
+    </li>
+    @foreach (var theme in Model.Themes)
+    {
+      var isCurrent = !Model.IsCreateMode && Model.SelectedThemeId == theme.Id;
+      var themeUrl = Url.Action("EditTheme", "ModernAdminServiceDataModels", new { id = Model.ModelId, groupId = theme.Id }) ?? "#";
+      <li class="dfe-f-side-navigation__item@(isCurrent ? " dfe-f-side-navigation__item--current" : "")">
+        <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline"
+           href="@themeUrl"
+           @(isCurrent ? Html.Raw("aria-current=\"page\"") : null)>
+          @theme.Name@(theme.IsDisabled ? " (disabled)" : "")
+        </a>
+      </li>
+    }
+    @if (Model.CanManage)
+    {
+      <li class="dfe-f-side-navigation__item@(Model.IsCreateMode ? " dfe-f-side-navigation__item--current" : "")">
+        <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline"
+           href="@createUrl"
+           @(Model.IsCreateMode ? Html.Raw("aria-current=\"page\"") : null)>
+          @(Model.IsCreateMode ? "New theme" : "Create theme")
+        </a>
+      </li>
+    }
+  </ul>
+</nav>

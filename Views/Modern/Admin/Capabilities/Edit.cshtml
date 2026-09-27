@@ -1,0 +1,94 @@
+@model Compass.ViewModels.Modern.CapabilityEditViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = Model.IsCreate ? "Add capability" : "Edit capability";
+    var listUrl = Url.Action("Index", "ModernAdminCapabilities") ?? "#";
+    bool HasError(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+    string? ErrorMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@listUrl">Capabilities</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@(Model.IsCreate ? "Add" : "Edit")</li>
+}
+
+<div class="admin-hub" id="sc-admin-capabilities-edit">
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Administration",
+    Title = Model.IsCreate ? "Add capability" : "Edit capability",
+    Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><a class=\"govuk-link\" href=\"{listUrl}\">Back to Capabilities</a></p>")
+  })
+
+  @if (ViewBag.AdminError != null)
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1rem;">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region">
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+  <div class="dfe-c-card dfe-c-mb-4" style="border:1px solid var(--grey-2);border-left:4px solid var(--blue);padding:1.25rem 1.5rem;background:var(--white);">
+    @if (!Model.IsCreate && Model.Id.HasValue)
+    {
+      <p class="govuk-hint">System id: <code>@Model.Id</code> (not editable). Census options show as <strong>@CapabilityDisplay.Format(Model.Title, Model.Reference)</strong>.</p>
+    }
+
+    <form method="post"
+          action="@(Model.IsCreate
+              ? Url.Action("CreatePost", "ModernAdminCapabilities")
+              : Url.Action("EditPost", "ModernAdminCapabilities", new { id = Model.Id }))"
+          novalidate>
+      @Html.AntiForgeryToken()
+      <div class="govuk-form-group@(HasError(nameof(Model.Title)) ? " govuk-form-group--error" : "")">
+        <label class="govuk-label" for="Title">Title</label>
+        <div class="govuk-hint">For example, Risk</div>
+        @if (HasError(nameof(Model.Title)))
+        {
+          <p id="Title-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.Title))</p>
+        }
+        <input class="govuk-input govuk-!-width-two-thirds@(HasError(nameof(Model.Title)) ? " govuk-input--error" : "")" id="Title" name="Title" type="text" maxlength="200" required value="@Model.Title" />
+      </div>
+      <div class="govuk-form-group@(HasError(nameof(Model.Reference)) ? " govuk-form-group--error" : "")">
+        <label class="govuk-label" for="Reference">Reference</label>
+        <div class="govuk-hint">Human reference code, unique among capabilities (for example GRC27372). Not the system id.</div>
+        @if (HasError(nameof(Model.Reference)))
+        {
+          <p id="Reference-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.Reference))</p>
+        }
+        <input class="govuk-input govuk-!-width-two-thirds@(HasError(nameof(Model.Reference)) ? " govuk-input--error" : "")" id="Reference" name="Reference" type="text" maxlength="100" required value="@Model.Reference" />
+      </div>
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="Description">Description</label>
+        <div class="govuk-hint">Shown on this admin record. Not required in the census option label.</div>
+        <textarea class="govuk-textarea" id="Description" name="Description" rows="3" maxlength="2000">@Model.Description</textarea>
+      </div>
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="SortOrder">Order</label>
+        <input class="govuk-input govuk-input--width-5" id="SortOrder" name="SortOrder" type="number" value="@Model.SortOrder" />
+      </div>
+      <button type="submit" class="govuk-button">Save</button>
+    </form>
+
+    @if (!Model.IsCreate && Model.Id.HasValue)
+    {
+      <form method="post" action="@Url.Action("Disable", "ModernAdminCapabilities", new { id = Model.Id })" class="govuk-!-margin-top-4">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="disabled" value="@(Model.IsActive ? "true" : "false")" />
+        <button type="submit" class="govuk-button @(Model.IsActive ? "govuk-button--warning" : "")">
+          @(Model.IsActive ? "Disable capability" : "Re-enable capability")
+        </button>
+      </form>
+    }
+  </div>
+</div>

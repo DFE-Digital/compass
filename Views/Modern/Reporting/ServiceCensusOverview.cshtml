@@ -1,0 +1,306 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.ServiceDataModelCompletionReportViewModel
+@using Compass.Models
+@using Compass.Models.ServiceDataModels
+@using Compass.ViewModels.Modern
+@using Compass.ViewModels.Modern.ServiceDataModels
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Service census overview";
+    ViewBag.CensusReportActive = "overview";
+    var filters = Model.Filters;
+    var searchAndFilter = ViewBag.SearchAndFilter as SearchAndFilterViewModel;
+
+    object RouteValues(ServiceDataModelCompletionReportGroupBy? groupBy = null, int? page = null) => new
+    {
+        modelId = filters.ModelId,
+        versionId = filters.VersionId,
+        periodLabel = filters.PeriodLabel,
+        directorateId = filters.DirectorateId,
+        businessAreaId = filters.BusinessAreaId,
+        productStatus = filters.ProductStatus,
+        phaseId = filters.PhaseId,
+        typeId = filters.TypeId,
+        ownerEmail = filters.OwnerEmail,
+        search = filters.Search,
+        groupBy = (groupBy ?? filters.GroupBy).ToString(),
+        page = page
+    };
+
+    var exportUrl = Url.Action("ExportServiceCensusOverview", "ModernReporting", RouteValues());
+    var calculatedDisplay = Model.CalculatedUtc.ToString("d MMM yyyy HH:mm");
+
+    string StatusBadge(ServiceDataModelAssignmentStatus s) => s switch
+    {
+        ServiceDataModelAssignmentStatus.Reviewed => "dfe-f-badge dfe-f-badge--small dfe-f-badge--green",
+        ServiceDataModelAssignmentStatus.Submitted => "dfe-f-badge dfe-f-badge--small dfe-f-badge--blue",
+        ServiceDataModelAssignmentStatus.ChangesRequested => "dfe-f-badge dfe-f-badge--small dfe-f-badge--red",
+        ServiceDataModelAssignmentStatus.Withdrawn or ServiceDataModelAssignmentStatus.NotApplicable => "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey",
+        _ => "dfe-f-badge dfe-f-badge--small"
+    };
+
+    var groupOptions = new (ServiceDataModelCompletionReportGroupBy Value, string Label)[]
+    {
+        (ServiceDataModelCompletionReportGroupBy.BusinessArea, "Business area"),
+        (ServiceDataModelCompletionReportGroupBy.Directorate, "Directorate"),
+        (ServiceDataModelCompletionReportGroupBy.Product, "Product"),
+        (ServiceDataModelCompletionReportGroupBy.Owner, "Owner"),
+        (ServiceDataModelCompletionReportGroupBy.Phase, "Phase"),
+        (ServiceDataModelCompletionReportGroupBy.ServiceType, "Type")
+    };
+
+    var headerActions = "<a class=\"govuk-button govuk-!-margin-bottom-0\" href=\"" + (exportUrl ?? "#") + "\">Export data (Excel)</a>";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceCensus", "ModernReporting")">Service census</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Overview</li>
+}
+
+<div class="mr-dash">
+@{
+  var mrHeaderLede = await Html.PartialAsync("_ReportingMutedBodyLede",
+    $"Standing Service Census completion across the Service Register. Not applicable and withdrawn stay separate from incomplete. Figures calculated at {calculatedDisplay} UTC.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Service census",
+  Title = "Overview",
+  Lede = mrHeaderLede,
+  Actions = new HtmlString(headerActions)
+})
+
+@await Html.PartialAsync("~/Views/Modern/Reporting/_ServiceCensusSectionNav.cshtml")
+
+@if (searchAndFilter != null)
+{
+  <div class="govuk-!-margin-bottom-4">
+    @await Html.PartialAsync("_SearchAndFilter", searchAndFilter)
+  </div>
+}
+
+<section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="census-summary-heading">
+  <h2 id="census-summary-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Summary</h2>
+  <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">
+    Eligible excludes not applicable and withdrawn. Incomplete means not started or in progress — not the same as not applicable.
+  </p>
+  <div class="dfe-f-card-grid govuk-!-margin-bottom-4">
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Assigned</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.AssignedCount</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+      <p class="govuk-body-s dfe-f-stat-card__label">Eligible</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.EligibleCount</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+      <p class="govuk-body-s dfe-f-stat-card__label">Portfolio completion</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(Model.PortfolioCompletionPercent.HasValue ? $"{Model.PortfolioCompletionPercent:0}%" : "—")</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+      <p class="govuk-body-s dfe-f-stat-card__label">Avg field completion</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@(Model.AverageFieldCompletionPercent.HasValue ? $"{Model.AverageFieldCompletionPercent:0}%" : "—")</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Not started</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.NotStartedCount</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+      <p class="govuk-body-s dfe-f-stat-card__label">In progress</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.InProgressCount</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+      <p class="govuk-body-s dfe-f-stat-card__label">Submitted</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.SubmittedCount</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+      <p class="govuk-body-s dfe-f-stat-card__label">Reviewed</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.ReviewedCount</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Not applicable</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.NotApplicableCount</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Withdrawn</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Model.WithdrawnCount</p>
+    </div>
+  </div>
+</section>
+
+<section class="mr-section govuk-!-margin-bottom-4" aria-labelledby="census-cut-heading">
+  <h2 id="census-cut-heading" class="govuk-heading-m govuk-!-margin-bottom-2">Cut by</h2>
+  <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-3">Choose a dimension. Filters above still narrow the population.</p>
+  <nav class="dfe-f-sub-navigation govuk-!-margin-bottom-4" aria-label="Report cut">
+    <ul class="dfe-f-sub-navigation__list">
+      @foreach (var opt in groupOptions)
+      {
+        var current = filters.GroupBy == opt.Value;
+        <li class="dfe-f-sub-navigation__item@(current ? " dfe-f-sub-navigation__item--active" : "")">
+          <a class="dfe-f-sub-navigation__link govuk-link govuk-link--no-visited-state" href="@Url.Action("ServiceCensusOverview", "ModernReporting", RouteValues(opt.Value, 1))"@if (current) { <text> aria-current="page"</text> }>@opt.Label</a>
+        </li>
+      }
+    </ul>
+  </nav>
+
+@if (Model.IsProductCut)
+{
+  <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Services in cut</h3>
+  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">
+    @if (Model.DrilldownTotalCount == 0)
+    {
+      <text>No assigned services match your access and filters.</text>
+    }
+    else
+    {
+      var from = ((Model.DrilldownPage - 1) * Model.DrilldownPageSize) + 1;
+      var to = Math.Min(Model.DrilldownPage * Model.DrilldownPageSize, Model.DrilldownTotalCount);
+      <text>Showing @from to @to of @Model.DrilldownTotalCount services. Export data downloads all filtered submissions as Excel (one sheet per theme), not only this page.</text>
+    }
+  </p>
+
+  @if (Model.Drilldown.Count == 0)
+  {
+    <div class="govuk-inset-text">
+      <p class="govuk-body govuk-!-margin-bottom-0">No assignments in scope for your access and filters. Not applicable and incomplete remain distinct when rows are present.</p>
+    </div>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper service-register-products-table fips-manage-products-table" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+        <caption class="govuk-visually-hidden">Product completion cut</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header service-register-products-table__product-col" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Service</button>
+            </th>
+            <th scope="col" class="govuk-table__header service-register-products-table__phase-col" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Phase</button>
+            </th>
+            <th scope="col" class="govuk-table__header service-register-products-table__type-col" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Type</button>
+            </th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Census status</button>
+            </th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Completion</button>
+            </th>
+            <th scope="col" class="govuk-table__header service-register-products-table__owner-col" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Updated</button>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in Model.Drilldown)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell service-register-products-table__product-col">
+                <a href="@Url.Action("Assignment", "ModernCensus", new { assignmentId = row.AssignmentId })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@(string.IsNullOrWhiteSpace(row.ProductTitle) ? "Untitled product" : row.ProductTitle)</a>
+                <div class="dfe-c-body-s dfe-c-text-muted service-register-products-table__product-meta">
+                  @(string.IsNullOrWhiteSpace(row.BusinessAreasDisplay) ? "—" : row.BusinessAreasDisplay)
+                  @if (!string.IsNullOrWhiteSpace(row.DirectoratesDisplay))
+                  {
+                    <text> · @row.DirectoratesDisplay</text>
+                  }
+                </div>
+              </td>
+              <td class="govuk-table__cell service-register-products-table__phase-col">@(string.IsNullOrWhiteSpace(row.PhaseName) ? "—" : row.PhaseName)</td>
+              <td class="govuk-table__cell service-register-products-table__type-col">@(string.IsNullOrWhiteSpace(row.TypesDisplay) ? "—" : row.TypesDisplay)</td>
+              <td class="govuk-table__cell">
+                <span class="@StatusBadge(row.Status)">@row.Status</span>
+              </td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@(row.FieldCompletionPercent.HasValue ? $"{row.FieldCompletionPercent:0}%" : "—")</td>
+              <td class="govuk-table__cell service-register-products-table__owner-col">
+                <span class="dfe-f-u-tabular-numbers">@row.UpdatedUtc.ToString("d MMM yyyy")</span>
+                @if (!string.IsNullOrWhiteSpace(row.OwnersDisplay))
+                {
+                  <div class="dfe-c-body-s dfe-c-text-muted">@row.OwnersDisplay</div>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  @if (Model.DrilldownTotalPages > 1)
+  {
+    <div class="govuk-!-margin-top-4">
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
+        CurrentPage = Model.DrilldownPage,
+        TotalPages = Model.DrilldownTotalPages,
+        PageUrl = p => Url.Action("ServiceCensusOverview", "ModernReporting", RouteValues(filters.GroupBy, p)) ?? "#"
+      })
+    </div>
+  }
+}
+else
+{
+  <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Breakdown by @Model.GroupByDisplayName.ToLowerInvariant()</h3>
+  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">
+    @if (Model.Breakdown.Count == 0)
+    {
+      <text>No assigned services match your access and filters, so there is nothing to cut.</text>
+    }
+    else
+    {
+      <text>@Model.Breakdown.Count @(Model.Breakdown.Count == 1 ? "group" : "groups"). Export data downloads all filtered submissions as Excel (one sheet per theme).</text>
+    }
+  </p>
+
+  @if (Model.Breakdown.Count == 0)
+  {
+    <div class="govuk-inset-text">
+      <p class="govuk-body govuk-!-margin-bottom-0">No groups to show for this cut.</p>
+    </div>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Completion cut by @Model.GroupByDisplayName</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">@Model.GroupByDisplayName</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Assigned</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Eligible</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Not started</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">In progress</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Submitted</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Reviewed</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Not applicable</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Withdrawn</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Portfolio %</button></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in Model.Breakdown)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell"><strong>@row.GroupLabel</strong></td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.AssignedCount</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.EligibleCount</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.NotStartedCount</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.InProgressCount</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.SubmittedCount</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.ReviewedCount</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.NotApplicableCount</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.WithdrawnCount</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@(row.PortfolioCompletionPercent.HasValue ? $"{row.PortfolioCompletionPercent:0}%" : "—")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+}
+</section>
+</div>
+
+@section Styles {
+  @await Html.PartialAsync("_MrReportCoreStyles")
+}

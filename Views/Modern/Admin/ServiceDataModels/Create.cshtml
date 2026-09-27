@@ -1,0 +1,100 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.ServiceDataModelCreateInput
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Create service data model";
+    bool HasError(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+    string? ErrorMsg(string field) => ViewData.ModelState[field]?.Errors?.FirstOrDefault()?.ErrorMessage;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdminServiceDataModels")">Service data models</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Create</li>
+}
+
+<div class="admin-hub" id="sc-admin-sdm-create">
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Administration",
+    Title = "Create service data model",
+    Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\"><a class=\"govuk-link govuk-link--no-visited-state\" href=\"{Url.Action("Index", "ModernAdminServiceDataModels") ?? "#"}\">Back to Service data models</a></p>")
+  })
+
+  @if (ViewBag.AdminError != null)
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (!ViewData.ModelState.IsValid)
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">
+        <ul class="govuk-list govuk-error-summary__list">
+          @foreach (var e in ViewData.ModelState.Where(x => x.Value?.Errors.Count > 0))
+          {
+            <li><a href="#@e.Key">@e.Value!.Errors.First().ErrorMessage</a></li>
+          }
+        </ul>
+      </div>
+    </div>
+  }
+
+  <form method="post" action="@Url.Action("Create", "ModernAdminServiceDataModels")" novalidate>
+    @Html.AntiForgeryToken()
+
+    <div class="govuk-form-group@(HasError(nameof(Model.StableKey)) ? " govuk-form-group--error" : "")">
+      <label class="govuk-label" for="StableKey">Stable key</label>
+      <div id="StableKey-hint" class="govuk-hint">Machine key that must not change meaning later, for example <code>service-census</code>.</div>
+      @if (HasError(nameof(Model.StableKey)))
+      {
+        <p id="StableKey-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.StableKey))</p>
+      }
+      <input class="govuk-input govuk-!-width-two-thirds@(HasError(nameof(Model.StableKey)) ? " govuk-input--error" : "")" id="StableKey" name="StableKey" type="text" maxlength="100" value="@Model.StableKey" aria-describedby="StableKey-hint@(HasError(nameof(Model.StableKey)) ? " StableKey-error" : "")" />
+    </div>
+
+    <div class="govuk-form-group@(HasError(nameof(Model.Name)) ? " govuk-form-group--error" : "")">
+      <label class="govuk-label" for="Name">Name</label>
+      @if (HasError(nameof(Model.Name)))
+      {
+        <p id="Name-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @ErrorMsg(nameof(Model.Name))</p>
+      }
+      <input class="govuk-input govuk-!-width-two-thirds@(HasError(nameof(Model.Name)) ? " govuk-input--error" : "")" id="Name" name="Name" type="text" maxlength="200" value="@Model.Name" />
+    </div>
+
+    <div class="govuk-form-group">
+      <label class="govuk-label" for="Description">Description</label>
+      <textarea class="govuk-textarea govuk-!-width-two-thirds" id="Description" name="Description" rows="4" maxlength="2000">@Model.Description</textarea>
+    </div>
+
+    <div class="govuk-form-group">
+      <label class="govuk-label" for="OwnerDisplayName">Owner display name</label>
+      <input class="govuk-input govuk-!-width-two-thirds" id="OwnerDisplayName" name="OwnerDisplayName" type="text" maxlength="200" value="@Model.OwnerDisplayName" />
+    </div>
+
+    <div class="govuk-form-group">
+      <label class="govuk-label" for="OwnerEmail">Owner email</label>
+      <input class="govuk-input govuk-!-width-two-thirds" id="OwnerEmail" name="OwnerEmail" type="email" maxlength="320" value="@Model.OwnerEmail" />
+    </div>
+
+    <div class="govuk-form-group">
+      <label class="govuk-label" for="Classification">Classification</label>
+      <input class="govuk-input govuk-!-width-two-thirds" id="Classification" name="Classification" type="text" maxlength="100" value="@Model.Classification" />
+    </div>
+
+    <div class="govuk-form-group">
+      <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+        <div class="govuk-checkboxes__item">
+          <input class="govuk-checkboxes__input" id="IsRepeatable" name="IsRepeatable" type="checkbox" value="true" @(Model.IsRepeatable ? "checked" : null) />
+          <label class="govuk-label govuk-checkboxes__label" for="IsRepeatable">Repeatable (for example a periodic return with a new assignment each cycle)</label>
+        </div>
+      </div>
+      <input type="hidden" name="IsRepeatable" value="false" />
+    </div>
+
+    <button type="submit" class="govuk-button">Create model</button>
+  </form>
+</div>

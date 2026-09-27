@@ -1,0 +1,73 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.ServiceDataModelListViewModel
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Reports";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Reports</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Title = "Reports",
+  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Completion and coverage reports for reportable service data models.</p>")
+})
+
+<section class="reporting-dashboard__section" aria-labelledby="reports-census-heading">
+  <h2 id="reports-census-heading" class="govuk-heading-m">Service census</h2>
+  <div class="dfe-f-card-grid reporting-dashboard__grid govuk-!-margin-bottom-6">
+    @await Html.PartialAsync("~/Views/Modern/Reporting/_ReportingDashboardCard.cshtml", new ReportingDashboardCardViewModel {
+      Title = "Service census section",
+      Href = Url.Action("ServiceCensus", "ModernReporting") ?? "#",
+      Description = "Overview and analysis reports for the standing Service Census."
+    })
+    @await Html.PartialAsync("~/Views/Modern/Reporting/_ReportingDashboardCard.cshtml", new ReportingDashboardCardViewModel {
+      Title = "Overview",
+      Href = Url.Action("ServiceCensusOverview", "ModernReporting") ?? "#",
+      Description = "Eligible, assigned, in progress, submitted, reviewed and overdue counts with service-level drill-down."
+    })
+    @await Html.PartialAsync("~/Views/Modern/Reporting/_ReportingDashboardCard.cshtml", new ReportingDashboardCardViewModel {
+      Title = "Analysis",
+      Href = Url.Action("ServiceCensusAnalysis", "ModernReporting") ?? "#",
+      Description = "Aggregated answers across shared themes with drill-down by metric, option and product."
+    })
+  </div>
+
+  <h2 class="govuk-heading-m">Service data models</h2>
+  @if (Model.Rows.Count == 0)
+  {
+    <p class="govuk-body">No reportable published models yet. Mark a model as reportable in Administration → Service data models.</p>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <caption class="govuk-table__caption govuk-table__caption--m">Reportable models</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Name</th>
+            <th scope="col" class="govuk-table__header">Key</th>
+            <th scope="col" class="govuk-table__header">Status</th>
+            <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Report</span></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in Model.Rows)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell"><strong>@row.Name</strong></td>
+              <td class="govuk-table__cell"><code>@row.StableKey</code></td>
+              <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@row.LifecycleStatus</span></td>
+              <td class="govuk-table__cell">
+                <a class="govuk-link" href="@Url.Action("ServiceCensusOverview", "ModernReporting", new { modelId = row.Id })">View overview</a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

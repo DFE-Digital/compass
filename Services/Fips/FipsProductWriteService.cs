@@ -169,27 +169,71 @@ public sealed class FipsProductWriteService : IFipsProductWriteService
         string actorEmail,
         string? auditChangedByDisplay,
         string? productUrl,
+        CancellationToken cancellationToken = default) =>
+        await TryUpdateDescriptionAndUrlAsync(
+            productId,
+            actorEmail,
+            auditChangedByDisplay,
+            updateDescription: false,
+            userDescription: null,
+            updateUrl: true,
+            productUrl,
+            cancellationToken);
+
+    public async Task<FipsProductWriteOutcome> TryUpdateDescriptionAndUrlAsync(
+        Guid productId,
+        string actorEmail,
+        string? auditChangedByDisplay,
+        bool updateDescription,
+        string? userDescription,
+        bool updateUrl,
+        string? productUrl,
         CancellationToken cancellationToken = default)
     {
+        if (!updateDescription && !updateUrl)
+            return new FipsProductWriteOutcome();
+
         var product = await _db.CMDBProducts
             .FirstOrDefaultAsync(p => p.Id == productId, cancellationToken);
 
         if (product == null)
             return new FipsProductWriteOutcome { NotFound = true };
 
-        var normalized = string.IsNullOrWhiteSpace(productUrl) ? null : productUrl.Trim();
-
-        if (product.ProductURL == normalized)
-            return new FipsProductWriteOutcome();
-
+        var changes = new List<string>();
         var changedBy = string.IsNullOrWhiteSpace(auditChangedByDisplay) ? actorEmail : auditChangedByDisplay.Trim();
-        LogAudit(product.Id, actorEmail, changedBy, "update", "ProductURL", product.ProductURL, normalized);
-        product.ProductURL = normalized;
-        product.UpdatedAt = DateTime.UtcNow;
-        product.UpdatedBy = actorEmail;
-        await _db.SaveChangesAsync(cancellationToken);
 
-        return new FipsProductWriteOutcome { Changes = ["Product URL"] };
+        if (updateDescription)
+        {
+            var normalizedDescription = string.IsNullOrWhiteSpace(userDescription) ? null : userDescription.Trim();
+            if (product.UserDescription != normalizedDescription)
+            {
+                LogAudit(product.Id, actorEmail, changedBy, "update", "UserDescription",
+                    product.UserDescription, normalizedDescription);
+                product.UserDescription = normalizedDescription;
+                changes.Add("User description");
+            }
+        }
+
+        if (updateUrl)
+        {
+            var normalizedUrl = string.IsNullOrWhiteSpace(productUrl) ? null : productUrl.Trim();
+            if (product.ProductURL != normalizedUrl)
+            {
+                LogAudit(product.Id, actorEmail, changedBy, "update", "ProductURL",
+                    product.ProductURL, normalizedUrl);
+                product.ProductURL = normalizedUrl;
+                changes.Add("Product URL");
+            }
+        }
+
+        if (changes.Count > 0)
+        {
+            product.UpdatedAt = DateTime.UtcNow;
+            product.UpdatedBy = actorEmail;
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        return new FipsProductWriteOutcome { Changes = changes };
     }
 
     private static bool IsContactManager(CMDBProduct product, string email) =>

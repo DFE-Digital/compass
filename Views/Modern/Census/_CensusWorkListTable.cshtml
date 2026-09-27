@@ -1,0 +1,95 @@
+@model IReadOnlyList<Compass.Models.Fips.FipsProductRow>
+@using System.Globalization
+@{
+    var products = Model ?? Array.Empty<Compass.Models.Fips.FipsProductRow>();
+    var tableCaption = ViewData["CensusWorkListCaption"] as string ?? "Census work";
+    var emptyMessage = ViewData["CensusWorkListEmptyMessage"] as string ?? "No products in this list.";
+}
+
+@if (products.Count == 0)
+{
+    <div class="govuk-inset-text">
+        <p class="govuk-body govuk-!-margin-bottom-0">@emptyMessage</p>
+    </div>
+}
+else
+{
+    <div class="dfe-f-table-wrapper census-work-list-table" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+            <caption class="govuk-visually-hidden">@tableCaption</caption>
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Name</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Service owner</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">Task completion</button>
+                    </th>
+                    <th scope="col" class="govuk-table__header" aria-sort="none">
+                        <button type="button" class="dfe-f-table-sort-button">% completion</button>
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+            @foreach (var p in products)
+            {
+                var censusHref = Url.Action("OpenForProduct", "ModernCensus", new { productId = p.Id });
+                var answered = p.CensusAnsweredCountingFields;
+                var total = p.CensusApplicableCountingFields;
+                var hasProgress = p.CensusPublishedAvailable && total.HasValue;
+                var pct = hasProgress && total!.Value > 0
+                    ? (int)Math.Round((double)(answered ?? 0) / total.Value * 100.0)
+                    : (hasProgress ? 0 : (int?)null);
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">
+                        <a href="@censusHref" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@p.Title</a>
+                        <div class="dfe-c-body-s dfe-c-text-muted">
+                            @(string.IsNullOrWhiteSpace(p.BusinessAreaDisplay) ? "—" : p.BusinessAreaDisplay)
+                        </div>
+                    </td>
+                    <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(p.ServiceOwner) ? "—" : p.ServiceOwner)</td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric">
+                        @if (hasProgress && total!.Value > 0)
+                        {
+                            <span class="dfe-f-u-tabular-numbers">@(answered ?? 0)/@total</span>
+                        }
+                        else if (hasProgress)
+                        {
+                            <span>—</span>
+                        }
+                        else
+                        {
+                            <span>—</span>
+                        }
+                    </td>
+                    <td class="govuk-table__cell">
+                        @if (pct.HasValue && total.HasValue && total.Value > 0)
+                        {
+                            var valueText = $"{answered ?? 0} of {total} tasks complete ({pct} percent)";
+                            <div class="fsa-progress-bar fsa-progress-bar--compact">
+                                <div class="fsa-progress-bar__track"
+                                     role="progressbar"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100"
+                                     aria-valuenow="@pct"
+                                     aria-valuetext="@valueText">
+                                    <div class="fsa-progress-bar__fill" style="width:@(pct.Value.ToString(CultureInfo.InvariantCulture))%"></div>
+                                </div>
+                                <span class="govuk-visually-hidden">@pct%</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <span>—</span>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}

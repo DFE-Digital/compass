@@ -1,0 +1,381 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.CensusFormGroupViewModel
+@using System.Text.Json
+@using Compass.Helpers
+@using Compass.Models.ServiceDataModels
+@using Compass.ViewModels.Modern.ServiceDataModels
+@{
+    var readOnly = (bool)(ViewData["CensusReadOnly"] ?? false);
+    var group = Model;
+
+    string DisplayValue(string? valueJson)
+    {
+        if (string.IsNullOrWhiteSpace(valueJson)) return "";
+        try
+        {
+            using var doc = JsonDocument.Parse(valueJson);
+            var el = doc.RootElement;
+            return el.ValueKind switch
+            {
+                JsonValueKind.String => el.GetString() ?? "",
+                JsonValueKind.Number => el.GetRawText(),
+                JsonValueKind.True => "Yes",
+                JsonValueKind.False => "No",
+                JsonValueKind.Array => string.Join(",", el.EnumerateArray().Select(x => x.ValueKind == JsonValueKind.String ? x.GetString() : x.GetRawText())),
+                _ => el.GetRawText()
+            };
+        }
+        catch (JsonException)
+        {
+            return valueJson.Trim();
+        }
+    }
+
+    HashSet<string> SelectedKeys(string? valueJson)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(valueJson)) return set;
+        try
+        {
+            using var doc = JsonDocument.Parse(valueJson);
+            var el = doc.RootElement;
+            if (el.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var x in el.EnumerateArray())
+                {
+                    if (x.ValueKind == JsonValueKind.String && x.GetString() is { } s)
+                        set.Add(s);
+                    else
+                        set.Add(x.GetRawText());
+                }
+            }
+            else if (el.ValueKind == JsonValueKind.String && el.GetString() is { } one)
+            {
+                set.Add(one);
+            }
+        }
+        catch (JsonException)
+        {
+            set.Add(valueJson.Trim());
+        }
+        return set;
+    }
+
+    List<string> TextListValues(string? valueJson)
+    {
+        var list = new List<string>();
+        if (string.IsNullOrWhiteSpace(valueJson)) return list;
+        try
+        {
+            using var doc = JsonDocument.Parse(valueJson);
+            var el = doc.RootElement;
+            if (el.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var x in el.EnumerateArray())
+                {
+                    if (x.ValueKind == JsonValueKind.String && x.GetString() is { } s && !string.IsNullOrWhiteSpace(s))
+                        list.Add(s);
+                }
+            }
+            else if (el.ValueKind == JsonValueKind.String && el.GetString() is { } one && !string.IsNullOrWhiteSpace(one))
+            {
+                list.Add(one);
+            }
+        }
+        catch (JsonException)
+        {
+            if (!string.IsNullOrWhiteSpace(valueJson))
+                list.Add(valueJson.Trim());
+        }
+        return list;
+    }
+}
+
+@foreach (var field in group.Fields.OrderBy(f => f.SortOrder))
+{
+  if (field.IsSuppressedFromForm)
+  {
+    continue;
+  }
+
+  var name = $"answer_{field.Id}";
+  var display = DisplayValue(field.ValueJson);
+  var selected = SelectedKeys(field.ValueJson);
+  var err = !field.IsValid;
+  var describedBy = new List<string>();
+  if (!string.IsNullOrWhiteSpace(field.Guidance)) describedBy.Add($"hint-{field.Id}");
+  if (!string.IsNullOrWhiteSpace(field.CurrentRegisterValue) && !field.IsReadOnlyRegisterValue)
+    describedBy.Add($"register-{field.Id}");
+  if (err) describedBy.Add($"error-{field.Id}");
+  var ariaDescribedBy = describedBy.Count > 0 ? string.Join(" ", describedBy) : null;
+  var visibilityAttr = string.IsNullOrWhiteSpace(field.VisibilityRuleJson) ? null : field.VisibilityRuleJson;
+  var hiddenStyle = field.IsVisible ? null : "display:none";
+  var hasRegister = !string.IsNullOrWhiteSpace(field.CurrentRegisterValue);
+  var readOnlyValue = field.IsReadOnlyRegisterValue
+      ? (field.CurrentRegisterValue ?? display)
+      : null;
+
+  <div class="govuk-form-group@(err ? " govuk-form-group--error" : "")"
+       id="field-@field.Id"
+       data-field-id="@field.Id"
+       data-field-key="@field.StableKey"
+       data-visibility="@(visibilityAttr ?? "")"
+       style="@hiddenStyle">
+    @if (field.IsReadOnlyRegisterValue)
+    {
+      <p class="govuk-label govuk-label--m">@field.Label</p>
+      @if (!string.IsNullOrWhiteSpace(field.Guidance))
+      {
+        <div id="hint-@field.Id" class="govuk-hint compass-census-guidance">@Html.Raw(MarkdownHelper.ToSafeHtml(field.Guidance))</div>
+      }
+      <p class="govuk-body govuk-!-margin-bottom-0" id="@name">@(string.IsNullOrWhiteSpace(readOnlyValue) ? "—" : readOnlyValue)</p>
+    }
+    else if (field.FieldType is ServiceDataModelFieldType.YesNo
+        or ServiceDataModelFieldType.SingleChoice
+        or ServiceDataModelFieldType.MultipleChoice
+        or ServiceDataModelFieldType.Lookup)
+    {
+      var isSingleLookup = field.FieldType == ServiceDataModelFieldType.Lookup && !field.AllowMultiple;
+      <fieldset class="govuk-fieldset" @(ariaDescribedBy != null ? Html.Raw($"aria-describedby=\"{ariaDescribedBy}\"") : null)>
+        <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+          @field.Label
+          @if (field.IsMandatory) { <span class="govuk-visually-hidden">(required)</span>; }
+        </legend>
+        @if (!string.IsNullOrWhiteSpace(field.Guidance))
+        {
+          <div id="hint-@field.Id" class="govuk-hint compass-census-guidance">@Html.Raw(MarkdownHelper.ToSafeHtml(field.Guidance))</div>
+        }
+        @if (hasRegister)
+        {
+          <p id="register-@field.Id" class="govuk-hint">Current register value: @field.CurrentRegisterValue</p>
+        }
+        @if (err)
+        {
+          <p id="error-@field.Id" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @(field.ValidationMessage ?? "Check this answer")</p>
+        }
+
+        @if (field.FieldType == ServiceDataModelFieldType.YesNo)
+        {
+          <div class="govuk-radios" data-module="govuk-radios">
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="@(name)-yes" name="@name" type="radio" value="Yes" @(display is "Yes" or "true" or "True" ? "checked" : null) @(readOnly ? "disabled" : null) />
+              <label class="govuk-label govuk-radios__label" for="@(name)-yes">Yes</label>
+            </div>
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="@(name)-no" name="@name" type="radio" value="No" @(display is "No" or "false" or "False" ? "checked" : null) @(readOnly ? "disabled" : null) />
+              <label class="govuk-label govuk-radios__label" for="@(name)-no">No</label>
+            </div>
+          </div>
+        }
+        else if (field.FieldType == ServiceDataModelFieldType.SingleChoice || isSingleLookup)
+        {
+          <div class="govuk-radios" data-module="govuk-radios">
+            @foreach (var opt in field.Options.OrderBy(o => o.SortOrder))
+            {
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" id="@(name)-@opt.ValueKey" name="@name" type="radio" value="@opt.ValueKey" @(selected.Contains(opt.ValueKey) || display == opt.ValueKey || display == opt.Label ? "checked" : null) @(readOnly ? "disabled" : null) />
+                <label class="govuk-label govuk-radios__label" for="@(name)-@opt.ValueKey">@opt.Label</label>
+              </div>
+            }
+          </div>
+        }
+        else
+        {
+          @* Multiple choice or Lookup multiple select *@
+          <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+            @foreach (var opt in field.Options.OrderBy(o => o.SortOrder))
+            {
+              <div class="govuk-checkboxes__item">
+                <input class="govuk-checkboxes__input" id="@(name)-@opt.ValueKey" name="@name" type="checkbox" value="@opt.ValueKey" @(selected.Contains(opt.ValueKey) ? "checked" : null) @(readOnly ? "disabled" : null) />
+                <label class="govuk-label govuk-checkboxes__label" for="@(name)-@opt.ValueKey">@opt.Label</label>
+              </div>
+            }
+          </div>
+        }
+      </fieldset>
+    }
+    else if (field.FieldType is ServiceDataModelFieldType.Services or ServiceDataModelFieldType.ServiceLines)
+    {
+      var isServices = field.FieldType == ServiceDataModelFieldType.Services;
+      var pickId = $"census-list-{field.Id:N}";
+      var searchUrl = isServices
+          ? Url.Action("PickServices", "ModernCensus")
+          : Url.Action("PickServiceLines", "ModernCensus");
+      var itemNoun = isServices ? "service" : "service line";
+      var selectedLabel = isServices ? "Selected services" : "Selected service lines";
+      <label class="govuk-label govuk-label--m" for="@(pickId)-search">
+        @field.Label
+        @if (field.IsMandatory) { <span class="govuk-visually-hidden">(required)</span>; }
+      </label>
+      @if (!string.IsNullOrWhiteSpace(field.Guidance))
+      {
+        <div id="hint-@field.Id" class="govuk-hint compass-census-guidance">@Html.Raw(MarkdownHelper.ToSafeHtml(field.Guidance))</div>
+      }
+      @if (err)
+      {
+        <p id="error-@field.Id" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @(field.ValidationMessage ?? "Check this answer")</p>
+      }
+      @* Marker so an emptied list still posts and clears the answer. *@
+      <input type="hidden" name="list_field_@field.Id" value="1" />
+      @if (!readOnly)
+      {
+        <div class="js-service-line-pick service-line-pick govuk-!-margin-bottom-2"
+             data-sl-search-url="@searchUrl"
+             data-sl-field-name="@name"
+             data-sl-id-kind="guid"
+             data-sl-min-one="true"
+             data-sl-confirm-title="Remove @itemNoun?"
+             data-sl-confirm-body="This @itemNoun will be removed from the list. You can add it again before saving.">
+          <div class="govuk-form-group govuk-!-margin-bottom-2">
+            <label class="govuk-label govuk-visually-hidden" for="@(pickId)-search">Add a @itemNoun</label>
+            <div class="govuk-hint" id="@(pickId)-hint">Type at least 2 characters, then choose a result to add it.</div>
+            <div class="service-line-pick__combo">
+              <input class="govuk-input js-sl-search" id="@(pickId)-search" type="search" autocomplete="off"
+                     aria-describedby="@(pickId)-hint hint-@field.Id" aria-autocomplete="list" aria-controls="@(pickId)-results" />
+              <div class="js-sl-results service-line-pick__results" id="@(pickId)-results" hidden></div>
+            </div>
+          </div>
+          <h3 class="govuk-heading-s" id="@(pickId)-sel-lbl">@selectedLabel</h3>
+          <div class="dfe-f-table-wrapper govuk-!-margin-bottom-0" data-module="dfe-f-table">
+            <table class="govuk-table govuk-table--small-text-until-tablet">
+              <caption class="govuk-table__caption govuk-visually-hidden">@selectedLabel</caption>
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header">@(isServices ? "Service" : "Service line")</th>
+                  <th scope="col" class="govuk-table__header govuk-!-width-one-quarter govuk-!-text-align-right">Action</th>
+                </tr>
+              </thead>
+              <tbody class="govuk-table__body js-sl-selected" aria-labelledby="@(pickId)-sel-lbl">
+                @foreach (var item in field.ListItems)
+                {
+                  <tr data-id="@item.Id">
+                    <td class="govuk-table__cell">
+                      <input type="hidden" name="@name" value="@item.Id" />
+                      @item.Label
+                      @if (!string.IsNullOrWhiteSpace(item.Subtitle))
+                      {
+                        <div class="govuk-body-s dfe-c-text-muted">@item.Subtitle</div>
+                      }
+                    </td>
+                    <td class="govuk-table__cell govuk-!-text-align-right">
+                      <a href="#" class="govuk-link js-sl-remove govuk-link--no-visited-state" aria-label="Remove @item.Label"@(field.ListItems.Count <= 1 ? Html.Raw(" hidden") : null)>Remove</a>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (field.ListItems.Count == 0)
+          {
+            <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-top-2">None added yet. Search above to add @(isServices ? "services" : "service lines").</p>
+          }
+        </div>
+      }
+      else if (field.ListItems.Count == 0)
+      {
+        <p class="govuk-body">None recorded.</p>
+      }
+      else
+      {
+        <ul class="govuk-list govuk-list--bullet">
+          @foreach (var item in field.ListItems)
+          {
+            <li>@item.Label</li>
+          }
+        </ul>
+      }
+    }
+    else if (field.AllowMultiple &&
+             field.FieldType is ServiceDataModelFieldType.Text or ServiceDataModelFieldType.MultilineText)
+    {
+      var textValues = TextListValues(field.ValueJson);
+      if (textValues.Count == 0) textValues.Add("");
+      var isMultiline = field.FieldType == ServiceDataModelFieldType.MultilineText;
+      <label class="govuk-label govuk-label--m">
+        @field.Label
+        @if (field.IsMandatory) { <span class="govuk-visually-hidden">(required)</span>; }
+      </label>
+      @if (!string.IsNullOrWhiteSpace(field.Guidance))
+      {
+        <div id="hint-@field.Id" class="govuk-hint compass-census-guidance">@Html.Raw(MarkdownHelper.ToSafeHtml(field.Guidance))</div>
+      }
+      @if (err)
+      {
+        <p id="error-@field.Id" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @(field.ValidationMessage ?? "Check this answer")</p>
+      }
+      <input type="hidden" name="list_field_@field.Id" value="1" />
+      <div class="js-census-text-list" data-field-name="@name" data-multiline="@(isMultiline ? "true" : "false")" data-readonly="@(readOnly ? "true" : "false")">
+        <div class="js-census-text-list-items">
+          @for (var i = 0; i < textValues.Count; i++)
+          {
+            var rowId = $"{name}-{i}";
+            <div class="govuk-form-group govuk-!-margin-bottom-2 js-census-text-list-row">
+              @if (isMultiline)
+              {
+                <textarea class="govuk-textarea@(err ? " govuk-textarea--error" : "")" id="@rowId" name="@name" rows="3" @(readOnly ? "readonly" : null)>@textValues[i]</textarea>
+              }
+              else
+              {
+                <input class="govuk-input@(err ? " govuk-input--error" : "")" id="@rowId" name="@name" type="text" value="@textValues[i]" @(readOnly ? "readonly" : null) />
+              }
+              @if (!readOnly)
+              {
+                @* Hidden when only one row — JS keeps this in sync after add/remove. *@
+                <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0 js-census-text-list-remove-wrap"@(textValues.Count <= 1 ? Html.Raw(" hidden") : null)>
+                  <a href="#" class="govuk-link js-census-text-list-remove">Remove</a>
+                </p>
+              }
+            </div>
+          }
+        </div>
+        @if (!readOnly)
+        {
+          <p class="govuk-body">
+            <a href="#" class="govuk-link js-census-text-list-add">Add another</a>
+          </p>
+        }
+      </div>
+    }
+    else
+    {
+      <label class="govuk-label govuk-label--m" for="@name">
+        @field.Label
+        @if (field.IsMandatory) { <span class="govuk-visually-hidden">(required)</span>; }
+      </label>
+      @if (!string.IsNullOrWhiteSpace(field.Guidance))
+      {
+        <div id="hint-@field.Id" class="govuk-hint compass-census-guidance">@Html.Raw(MarkdownHelper.ToSafeHtml(field.Guidance))</div>
+      }
+      @if (hasRegister)
+      {
+        <p id="register-@field.Id" class="govuk-hint">
+          @(string.IsNullOrWhiteSpace(display) || string.Equals(display, field.CurrentRegisterValue, StringComparison.OrdinalIgnoreCase)
+              ? "From the Service Register — you can update it below."
+              : $"Current register value: {field.CurrentRegisterValue}")
+        </p>
+      }
+      @if (err)
+      {
+        <p id="error-@field.Id" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @(field.ValidationMessage ?? "Check this answer")</p>
+      }
+
+      @switch (field.FieldType)
+      {
+        case ServiceDataModelFieldType.MultilineText:
+          <textarea class="govuk-textarea@(err ? " govuk-textarea--error" : "")" id="@name" name="@name" rows="5" aria-describedby="@ariaDescribedBy" @(readOnly ? "readonly" : null)>@display</textarea>
+          break;
+        case ServiceDataModelFieldType.Number:
+          <input class="govuk-input govuk-input--width-10@(err ? " govuk-input--error" : "")" id="@name" name="@name" type="number" value="@display" aria-describedby="@ariaDescribedBy" @(readOnly ? "readonly" : null) />
+          break;
+        case ServiceDataModelFieldType.Date:
+          <input class="govuk-input govuk-input--width-10@(err ? " govuk-input--error" : "")" id="@name" name="@name" type="date" value="@display" aria-describedby="@ariaDescribedBy" @(readOnly ? "readonly" : null) />
+          break;
+        case ServiceDataModelFieldType.Url:
+          <input class="govuk-input@(err ? " govuk-input--error" : "")" id="@name" name="@name" type="url" value="@display" aria-describedby="@ariaDescribedBy" @(readOnly ? "readonly" : null) />
+          break;
+        default:
+          <input class="govuk-input@(err ? " govuk-input--error" : "")" id="@name" name="@name" type="text" value="@display" aria-describedby="@ariaDescribedBy" @(readOnly ? "readonly" : null) />
+          break;
+      }
+    }
+  </div>
+}

@@ -7,6 +7,7 @@ using Compass.Models.Modern.Work;
 using Compass.Services;
 using Compass.Services.Aiss;
 using Compass.Services.Modern;
+using Compass.Services.ServiceDataModels;
 using Compass.ViewModels;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Authorization;
@@ -36,6 +37,7 @@ public partial class ModernReportingController : Controller
     private readonly IWorkScopedExcelExportService _workScopedExcelExport;
     private readonly IConfiguration _configuration;
     private readonly IPermissionService _permissionService;
+    private readonly IServiceDataModelReportingService _serviceDataModelReporting;
     private readonly ILogger<ModernReportingController> _logger;
 
     public ModernReportingController(
@@ -54,6 +56,7 @@ public partial class ModernReportingController : Controller
         IWorkScopedExcelExportService workScopedExcelExport,
         IConfiguration configuration,
         IPermissionService permissionService,
+        IServiceDataModelReportingService serviceDataModelReporting,
         ILogger<ModernReportingController> logger)
     {
         _context = context;
@@ -71,6 +74,7 @@ public partial class ModernReportingController : Controller
         _workScopedExcelExport = workScopedExcelExport;
         _configuration = configuration;
         _permissionService = permissionService;
+        _serviceDataModelReporting = serviceDataModelReporting;
         _logger = logger;
     }
 

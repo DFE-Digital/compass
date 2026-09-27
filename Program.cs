@@ -638,6 +638,12 @@ builder.Services.Configure<Compass.Configuration.EnvironmentSyncOptions>(
 builder.Services.AddScoped<Compass.Services.EnvironmentSync.IEnvironmentSyncService, Compass.Services.EnvironmentSync.EnvironmentSyncService>();
 builder.Services.AddScoped<Compass.Services.ICmsCompassServiceDataComparisonService, Compass.Services.CmsCompassServiceDataComparisonService>();
 builder.Services.AddScoped<Compass.Services.ICmsCompassServiceDataSyncService, Compass.Services.CmsCompassServiceDataSyncService>();
+builder.Services.AddScoped<Compass.Services.ServiceDataModels.IServiceDataModelAccessService, Compass.Services.ServiceDataModels.ServiceDataModelAccessService>();
+builder.Services.AddScoped<Compass.Services.ServiceDataModels.IServiceDataModelAdminService, Compass.Services.ServiceDataModels.ServiceDataModelAdminService>();
+builder.Services.AddScoped<Compass.Services.ServiceDataModels.ICoreCensusThemeService, Compass.Services.ServiceDataModels.CoreCensusThemeService>();
+builder.Services.AddScoped<Compass.Services.ServiceDataModels.IServiceDataModelCensusService, Compass.Services.ServiceDataModels.ServiceDataModelCensusService>();
+builder.Services.AddScoped<Compass.Services.ServiceDataModels.IServiceDataModelReportingService, Compass.Services.ServiceDataModels.ServiceDataModelReportingService>();
+builder.Services.AddScoped<Compass.Services.ICapabilityAdminService, Compass.Services.CapabilityAdminService>();
 builder.Services.AddHttpClient<Compass.Services.Aiss.IAissSummaryService, Compass.Services.Aiss.AissSummaryService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddHttpClient<Compass.Services.Aiss.IAissProductAccessibilityService, Compass.Services.Aiss.AissProductAccessibilityService>()

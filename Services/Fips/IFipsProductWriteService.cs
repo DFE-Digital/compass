@@ -51,4 +51,18 @@ public interface IFipsProductWriteService
         string? auditChangedByDisplay,
         string? productUrl,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates user description and/or product URL only. Caller must authorize.
+    /// Does not require service-owner manager and does not touch other product fields.
+    /// </summary>
+    Task<FipsProductWriteOutcome> TryUpdateDescriptionAndUrlAsync(
+        Guid productId,
+        string actorEmail,
+        string? auditChangedByDisplay,
+        bool updateDescription,
+        string? userDescription,
+        bool updateUrl,
+        string? productUrl,
+        CancellationToken cancellationToken = default);
 }

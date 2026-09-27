@@ -1,0 +1,81 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.ServiceCensusAnalysisProductTableModel
+@using Compass.ViewModels.Modern
+@using Compass.ViewModels.Modern.ServiceDataModels
+
+@if (Model.TotalCount == 0)
+{
+  <div class="govuk-inset-text">
+    <p class="govuk-body govuk-!-margin-bottom-0">No products to show for this cut.</p>
+  </div>
+}
+else
+{
+  <p class="govuk-body-s dfe-c-text-muted govuk-!-margin-bottom-3">
+    @{
+      var from = ((Model.Page - 1) * Model.PageSize) + 1;
+      var to = Math.Min(Model.Page * Model.PageSize, Model.TotalCount);
+    }
+    Showing @from to @to of @Model.TotalCount services.
+  </p>
+  <div class="dfe-f-table-wrapper service-register-products-table fips-manage-products-table" data-module="dfe-f-table">
+    <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table govuk-table--small dfe-f-table--condensed">
+      <caption class="govuk-visually-hidden">Products</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header service-register-products-table__product-col" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Service</button>
+          </th>
+          <th scope="col" class="govuk-table__header service-register-products-table__phase-col" aria-sort="none">
+            <button type="button" class="dfe-f-table-sort-button">Phase</button>
+          </th>
+          @if (Model.ShowAnswer)
+          {
+            <th scope="col" class="govuk-table__header" aria-sort="none">
+              <button type="button" class="dfe-f-table-sort-button">Answer</button>
+            </th>
+          }
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var row in Model.Products)
+        {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell service-register-products-table__product-col">
+              <a href="@Url.Action("ServiceCensusAnalysis", "ModernReporting", new {
+                   modelId = Context.Request.Query["modelId"].ToString(),
+                   directorateId = Context.Request.Query["directorateId"].ToString(),
+                   businessAreaId = Context.Request.Query["businessAreaId"].ToString(),
+                   productStatus = Context.Request.Query["productStatus"].ToString(),
+                   phaseId = Context.Request.Query["phaseId"].ToString(),
+                   typeId = Context.Request.Query["typeId"].ToString(),
+                   ownerEmail = Context.Request.Query["ownerEmail"].ToString(),
+                   search = Context.Request.Query["search"].ToString(),
+                   productId = row.ProductId
+                 })" class="govuk-link govuk-link--no-visited-state govuk-!-font-weight-bold">@row.ProductTitle</a>
+              @if (!string.IsNullOrWhiteSpace(row.BusinessAreasDisplay))
+              {
+                <div class="dfe-c-body-s dfe-c-text-muted service-register-products-table__product-meta">@row.BusinessAreasDisplay</div>
+              }
+            </td>
+            <td class="govuk-table__cell service-register-products-table__phase-col">@(string.IsNullOrWhiteSpace(row.PhaseName) ? "—" : row.PhaseName)</td>
+            @if (Model.ShowAnswer)
+            {
+              <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(row.AnswerDisplay) ? "—" : row.AnswerDisplay)</td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (Model.TotalPages > 1 && Model.PageUrl != null)
+  {
+    <div class="govuk-!-margin-top-4">
+      @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkPagination.cshtml", new GovUkPaginationViewModel {
+        CurrentPage = Model.Page,
+        TotalPages = Model.TotalPages,
+        PageUrl = Model.PageUrl
+      })
+    </div>
+  }
+}

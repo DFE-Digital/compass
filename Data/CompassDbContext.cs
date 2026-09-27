@@ -8,6 +8,7 @@ using Compass.Models;
 using Compass.Models.DemandPipeline;
 using Compass.Models.DemandTriage;
 using Compass.Models.Fips;
+using Compass.Models.ServiceDataModels;
 using Compass.Services;
 
 namespace Compass.Data;
@@ -403,6 +404,25 @@ public partial class CompassDbContext : DbContext
     public DbSet<ServiceLineBusinessArea> ServiceLineBusinessAreas { get; set; }
     public DbSet<ServiceLineProduct> ServiceLineProducts { get; set; }
     public DbSet<ServiceLineProject> ServiceLineProjects { get; set; }
+
+    // Reusable service data models (Service Census and future models)
+    public DbSet<ServiceDataModel> ServiceDataModels { get; set; }
+    public DbSet<ServiceDataModelVersion> ServiceDataModelVersions { get; set; }
+    public DbSet<ServiceDataModelGroup> ServiceDataModelGroups { get; set; }
+    public DbSet<ServiceDataModelField> ServiceDataModelFields { get; set; }
+    public DbSet<ServiceDataModelFieldOption> ServiceDataModelFieldOptions { get; set; }
+    public DbSet<ServiceDataModelApplicabilityRule> ServiceDataModelApplicabilityRules { get; set; }
+    public DbSet<ServiceDataModelExplicitService> ServiceDataModelExplicitServices { get; set; }
+    public DbSet<ServiceDataModelAssignment> ServiceDataModelAssignments { get; set; }
+    public DbSet<ServiceDataModelSubmission> ServiceDataModelSubmissions { get; set; }
+    public DbSet<ServiceDataModelAnswer> ServiceDataModelAnswers { get; set; }
+    public DbSet<ServiceDataModelProposedRegisterChange> ServiceDataModelProposedRegisterChanges { get; set; }
+    public DbSet<ServiceDataModelThemeCompletion> ServiceDataModelThemeCompletions { get; set; }
+    public DbSet<ServiceDataModelAuditEvent> ServiceDataModelAuditEvents { get; set; }
+    public DbSet<CoreCensusTheme> CoreCensusThemes { get; set; }
+    public DbSet<CoreCensusThemeField> CoreCensusThemeFields { get; set; }
+    public DbSet<CoreCensusThemeFieldOption> CoreCensusThemeFieldOptions { get; set; }
+    public DbSet<CapabilityLookup> CapabilityLookups { get; set; }
 
     // Design Decision Records (DDR). Tables share the `ddr_` prefix per ddr.md §2.
     public DbSet<Compass.Models.Ddr.DesignDecisionRecord> DesignDecisionRecords { get; set; } = default!;
@@ -4055,6 +4075,205 @@ public partial class CompassDbContext : DbContext
             e.HasIndex(x => x.SettingKey);
             e.HasIndex(x => x.UpdatedAt);
             e.Property(x => x.Reason).HasColumnType("nvarchar(max)");
+        });
+
+        // ----- Service data models (reusable census / profiles) -----
+        modelBuilder.Entity<ServiceDataModel>(e =>
+        {
+            e.HasIndex(x => x.StableKey).IsUnique();
+            e.HasIndex(x => x.LifecycleStatus);
+            e.Property(x => x.Description).HasColumnType("nvarchar(max)");
+        });
+
+        modelBuilder.Entity<ServiceDataModelVersion>(e =>
+        {
+            e.HasIndex(x => new { x.ServiceDataModelId, x.VersionNumber }).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.DefinitionSnapshotJson).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.Model)
+                .WithMany(m => m.Versions)
+                .HasForeignKey(x => x.ServiceDataModelId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceDataModelGroup>(e =>
+        {
+            e.HasIndex(x => new { x.ServiceDataModelVersionId, x.StableKey }).IsUnique();
+            e.HasIndex(x => new { x.ServiceDataModelVersionId, x.CoreThemeKey });
+            e.Property(x => x.Guidance).HasColumnType("nvarchar(max)");
+            e.Property(x => x.CoreThemeKey).HasMaxLength(100);
+            e.HasOne(x => x.Version)
+                .WithMany(v => v.Groups)
+                .HasForeignKey(x => x.ServiceDataModelVersionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CoreCensusTheme>(e =>
+        {
+            e.HasIndex(x => x.StableKey).IsUnique();
+            e.Property(x => x.Guidance).HasColumnType("nvarchar(max)");
+        });
+
+        modelBuilder.Entity<CoreCensusThemeField>(e =>
+        {
+            e.HasIndex(x => new { x.CoreCensusThemeId, x.StableKey }).IsUnique();
+            e.Property(x => x.Guidance).HasColumnType("nvarchar(max)");
+            e.Property(x => x.VisibilityRuleJson).HasMaxLength(2000);
+            e.Property(x => x.CanonicalAttributeKey).HasMaxLength(100);
+            e.Property(x => x.ValidationPattern).HasMaxLength(500);
+            e.Property(x => x.OptionsLookupKey).HasMaxLength(100);
+            e.Property(x => x.MinNumber).HasPrecision(18, 4);
+            e.Property(x => x.MaxNumber).HasPrecision(18, 4);
+            e.HasOne(x => x.Theme)
+                .WithMany(t => t.Fields)
+                .HasForeignKey(x => x.CoreCensusThemeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CapabilityLookup>(e =>
+        {
+            e.HasIndex(x => x.Reference).IsUnique();
+            e.Property(x => x.Title).HasMaxLength(200);
+            e.Property(x => x.Description).HasMaxLength(2000);
+            e.Property(x => x.Reference).HasMaxLength(100);
+            e.Ignore(x => x.DisplayLabel);
+        });
+
+        modelBuilder.Entity<CoreCensusThemeFieldOption>(e =>
+        {
+            e.HasIndex(x => new { x.CoreCensusThemeFieldId, x.ValueKey }).IsUnique();
+            e.HasOne(x => x.Field)
+                .WithMany(f => f.Options)
+                .HasForeignKey(x => x.CoreCensusThemeFieldId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceDataModelField>(e =>
+        {
+            e.HasIndex(x => new { x.ServiceDataModelGroupId, x.StableKey }).IsUnique();
+            e.Property(x => x.Guidance).HasColumnType("nvarchar(max)");
+            e.Property(x => x.VisibilityRuleJson).HasMaxLength(2000);
+            e.Property(x => x.MinNumber).HasPrecision(18, 4);
+            e.Property(x => x.MaxNumber).HasPrecision(18, 4);
+            e.HasOne(x => x.Group)
+                .WithMany(g => g.Fields)
+                .HasForeignKey(x => x.ServiceDataModelGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceDataModelFieldOption>(e =>
+        {
+            e.HasIndex(x => new { x.ServiceDataModelFieldId, x.ValueKey }).IsUnique();
+            e.HasOne(x => x.Field)
+                .WithMany(f => f.Options)
+                .HasForeignKey(x => x.ServiceDataModelFieldId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceDataModelApplicabilityRule>(e =>
+        {
+            e.HasIndex(x => x.ServiceDataModelId);
+            e.HasOne(x => x.Model)
+                .WithMany(m => m.ApplicabilityRules)
+                .HasForeignKey(x => x.ServiceDataModelId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceDataModelExplicitService>(e =>
+        {
+            e.HasIndex(x => new { x.ServiceDataModelId, x.CMDBProductId, x.Mode }).IsUnique();
+            e.HasOne(x => x.Model)
+                .WithMany(m => m.ExplicitServices)
+                .HasForeignKey(x => x.ServiceDataModelId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.CMDBProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ServiceDataModelAssignment>(e =>
+        {
+            e.HasIndex(x => new { x.ServiceDataModelVersionId, x.CMDBProductId, x.PeriodLabel });
+            e.HasIndex(x => x.CMDBProductId);
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.DueUtc);
+            e.Property(x => x.FieldCompletionPercent).HasPrecision(5, 1);
+            e.Property(x => x.MandatoryCompletionPercent).HasPrecision(5, 1);
+            e.Property(x => x.ReviewerAttestationNote).HasColumnType("nvarchar(max)");
+            e.Property(x => x.ChangesRequestedNote).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.Version)
+                .WithMany(v => v.Assignments)
+                .HasForeignKey(x => x.ServiceDataModelVersionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.CMDBProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ServiceDataModelSubmission>(e =>
+        {
+            e.HasIndex(x => new { x.ServiceDataModelAssignmentId, x.RevisionNumber }).IsUnique();
+            e.HasIndex(x => new { x.ServiceDataModelAssignmentId, x.IsCurrent });
+            e.HasOne(x => x.Assignment)
+                .WithMany(a => a.Submissions)
+                .HasForeignKey(x => x.ServiceDataModelAssignmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceDataModelAnswer>(e =>
+        {
+            e.HasIndex(x => new { x.ServiceDataModelSubmissionId, x.FieldStableKey });
+            e.HasIndex(x => x.ServiceDataModelFieldId);
+            e.Property(x => x.FieldStableKey).HasMaxLength(100);
+            e.Property(x => x.ValueJson).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.Submission)
+                .WithMany(s => s.Answers)
+                .HasForeignKey(x => x.ServiceDataModelSubmissionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Field)
+                .WithMany()
+                .HasForeignKey(x => x.ServiceDataModelFieldId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ServiceDataModelProposedRegisterChange>(e =>
+        {
+            e.HasIndex(x => x.ServiceDataModelAssignmentId);
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.FieldStableKey);
+            e.Property(x => x.FieldStableKey).HasMaxLength(100);
+            e.Property(x => x.CurrentRegisterValue).HasColumnType("nvarchar(max)");
+            e.Property(x => x.ProposedValue).HasColumnType("nvarchar(max)");
+            e.HasOne(x => x.Assignment)
+                .WithMany()
+                .HasForeignKey(x => x.ServiceDataModelAssignmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Field)
+                .WithMany()
+                .HasForeignKey(x => x.ServiceDataModelFieldId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ServiceDataModelThemeCompletion>(e =>
+        {
+            e.HasIndex(x => new { x.ServiceDataModelAssignmentId, x.ThemeStableKey }).IsUnique();
+            e.Property(x => x.ThemeStableKey).HasMaxLength(100);
+            e.Property(x => x.CompletedByEmail).HasMaxLength(320);
+            e.HasOne(x => x.Assignment)
+                .WithMany(a => a.ThemeCompletions)
+                .HasForeignKey(x => x.ServiceDataModelAssignmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceDataModelAuditEvent>(e =>
+        {
+            e.HasIndex(x => new { x.EntityType, x.EntityId });
+            e.HasIndex(x => x.OccurredUtc);
+            e.Property(x => x.MetadataJson).HasMaxLength(4000);
         });
 
         modelBuilder.Entity<Comment>(e =>

@@ -13543,6 +13543,628 @@ namespace Compass.Migrations
                     b.ToTable("ScoreSnapshots");
                 });
 
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ApplicabilityMode")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Classification")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DefaultDueDaysAfterPublish")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsRepeatable")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsReportable")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LifecycleStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("OwnerDisplayName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("OwnerEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("ProgressLabelThresholdPercent")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("RequiresReviewerAttestation")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ReviewCadenceLabel")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("StableKey")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("UpdatedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LifecycleStatus");
+
+                    b.HasIndex("StableKey")
+                        .IsUnique();
+
+                    b.ToTable("ServiceDataModels");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelAnswer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsValid")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("ServiceDataModelFieldId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ServiceDataModelSubmissionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UpdatedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ValidationMessage")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ValueJson")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceDataModelFieldId");
+
+                    b.HasIndex("ServiceDataModelSubmissionId", "ServiceDataModelFieldId")
+                        .IsUnique();
+
+                    b.ToTable("ServiceDataModelAnswers");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelApplicabilityRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("FipsBusinessAreaId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FipsDirectorateId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FipsTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PhaseId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProductStatus")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ServiceDataModelId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceDataModelId");
+
+                    b.ToTable("ServiceDataModelApplicabilityRules");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CMDBProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ChangesRequestedNote")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ChangesRequestedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CurrentRevisionNumber")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DueUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("FieldCompletionPercent")
+                        .HasPrecision(5, 1)
+                        .HasColumnType("decimal(5,1)");
+
+                    b.Property<string>("LastAnsweredByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("LastAnsweredUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("MandatoryCompletionPercent")
+                        .HasPrecision(5, 1)
+                        .HasColumnType("decimal(5,1)");
+
+                    b.Property<DateTime?>("PeriodEndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PeriodLabel")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("PeriodStartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("ReviewedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewerAttestationNote")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("ServiceDataModelVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StatusReason")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("SubmittedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("SubmittedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CMDBProductId");
+
+                    b.HasIndex("DueUtc");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("ServiceDataModelVersionId", "CMDBProductId", "PeriodLabel");
+
+                    b.ToTable("ServiceDataModelAssignments");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelAuditEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ActorEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateTime>("OccurredUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredUtc");
+
+                    b.HasIndex("EntityType", "EntityId");
+
+                    b.ToTable("ServiceDataModelAuditEvents");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelExplicitService", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CMDBProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ServiceDataModelId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CMDBProductId");
+
+                    b.HasIndex("ServiceDataModelId", "CMDBProductId", "Mode")
+                        .IsUnique();
+
+                    b.ToTable("ServiceDataModelExplicitServices");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelField", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CanonicalAttributeKey")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("CountsTowardsCompletion")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("FieldType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Guidance")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDisabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsMandatory")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsReportable")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<decimal?>("MaxNumber")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("MinNumber")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("ServiceDataModelGroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StableKey")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ValidationPattern")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("VisibilityRuleJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceDataModelGroupId", "StableKey")
+                        .IsUnique();
+
+                    b.ToTable("ServiceDataModelFields");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelFieldOption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<Guid>("ServiceDataModelFieldId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ValueKey")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceDataModelFieldId", "ValueKey")
+                        .IsUnique();
+
+                    b.ToTable("ServiceDataModelFieldOptions");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Guidance")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDisabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<Guid>("ServiceDataModelVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StableKey")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceDataModelVersionId", "StableKey")
+                        .IsUnique();
+
+                    b.ToTable("ServiceDataModelGroups");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelProposedRegisterChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CanonicalAttributeKey")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CurrentRegisterValue")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProposedValue")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ReviewedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("ReviewedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ServiceDataModelAssignmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ServiceDataModelFieldId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceDataModelAssignmentId");
+
+                    b.HasIndex("ServiceDataModelFieldId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("ServiceDataModelProposedRegisterChanges");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CreatedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSubmittedSnapshot")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("RevisionNumber")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ServiceDataModelAssignmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SubmittedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("SubmittedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceDataModelAssignmentId", "IsCurrent");
+
+                    b.HasIndex("ServiceDataModelAssignmentId", "RevisionNumber")
+                        .IsUnique();
+
+                    b.ToTable("ServiceDataModelSubmissions");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ChangeSummary")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DefinitionSnapshotJson")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PeriodEndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PeriodLabel")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("PeriodStartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PublishedByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("PublishedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RetiredByEmail")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("RetiredUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ServiceDataModelId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("ServiceDataModelId", "VersionNumber")
+                        .IsUnique();
+
+                    b.ToTable("ServiceDataModelVersions");
+                });
+
             modelBuilder.Entity("Compass.Models.ServiceLine", b =>
                 {
                     b.Property<Guid>("Id")
@@ -19076,6 +19698,148 @@ namespace Compass.Migrations
                     b.Navigation("Service");
                 });
 
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelAnswer", b =>
+                {
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModelField", "Field")
+                        .WithMany()
+                        .HasForeignKey("ServiceDataModelFieldId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModelSubmission", "Submission")
+                        .WithMany("Answers")
+                        .HasForeignKey("ServiceDataModelSubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Field");
+
+                    b.Navigation("Submission");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelApplicabilityRule", b =>
+                {
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModel", "Model")
+                        .WithMany("ApplicabilityRules")
+                        .HasForeignKey("ServiceDataModelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Model");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelAssignment", b =>
+                {
+                    b.HasOne("Compass.Models.Fips.CMDBProduct", "Product")
+                        .WithMany()
+                        .HasForeignKey("CMDBProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModelVersion", "Version")
+                        .WithMany("Assignments")
+                        .HasForeignKey("ServiceDataModelVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Version");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelExplicitService", b =>
+                {
+                    b.HasOne("Compass.Models.Fips.CMDBProduct", "Product")
+                        .WithMany()
+                        .HasForeignKey("CMDBProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModel", "Model")
+                        .WithMany("ExplicitServices")
+                        .HasForeignKey("ServiceDataModelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Model");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelField", b =>
+                {
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModelGroup", "Group")
+                        .WithMany("Fields")
+                        .HasForeignKey("ServiceDataModelGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelFieldOption", b =>
+                {
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModelField", "Field")
+                        .WithMany("Options")
+                        .HasForeignKey("ServiceDataModelFieldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Field");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelGroup", b =>
+                {
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModelVersion", "Version")
+                        .WithMany("Groups")
+                        .HasForeignKey("ServiceDataModelVersionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Version");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelProposedRegisterChange", b =>
+                {
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModelAssignment", "Assignment")
+                        .WithMany()
+                        .HasForeignKey("ServiceDataModelAssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModelField", "Field")
+                        .WithMany()
+                        .HasForeignKey("ServiceDataModelFieldId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Assignment");
+
+                    b.Navigation("Field");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelSubmission", b =>
+                {
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModelAssignment", "Assignment")
+                        .WithMany("Submissions")
+                        .HasForeignKey("ServiceDataModelAssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Assignment");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelVersion", b =>
+                {
+                    b.HasOne("Compass.Models.ServiceDataModels.ServiceDataModel", "Model")
+                        .WithMany("Versions")
+                        .HasForeignKey("ServiceDataModelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Model");
+                });
+
             modelBuilder.Entity("Compass.Models.ServiceLineBusinessArea", b =>
                 {
                     b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
@@ -19603,18 +20367,18 @@ namespace Compass.Migrations
                     b.HasOne("Compass.Models.Milestone", "Milestone")
                         .WithMany()
                         .HasForeignKey("MilestoneId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Compass.Models.ProjectMonthlyUpdate", "ProjectMonthlyUpdate")
                         .WithMany()
                         .HasForeignKey("ProjectMonthlyUpdateId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Compass.Models.ProjectWeeklyWorkUpdate", "ProjectWeeklyWorkUpdate")
                         .WithMany()
                         .HasForeignKey("ProjectWeeklyWorkUpdateId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Compass.Models.RagStatusLookup", "RagStatusLookup")
                         .WithMany()
@@ -20162,6 +20926,42 @@ namespace Compass.Migrations
                     b.Navigation("RiskRiskTypes");
 
                     b.Navigation("Tags");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModel", b =>
+                {
+                    b.Navigation("ApplicabilityRules");
+
+                    b.Navigation("ExplicitServices");
+
+                    b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelAssignment", b =>
+                {
+                    b.Navigation("Submissions");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelField", b =>
+                {
+                    b.Navigation("Options");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelGroup", b =>
+                {
+                    b.Navigation("Fields");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelSubmission", b =>
+                {
+                    b.Navigation("Answers");
+                });
+
+            modelBuilder.Entity("Compass.Models.ServiceDataModels.ServiceDataModelVersion", b =>
+                {
+                    b.Navigation("Assignments");
+
+                    b.Navigation("Groups");
                 });
 
             modelBuilder.Entity("Compass.Models.ServiceLine", b =>

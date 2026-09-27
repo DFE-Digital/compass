@@ -1,0 +1,35 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.CensusAssignmentFormViewModel
+@{
+  var listId = "census-assignment-side-nav-list";
+  var summaryUrl = Url.Action("Assignment", "ModernCensus", new { assignmentId = Model.AssignmentId }) ?? "#";
+}
+
+<nav class="dfe-f-side-navigation census-assignment-side-nav"
+     aria-label="Census themes"
+     data-module="dfe-f-side-navigation">
+  <button type="button"
+          class="dfe-f-side-navigation__toggle"
+          aria-controls="@listId"
+          aria-expanded="false">
+    Themes
+  </button>
+  <ul id="@listId" class="dfe-f-side-navigation__list" hidden>
+    <li class="dfe-f-side-navigation__item@(Model.IsSummaryView ? " dfe-f-side-navigation__item--current" : "")">
+      <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline"
+         href="@summaryUrl"
+         @(Model.IsSummaryView ? Html.Raw("aria-current=\"page\"") : null)>Summary</a>
+    </li>
+    @foreach (var theme in Model.Groups.OrderBy(g => g.SortOrder))
+    {
+      var isCurrent = Model.SelectedGroupId == theme.Id;
+      var themeUrl = Url.Action("AssignmentTheme", "ModernCensus", new { assignmentId = Model.AssignmentId, groupId = theme.Id }) ?? "#";
+      <li class="dfe-f-side-navigation__item@(isCurrent ? " dfe-f-side-navigation__item--current" : "")">
+        <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state govuk-link--no-underline"
+           href="@themeUrl"
+           @(isCurrent ? Html.Raw("aria-current=\"page\"") : null)>
+          @theme.Name
+        </a>
+      </li>
+    }
+  </ul>
+</nav>

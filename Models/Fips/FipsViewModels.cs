@@ -80,6 +80,22 @@ public class FipsProductRow
     public CMDBProductStatus Status { get; set; }
     public int QualityScore { get; set; }
     public int QualityScoreMax { get; set; } = 7;
+
+    /// <summary>Optional census enrichment for the census work list (same product rows as Service Register).</summary>
+    public bool HasCensusAssignment { get; set; }
+    public Guid? CensusAssignmentId { get; set; }
+    public Compass.Models.ServiceDataModels.ServiceDataModelAssignmentStatus? CensusStatus { get; set; }
+    public string? CensusStatusLabel { get; set; }
+    public decimal? CensusFieldCompletionPercent { get; set; }
+
+    /// <summary>Answered applicable counting fields (standing census). Null when no published census exists.</summary>
+    public int? CensusAnsweredCountingFields { get; set; }
+
+    /// <summary>Applicable counting fields denominator. Null when no published census exists.</summary>
+    public int? CensusApplicableCountingFields { get; set; }
+
+    /// <summary>True when a published Service Census definition exists for services to complete.</summary>
+    public bool CensusPublishedAvailable { get; set; }
 }
 
 /// <summary>Matches <see cref="Compass.Services.Fips.FipsProductListingHelper.CalculateQualityScore"/> — score out of 7 with human labels for gaps.</summary>
@@ -198,7 +214,7 @@ public class FipsProductDetailViewModel
     /// <summary>True when the information tab shows the editable form (named contacts or operations console users on manage pages).</summary>
     public bool EditMode { get; set; }
 
-    /// <summary><c>information</c>, <c>history</c>, <c>risks</c>, <c>issues</c>, <c>assumptions</c>, <c>dependencies</c>, <c>accessibility</c>, <c>assurance</c>, <c>work</c>, <c>strategic-alignment</c>, or <c>performance</c>.</summary>
+    /// <summary><c>information</c>, <c>history</c>, <c>risks</c>, <c>issues</c>, <c>assumptions</c>, <c>dependencies</c>, <c>accessibility</c>, <c>assurance</c>, <c>work</c>, <c>strategic-alignment</c>, <c>census</c>, or <c>performance</c>.</summary>
     public string ActiveDetailTab { get; set; } = "information";
 
     /// <summary>Strategic alignment summary for the product detail tab.</summary>
@@ -206,6 +222,9 @@ public class FipsProductDetailViewModel
 
     /// <summary>Linked delivery work items (from <see cref="ProjectProduct"/>).</summary>
     public FipsProductWorkItemsPanelViewModel? WorkItemsPanel { get; set; }
+
+    /// <summary>Service data model / census assignments for this product.</summary>
+    public Compass.ViewModels.Modern.ServiceDataModels.CensusProductAssignmentsViewModel? CensusPanel { get; set; }
 
     /// <summary>CMS product document id when resolved from the catalogue API (fallback: CMDB product GUID string).</summary>
     public string? ResolvedCmsDocumentId { get; set; }

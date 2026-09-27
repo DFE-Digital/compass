@@ -70,5 +70,28 @@ public sealed class ModernUiViewLocationExpander : IViewLocationExpander
             yield return "/Views/Modern/Operations/{0}.cshtml";
             yield return "/Views/Modern/Shared/{0}.cshtml";
         }
+        else if (string.Equals(controllerName, "ModernCensus", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "/Views/Modern/Census/{0}.cshtml";
+            yield return "/Views/Modern/Shared/{0}.cshtml";
+        }
+        else if (string.Equals(controllerName, "ModernAdminServiceDataModels", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "/Views/Modern/Admin/ServiceDataModels/{0}.cshtml";
+            yield return "/Views/Modern/Admin/{0}.cshtml";
+            yield return "/Views/Modern/Shared/{0}.cshtml";
+        }
+        else if (string.Equals(controllerName, "ModernAdminDefaultCensusThemes", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "/Views/Modern/Admin/DefaultCensusThemes/{0}.cshtml";
+            yield return "/Views/Modern/Admin/{0}.cshtml";
+            yield return "/Views/Modern/Shared/{0}.cshtml";
+        }
+        else if (string.Equals(controllerName, "ModernAdminCapabilities", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "/Views/Modern/Admin/Capabilities/{0}.cshtml";
+            yield return "/Views/Modern/Admin/{0}.cshtml";
+            yield return "/Views/Modern/Shared/{0}.cshtml";
+        }
     }
 }

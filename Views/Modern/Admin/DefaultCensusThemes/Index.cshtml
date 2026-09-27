@@ -1,0 +1,188 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.DefaultCensusThemesOverviewViewModel
+@using Compass.ViewModels.Modern
+@using Compass.ViewModels.Modern.ServiceDataModels
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Default census themes";
+    var themes = Model.Themes.OrderBy(t => t.SortOrder).ThenBy(t => t.Name).ToList();
+    var sideNav = new DefaultCensusThemeSideNavViewModel
+    {
+        SelectedThemeId = null,
+        IsCreateMode = false,
+        IsOverviewCurrent = true,
+        CanManage = Model.CanManage,
+        Themes = themes
+    };
+    string? headerActions = null;
+    if (Model.CanManage)
+    {
+        var createUrl = Url.Action("CreateTheme", "ModernAdminDefaultCensusThemes") ?? "#";
+        var exportUrl = Url.Action("ExportSchema", "ModernAdminDefaultCensusThemes") ?? "#";
+        headerActions =
+            $"<a class=\"govuk-button\" href=\"{createUrl}\">Create theme</a>" +
+            $" <a class=\"govuk-button\" href=\"{exportUrl}\">Export schema</a>";
+    }
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Default census themes</li>
+}
+
+<div class="admin-hub" id="sc-admin-default-census-themes">
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Administration",
+    Title = "Default census themes",
+    Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">One shared base set of themes and questions. Every census inherits this set — edits here apply everywhere.</p>"),
+    Actions = headerActions != null ? new HtmlString(headerActions) : null
+  })
+
+  @if (ViewBag.AdminError != null)
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary" style="margin-bottom:1rem;">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+  @if (ViewBag.AdminMessage != null)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-3" role="region" aria-labelledby="default-themes-ok">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="default-themes-ok">Success</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@ViewBag.AdminMessage</p>
+      </div>
+    </div>
+  }
+
+  <div class="govuk-grid-row notification-settings-layout">
+    <div class="govuk-grid-column-one-quarter-from-desktop notification-settings-layout__nav">
+      <div class="dfe-f-u-sticky govuk-!-margin-bottom-4" style="--dfe-f-sticky-top: 1rem;">
+        @await Html.PartialAsync("~/Views/Modern/Admin/DefaultCensusThemes/_ThemeEditorSideNav.cshtml", sideNav)
+      </div>
+    </div>
+    <div class="govuk-grid-column-three-quarters-from-desktop">
+      <p class="govuk-body">Service offering (name, description, URL) stays on the Service Register and is not part of this catalogue.</p>
+      <p class="govuk-hint">@themes.Count themes · disabled themes and questions are hidden from respondents and excluded from completion.</p>
+
+      @if (Model.CanManage)
+      {
+        <div class="govuk-!-margin-bottom-6" id="schema-import">
+          <h2 class="govuk-heading-m">Import schema</h2>
+          <p class="govuk-body">
+            Upload a <code>census-theme-schema.json</code> exported from another environment.
+            Themes and questions are matched by stable key; capabilities by reference.
+            Answers are not changed. Absent themes/questions are not deleted unless you opt in below.
+          </p>
+          <form method="post" action="@Url.Action("ImportSchema", "ModernAdminDefaultCensusThemes")" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <div class="govuk-form-group">
+              <label class="govuk-label" for="census-theme-schema-file">Schema file</label>
+              <div class="govuk-hint" id="census-theme-schema-file-hint">JSON with schemaVersion 1 — themes, questions, and capabilities.</div>
+              <input class="govuk-file-upload" id="census-theme-schema-file" name="file" type="file" accept=".json,application/json" aria-describedby="census-theme-schema-file-hint" required />
+            </div>
+            <div class="govuk-checkboxes govuk-checkboxes--small govuk-!-margin-bottom-3" data-module="govuk-checkboxes">
+              <div class="govuk-checkboxes__item">
+                <input class="govuk-checkboxes__input" id="disable-not-in-file" name="disableNotInFile" type="checkbox" value="true" />
+                <label class="govuk-label govuk-checkboxes__label" for="disable-not-in-file">Disable themes and questions not in the file</label>
+              </div>
+              <div class="govuk-checkboxes__item">
+                <input class="govuk-checkboxes__input" id="confirm-import" name="confirmImport" type="checkbox" value="true" required />
+                <label class="govuk-label govuk-checkboxes__label" for="confirm-import">I confirm I want to apply this schema to this environment</label>
+              </div>
+            </div>
+            <button type="submit" class="govuk-button">Import schema</button>
+          </form>
+        </div>
+      }
+
+      @if (themes.Count == 0)
+      {
+        <p class="govuk-body">No default themes yet. Seed happens automatically on first visit when the catalogue is empty.</p>
+      }
+      else
+      {
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+          <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+            <caption class="govuk-table__caption govuk-visually-hidden">Default census themes</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Theme</th>
+                <th scope="col" class="govuk-table__header">Questions</th>
+                <th scope="col" class="govuk-table__header">Status</th>
+                <th scope="col" class="govuk-table__header">Order</th>
+                <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @for (var i = 0; i < themes.Count; i++)
+              {
+                var theme = themes[i];
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">
+                    <a class="govuk-link" href="@Url.Action("EditTheme", "ModernAdminDefaultCensusThemes", new { themeId = theme.Id })">@theme.Name</a>
+                    <span class="govuk-!-font-size-16 dfe-c-text-muted"> (<code>@theme.StableKey</code>)</span>
+                  </td>
+                  <td class="govuk-table__cell">@theme.FieldCount</td>
+                  <td class="govuk-table__cell">
+                    @if (theme.IsDisabled)
+                    {
+                      <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">Disabled</span>
+                    }
+                    else
+                    {
+                      <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Active</span>
+                    }
+                  </td>
+                  <td class="govuk-table__cell">
+                    @if (Model.CanManage)
+                    {
+                      @if (i > 0)
+                      {
+                        var upOrder = themes.Select(t => t.Id).ToList();
+                        (upOrder[i], upOrder[i - 1]) = (upOrder[i - 1], upOrder[i]);
+                        <form method="post" action="@Url.Action("ReorderThemes", "ModernAdminDefaultCensusThemes")" class="govuk-!-margin-bottom-1">
+                          @Html.AntiForgeryToken()
+                          @foreach (var oid in upOrder)
+                          {
+                            <input type="hidden" name="orderedIds" value="@oid" />
+                          }
+                          <button type="submit" class="govuk-link">Up</button>
+                        </form>
+                      }
+                      @if (i < themes.Count - 1)
+                      {
+                        var downOrder = themes.Select(t => t.Id).ToList();
+                        (downOrder[i], downOrder[i + 1]) = (downOrder[i + 1], downOrder[i]);
+                        <form method="post" action="@Url.Action("ReorderThemes", "ModernAdminDefaultCensusThemes")" class="govuk-!-margin-bottom-0">
+                          @Html.AntiForgeryToken()
+                          @foreach (var oid in downOrder)
+                          {
+                            <input type="hidden" name="orderedIds" value="@oid" />
+                          }
+                          <button type="submit" class="govuk-link">Down</button>
+                        </form>
+                      }
+                    }
+                  </td>
+                  <td class="govuk-table__cell">
+                    @if (Model.CanManage)
+                    {
+                      <form method="post" action="@Url.Action("DisableTheme", "ModernAdminDefaultCensusThemes", new { themeId = theme.Id })">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="disabled" value="@(theme.IsDisabled ? "false" : "true")" />
+                        <button type="submit" class="govuk-link">@(theme.IsDisabled ? "Re-enable" : "Disable")</button>
+                      </form>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  </div>
+</div>

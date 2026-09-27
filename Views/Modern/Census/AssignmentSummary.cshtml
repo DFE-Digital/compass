@@ -1,0 +1,179 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.CensusAssignmentFormViewModel
+@using Compass.Models.ServiceDataModels
+@using Compass.ViewModels.Modern
+@using Compass.ViewModels.Modern.ServiceDataModels
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = $"{Model.ModelName} — {Model.ProductTitle}";
+    var standingHint = string.Equals(Model.ModelStableKey, "service-census", StringComparison.OrdinalIgnoreCase)
+        ? "<p class=\"govuk-hint govuk-!-margin-bottom-0\">Standing service census — available any time. Keep answers current; you can update after submit or review.</p>"
+        : (string.IsNullOrWhiteSpace(Model.PeriodLabel)
+            ? $"<p class=\"govuk-hint govuk-!-margin-bottom-0\">Version {Model.VersionNumber}</p>"
+            : $"<p class=\"govuk-hint govuk-!-margin-bottom-0\">Period: {Model.PeriodLabel} · Version {Model.VersionNumber}</p>");
+    var headerBadges = $"<p class=\"govuk-body govuk-!-margin-bottom-0\"><span class=\"dfe-f-badge dfe-f-badge--small\">{Model.Status}</span>";
+    if (Model.IsOverdue) headerBadges += " <span class=\"dfe-f-badge dfe-f-badge--small dfe-f-badge--red\">Overdue</span>";
+    headerBadges += "</p>";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Service register</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("WorkList", "ModernCensus")">Census</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.ModelName</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = Model.ProductTitle,
+  Title = Model.ModelName,
+  Lede = new HtmlString(headerBadges + standingHint)
+})
+
+<p class="govuk-body">
+  <a class="govuk-link" href="@Url.Action("FipsProduct", "ModernManage", new { id = Model.ProductId, tab = "census" })">Back to service census tab</a>
+  ·
+  <a class="govuk-link" href="@Url.Action("WorkList", "ModernCensus")">All census work</a>
+</p>
+
+@if (ViewBag.CensusError != null)
+{
+  <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+    <h2 class="govuk-error-summary__title">There is a problem</h2>
+    <div class="govuk-error-summary__body">@ViewBag.CensusError</div>
+  </div>
+}
+@if (ViewBag.CensusMessage != null)
+{
+  <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region" aria-labelledby="census-ok-title">
+    <div class="govuk-notification-banner__header">
+      <h2 class="govuk-notification-banner__title" id="census-ok-title">Success</h2>
+    </div>
+    <div class="govuk-notification-banner__content">
+      <p class="govuk-notification-banner__heading">@ViewBag.CensusMessage</p>
+    </div>
+  </div>
+}
+@if (ViewBag.CensusWarning != null)
+{
+  <div class="govuk-warning-text">
+    <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+    <strong class="govuk-warning-text__text">
+      <span class="govuk-visually-hidden">Warning</span>
+      @ViewBag.CensusWarning
+    </strong>
+  </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.ChangesRequestedNote))
+{
+  <div class="govuk-warning-text">
+    <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+    <strong class="govuk-warning-text__text">
+      <span class="govuk-visually-hidden">Warning</span>
+      Changes requested: @Model.ChangesRequestedNote
+    </strong>
+  </div>
+}
+
+<div class="govuk-grid-row notification-settings-layout">
+  <div class="govuk-grid-column-one-quarter-from-desktop notification-settings-layout__nav">
+    <div class="dfe-f-u-sticky govuk-!-margin-bottom-4" style="--dfe-f-sticky-top: 1rem;">
+      @await Html.PartialAsync("~/Views/Modern/Census/_CensusAssignmentSideNav.cshtml", Model)
+    </div>
+  </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop">
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="census-themes-heading">
+      <h2 id="census-themes-heading" class="govuk-heading-m">Themes to complete</h2>
+      <p class="govuk-body">Work through each theme. Progress is saved when you save a theme.</p>
+
+      <ul class="govuk-task-list">
+        @foreach (var theme in Model.Groups.OrderBy(g => g.SortOrder))
+        {
+          var statusId = $"theme-status-{theme.Id}";
+          var hintId = $"theme-hint-{theme.Id}";
+          var themeUrl = Url.Action("AssignmentTheme", "ModernCensus", new { assignmentId = Model.AssignmentId, groupId = theme.Id });
+          <li class="govuk-task-list__item govuk-task-list__item--with-link">
+            <div class="govuk-task-list__name-and-hint">
+              <a class="govuk-link govuk-task-list__link govuk-!-font-weight-bold govuk-link--no-visited-state"
+                 href="@themeUrl"
+                 aria-describedby="@hintId @statusId">@theme.Name</a>
+              <div id="@hintId" class="govuk-task-list__hint">@theme.ThemeActionLabel</div>
+            </div>
+            <div class="govuk-task-list__status" id="@statusId">
+              <strong class="govuk-tag @theme.ThemeStatusTagClass">@theme.ThemeStatusLabel</strong>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+
+    @if (Model.ProposedChanges.Count > 0)
+    {
+      <h2 class="govuk-heading-m">Proposed register changes</h2>
+      <p class="govuk-hint">These answers may update canonical Service Register attributes after approval.</p>
+      @foreach (var change in Model.ProposedChanges)
+      {
+        <div class="govuk-summary-card govuk-!-margin-bottom-3">
+          <div class="govuk-summary-card__title-wrapper">
+            <h3 class="govuk-summary-card__title">@change.CanonicalAttributeKey</h3>
+          </div>
+          <div class="govuk-summary-card__content">
+            <dl class="govuk-summary-list govuk-summary-list--no-border">
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Current register value</dt>
+                <dd class="govuk-summary-list__value">@(change.CurrentRegisterValue ?? "—")</dd>
+              </div>
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Proposed value</dt>
+                <dd class="govuk-summary-list__value">@(change.ProposedValue ?? "—")</dd>
+              </div>
+              <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Status</dt>
+                <dd class="govuk-summary-list__value"><span class="dfe-f-badge dfe-f-badge--small">@change.Status</span></dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      }
+    }
+
+    @if (Model.CanEdit)
+    {
+      <form method="post" action="@Url.Action("Submit", "ModernCensus", new { assignmentId = Model.AssignmentId })" class="govuk-!-margin-bottom-4">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="expectedUpdatedUtc" value="@Model.UpdatedUtc.ToString("o")" />
+        <div class="govuk-button-group">
+          <button type="submit" class="govuk-button">Submit</button>
+          @if (Model.NextIncompleteGroupId is Guid nextId)
+          {
+            <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("AssignmentTheme", "ModernCensus", new { assignmentId = Model.AssignmentId, groupId = nextId })">Continue next incomplete theme</a>
+          }
+        </div>
+      </form>
+    }
+
+    @if (Model.CanReview && Model.Status is ServiceDataModelAssignmentStatus.Submitted or ServiceDataModelAssignmentStatus.ReviewDue)
+    {
+      <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+      <h2 class="govuk-heading-m">Review</h2>
+      <form method="post" action="@Url.Action("RequestChanges", "ModernCensus", new { assignmentId = Model.AssignmentId })" class="govuk-!-margin-bottom-4">
+        @Html.AntiForgeryToken()
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="note">Request changes note</label>
+          <textarea class="govuk-textarea" id="note" name="note" rows="3" required></textarea>
+        </div>
+        <button type="submit" class="govuk-button">Request changes</button>
+      </form>
+      <form method="post" action="@Url.Action("Review", "ModernCensus", new { assignmentId = Model.AssignmentId })">
+        @Html.AntiForgeryToken()
+        @if (Model.RequiresReviewerAttestation)
+        {
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="attestationNote">Attestation note</label>
+            <textarea class="govuk-textarea" id="attestationNote" name="attestationNote" rows="3">@Model.ReviewerAttestationNote</textarea>
+          </div>
+        }
+        <button type="submit" class="govuk-button">Mark as reviewed</button>
+      </form>
+    }
+  </div>
+</div>

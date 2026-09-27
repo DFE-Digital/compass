@@ -7,6 +7,7 @@ using Compass.Services;
 using Compass.Services.Aiss;
 using Compass.Services.Fips;
 using Compass.Services.Modern;
+using Compass.Services.ServiceDataModels;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -29,6 +30,7 @@ public partial class ModernManageController : Controller
     private readonly IAissProductAccessibilityService _aissProductAccessibility;
     private readonly IConfiguration _configuration;
     private readonly IWorkServiceRegisterLinkService _workServiceRegisterLinks;
+    private readonly IServiceDataModelCensusService _census;
 
     public ModernManageController(
         CompassDbContext context,
@@ -41,7 +43,8 @@ public partial class ModernManageController : Controller
         IServiceAssessmentApiService serviceAssessmentApi,
         IAissProductAccessibilityService aissProductAccessibility,
         IConfiguration configuration,
-        IWorkServiceRegisterLinkService workServiceRegisterLinks)
+        IWorkServiceRegisterLinkService workServiceRegisterLinks,
+        IServiceDataModelCensusService census)
     {
         _context = context;
         _fipsProductWrite = fipsProductWrite;
@@ -54,6 +57,7 @@ public partial class ModernManageController : Controller
         _aissProductAccessibility = aissProductAccessibility;
         _configuration = configuration;
         _workServiceRegisterLinks = workServiceRegisterLinks;
+        _census = census;
     }
 
     private async Task<IActionResult?> RequireFipsDatabaseAsync()
@@ -130,6 +134,7 @@ public partial class ModernManageController : Controller
             _ when string.Equals(tab, "workitems", StringComparison.OrdinalIgnoreCase) => "work",
             _ when string.Equals(tab, "strategic-alignment", StringComparison.OrdinalIgnoreCase) => "strategic-alignment",
             _ when string.Equals(tab, "strategicalignment", StringComparison.OrdinalIgnoreCase) => "strategic-alignment",
+            _ when string.Equals(tab, "census", StringComparison.OrdinalIgnoreCase) => "census",
             _ when string.Equals(tab, "details", StringComparison.OrdinalIgnoreCase) => "information",
             _ => "information"
         };
@@ -353,6 +358,11 @@ public partial class ModernManageController : Controller
                 ProductId = id,
                 LinkCount = linkCount,
             };
+        }
+
+        if (string.Equals(detailTab, "census", StringComparison.OrdinalIgnoreCase))
+        {
+            vm.CensusPanel = await _census.GetAssignmentsForProductAsync(id, email);
         }
 
         return View("Detail", vm);

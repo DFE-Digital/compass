@@ -1,0 +1,115 @@
+@model Compass.ViewModels.Modern.ServiceDataModels.ServiceDataModelApplicabilityInput
+@using Compass.Models.Fips
+@using Compass.Models.ServiceDataModels
+@using Compass.ViewModels.Modern
+@using Compass.ViewModels.Modern.ServiceDataModels
+@using Microsoft.AspNetCore.Html
+@{
+    var detail = ViewBag.ModelDetail as ServiceDataModelDetailViewModel;
+    var preview = ViewBag.ApplicabilityPreview as ServiceDataModelApplicabilityPreviewViewModel;
+    ViewData["Title"] = detail == null ? "Applicability" : $"Applicability — {detail.Name}";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdminServiceDataModels")">Service data models</a></li>
+  @if (detail != null)
+  {
+    <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Detail", "ModernAdminServiceDataModels", new { id = detail.Id })">@detail.Name</a></li>
+  }
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Applicability</li>
+}
+
+<div class="admin-hub" id="sc-admin-sdm-applicability">
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+    Caption = "Administration",
+    Title = detail == null ? "Applicability" : $"Applicability — {detail.Name}",
+    Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Choose which Service Register products this model applies to.</p>")
+  })
+
+  @if (ViewBag.AdminError != null)
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <div class="govuk-error-summary__body">@ViewBag.AdminError</div>
+    </div>
+  }
+
+  @if (preview != null)
+  {
+    <div class="govuk-notification-banner" role="region" aria-labelledby="sdm-preview-title">
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="sdm-preview-title">Preview</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">@preview.Count service(s) currently match this model’s applicability.</p>
+        @if (preview.SampleProductTitles.Count > 0)
+        {
+          <p class="govuk-body">Examples: @string.Join("; ", preview.SampleProductTitles)</p>
+        }
+      </div>
+    </div>
+  }
+
+  @if (detail != null)
+  {
+    <form method="post" action="@Url.Action("SetApplicability", "ModernAdminServiceDataModels", new { id = detail.Id })">
+      @Html.AntiForgeryToken()
+
+      <div class="govuk-form-group">
+        <fieldset class="govuk-fieldset">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Applicability mode</legend>
+          <div class="govuk-radios" data-module="govuk-radios">
+            @foreach (ServiceDataModelApplicabilityMode mode in Enum.GetValues(typeof(ServiceDataModelApplicabilityMode)))
+            {
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" id="Mode-@mode" name="Mode" type="radio" value="@mode" @(Model.Mode == mode ? "checked" : null) />
+                <label class="govuk-label govuk-radios__label" for="Mode-@mode">@mode</label>
+              </div>
+            }
+          </div>
+        </fieldset>
+      </div>
+
+      <h2 class="govuk-heading-s">Attribute rule (optional)</h2>
+      <p class="govuk-hint">Used when mode is ByAttributes. Leave blank for “any”.</p>
+      @{
+        var rule = Model.Rules.FirstOrDefault() ?? new ServiceDataModelApplicabilityRuleInput();
+      }
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="Rules_0__ProductStatus">Product status</label>
+        <select class="govuk-select" id="Rules_0__ProductStatus" name="Rules[0].ProductStatus">
+          <option value="">Any</option>
+          @foreach (CMDBProductStatus s in Enum.GetValues(typeof(CMDBProductStatus)))
+          {
+            <option value="@s" selected="@(rule.ProductStatus == s)">@s</option>
+          }
+        </select>
+      </div>
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="Rules_0__PhaseId">Phase id</label>
+        <input class="govuk-input govuk-input--width-5" id="Rules_0__PhaseId" name="Rules[0].PhaseId" type="number" value="@rule.PhaseId" />
+      </div>
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="Rules_0__FipsTypeId">Type id</label>
+        <input class="govuk-input govuk-input--width-5" id="Rules_0__FipsTypeId" name="Rules[0].FipsTypeId" type="number" value="@rule.FipsTypeId" />
+      </div>
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="Rules_0__FipsBusinessAreaId">Business area id</label>
+        <input class="govuk-input govuk-input--width-5" id="Rules_0__FipsBusinessAreaId" name="Rules[0].FipsBusinessAreaId" type="number" value="@rule.FipsBusinessAreaId" />
+      </div>
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="Rules_0__FipsDirectorateId">Directorate id</label>
+        <input class="govuk-input govuk-input--width-5" id="Rules_0__FipsDirectorateId" name="Rules[0].FipsDirectorateId" type="number" value="@rule.FipsDirectorateId" />
+      </div>
+
+      <button type="submit" class="govuk-button">Save applicability</button>
+      <p class="govuk-body govuk-!-margin-top-2">
+        <a class="govuk-link" href="@Url.Action("PreviewApplicability", "ModernAdminServiceDataModels", new { id = detail.Id })">Preview affected services</a>
+        ·
+        <a class="govuk-link" href="@Url.Action("Detail", "ModernAdminServiceDataModels", new { id = detail.Id })">Back to model</a>
+      </p>
+    </form>
+  }
+</div>
