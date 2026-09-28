@@ -1,4 +1,5 @@
 using Compass.Data;
+using Compass.Models;
 using Compass.Models.Fips;
 using Compass.Services.ServiceDataModels;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +27,51 @@ public class CensusAdminLookupOptionsTests
         Assert.Contains(options, o => o.ValueKey == "11" && o.Label == "— Inactive parent");
         Assert.Contains(options, o => o.ValueKey == "12" && o.Label == "—— Nested child");
         Assert.Contains(options, o => o.ValueKey == "13" && o.Label == "— Active sibling");
+    }
+
+    [Fact]
+    public void BindableLookups_IncludesNamedAdminPanels_AndIsAlphabetical()
+    {
+        var lookups = CensusAdminLookupOptions.BindableLookups;
+
+        Assert.Contains(lookups, l => l.Key == "priority-outcomes" && l.DisplayName == "Priority outcomes");
+        Assert.Contains(lookups, l => l.Key == "directorates" && l.DisplayName == "Directorates");
+        Assert.Contains(lookups, l => l.Key == "mission-pillars" && l.DisplayName == "Mission pillars");
+        Assert.Contains(lookups, l => l.Key == "work-tagging" && l.DisplayName == "Thematic tags");
+        Assert.Contains(lookups, l => l.Key == CensusAdminLookupOptions.Capabilities);
+        Assert.Contains(lookups, l => l.Key == CensusAdminLookupOptions.FipsUserGroups);
+
+        var names = lookups.Select(l => l.DisplayName).ToList();
+        Assert.Equal(names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(), names);
+    }
+
+    [Fact]
+    public async Task Resolve_PriorityOutcomesAndMissionPillars_UsesAdminTitles()
+    {
+        await using var db = CreateDb();
+        db.Missions.Add(new Mission { Id = 1, Title = "Mission A", IsDeleted = false });
+        db.Missions.Add(new Mission { Id = 2, Title = "Deleted mission", IsDeleted = true });
+        db.Objectives.Add(new Objective { Id = 10, Title = "Outcome X", IsDeleted = false });
+        db.Objectives.Add(new Objective { Id = 11, Title = "Deleted outcome", IsDeleted = true });
+        db.DirectorateLookups.Add(new DirectorateLookup { Id = 5, Name = "Dir One", IsActive = true, SortOrder = 1 });
+        db.WorkItemTagLookups.Add(new WorkItemTagLookup { Id = 7, Name = "Tag One", IsActive = true, SortOrder = 1 });
+        await db.SaveChangesAsync();
+
+        var pillars = await CensusAdminLookupOptions.ResolveAsync(db, "mission-pillars");
+        Assert.Single(pillars);
+        Assert.Equal("1", pillars[0].ValueKey);
+        Assert.Equal("Mission A", pillars[0].Label);
+
+        var outcomes = await CensusAdminLookupOptions.ResolveAsync(db, "priority-outcomes");
+        Assert.Single(outcomes);
+        Assert.Equal("10", outcomes[0].ValueKey);
+        Assert.Equal("Outcome X", outcomes[0].Label);
+
+        var dirs = await CensusAdminLookupOptions.ResolveAsync(db, "directorates");
+        Assert.Contains(dirs, d => d.ValueKey == "5" && d.Label == "Dir One");
+
+        var tags = await CensusAdminLookupOptions.ResolveAsync(db, "work-tagging");
+        Assert.Contains(tags, t => t.ValueKey == "7" && t.Label == "Tag One");
     }
 
     private static CompassDbContext CreateDb()
