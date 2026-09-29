@@ -76,5 +76,11 @@ public class PerformanceReportingEligibilityCache
     public List<PerformanceReportingPeriodExclusion> PeriodExclusions { get; set; } = new();
     public List<PerformanceReportingBusinessAreaConfig> BusinessAreaConfigs { get; set; } = new();
     public List<PerformanceReportingProductExclusion> ProductExclusions { get; set; } = new();
+
+    /// <summary>
+    /// Compass service-register row id (<c>CMDBProducts.Id</c>) → ServiceNow sys id (<c>CMDBProducts.CMDBID</c>).
+    /// Product exclusions created from that register store the row id when the CMS document id was not resolved.
+    /// </summary>
+    public Dictionary<string, string> CmdbRowIdToSysId { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 

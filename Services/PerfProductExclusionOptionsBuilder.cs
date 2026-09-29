@@ -28,14 +28,14 @@ public static class PerfProductExclusionOptionsBuilder
             .Select(p => new { p.Id, p.Title, p.CMDBID })
             .ToListAsync(cancellationToken);
 
-        var cmsByFips = await LoadCmsProductsByFipsIdAsync(productsApi, cancellationToken);
+        var cmsBySysId = await LoadCmsProductsByCmdbSysIdAsync(productsApi, cancellationToken);
 
         var options = new List<PerfProductExclusionProductOption>(cmdbActive.Count);
         var seenDocIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var p in cmdbActive)
         {
-            var option = MapCmdbRow(p.Id, p.Title, p.CMDBID, cmsByFips);
+            var option = MapCmdbRow(p.Id, p.Title, p.CMDBID, cmsBySysId);
             if (seenDocIds.Add(option.ProductDocumentId))
                 options.Add(option);
         }
@@ -82,7 +82,7 @@ public static class PerfProductExclusionOptionsBuilder
             string.Equals(o.ProductDocumentId, docId, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static async Task<Dictionary<string, ProductDto>> LoadCmsProductsByFipsIdAsync(
+    private static async Task<Dictionary<string, ProductDto>> LoadCmsProductsByCmdbSysIdAsync(
         IProductsApiService productsApi,
         CancellationToken cancellationToken)
     {
@@ -90,8 +90,8 @@ public static class PerfProductExclusionOptionsBuilder
         {
             var cmsProducts = await productsApi.GetAllProductsAsync();
             return cmsProducts
-                .Where(p => !string.IsNullOrWhiteSpace(p.FipsId))
-                .GroupBy(p => p.FipsId!.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Where(p => !string.IsNullOrWhiteSpace(p.CmdbSysId))
+                .GroupBy(p => p.CmdbSysId!.Trim(), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         }
         catch
@@ -103,20 +103,27 @@ public static class PerfProductExclusionOptionsBuilder
     private static PerfProductExclusionProductOption MapCmdbRow(
         Guid cmdbId,
         string title,
-        string? cmdbIdCode,
-        IReadOnlyDictionary<string, ProductDto> cmsByFips)
+        string? cmdbSysId,
+        IReadOnlyDictionary<string, ProductDto> cmsBySysId)
     {
-        var fipsId = string.IsNullOrWhiteSpace(cmdbIdCode) ? null : cmdbIdCode.Trim();
+        // CMDBProducts.CMDBID is the ServiceNow sys id, not the FIPS id.
+        var sysId = string.IsNullOrWhiteSpace(cmdbSysId) ? null : cmdbSysId.Trim();
         var displayName = title;
         string? documentId = null;
+        string? fipsId = null;
 
-        if (fipsId != null && cmsByFips.TryGetValue(fipsId, out var cms))
+        if (sysId != null && cmsBySysId.TryGetValue(sysId, out var cms))
         {
-            documentId = cms.DocumentId;
+            if (!string.IsNullOrWhiteSpace(cms.DocumentId))
+                documentId = cms.DocumentId.Trim();
+            if (!string.IsNullOrWhiteSpace(cms.FipsId))
+                fipsId = cms.FipsId.Trim();
             if (!string.IsNullOrWhiteSpace(cms.Title))
                 displayName = cms.Title;
         }
 
+        // Keep the sys id when the CMS record has no FIPS id, so eligibility can still match on cmdb_sys_id.
+        fipsId ??= sysId;
         documentId ??= cmdbId.ToString();
 
         return new PerfProductExclusionProductOption
