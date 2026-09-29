@@ -1,4 +1,6 @@
+using Compass.Data;
 using Compass.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace Compass.Services;
 
@@ -28,9 +30,30 @@ public static class CommissionReportingProductScope
         (!product.Phase.Equals("Decommissioned", StringComparison.OrdinalIgnoreCase) &&
          !product.Phase.Equals("Decommissioning", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Service-register contact roles that can complete a performance return.
+    /// Names match <c>FipsContactRoles</c> (case-insensitive).
+    /// </summary>
+    public static bool IsPerformanceReportingContactRole(string? roleName)
+    {
+        if (string.IsNullOrWhiteSpace(roleName))
+            return false;
+
+        return roleName.Trim() switch
+        {
+            var name when name.Equals("Service Owner", StringComparison.OrdinalIgnoreCase) => true,
+            var name when name.Equals("Product manager", StringComparison.OrdinalIgnoreCase) => true,
+            var name when name.Equals("Delivery Manager", StringComparison.OrdinalIgnoreCase) => true,
+            var name when name.Equals("Reporting contact", StringComparison.OrdinalIgnoreCase) => true,
+            _ => false
+        };
+    }
+
     public static async Task<List<ProductDto>> GetUserProductsForReportingAsync(
         string? userEmail,
-        IProductsApiService productsApi)
+        IProductsApiService productsApi,
+        CompassDbContext? serviceRegister = null,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(userEmail))
             return new List<ProductDto>();
@@ -41,21 +64,78 @@ public static class CommissionReportingProductScope
         var t4 = productsApi.GetProductsByReportingUserAsync(userEmail);
         await Task.WhenAll(t1, t2, t3, t4);
 
-        var productsByServiceOwner = await t1;
-        var productsByProductManager = await t2;
-        var productsByDeliveryManager = await t3;
-        var productsByReportingUser = await t4;
+        var products = (await t1)
+            .Concat(await t2)
+            .Concat(await t3)
+            .Concat(await t4)
+            .ToList();
 
-        return productsByServiceOwner
-            .Concat(productsByProductManager)
-            .Concat(productsByDeliveryManager)
-            .Concat(productsByReportingUser)
-            .GroupBy(p => p.FipsId)
-            .Where(g => !string.IsNullOrEmpty(g.Key))
-            .Select(g => g.First())
+        if (serviceRegister != null)
+            products.AddRange(await LoadServiceRegisterContactProductsAsync(
+                userEmail, productsApi, serviceRegister, cancellationToken));
+
+        return CombineUserReportingProducts(products)
             .Where(PassesPhaseExclusion)
             .Where(PassesDataTypeExclusion)
             .ToList();
+    }
+
+    /// <summary>
+    /// Catalogue products where the user is a reporting contact on the service register,
+    /// matched by ServiceNow sys id. CMS role relations often omit that delivery manager.
+    /// </summary>
+    private static async Task<List<ProductDto>> LoadServiceRegisterContactProductsAsync(
+        string userEmail,
+        IProductsApiService productsApi,
+        CompassDbContext serviceRegister,
+        CancellationToken cancellationToken)
+    {
+        var email = userEmail.Trim().ToLowerInvariant();
+        var reportingRoles = new[] { "service owner", "product manager", "delivery manager", "reporting contact" };
+
+        var sysIds = await serviceRegister.CMDBProducts.AsNoTracking()
+            .Where(p => p.CMDBID != null && p.CMDBID != "")
+            .Where(p => p.Contacts.Any(c =>
+                c.UserEmail != null &&
+                c.UserEmail.ToLower() == email &&
+                c.FipsContactRole != null &&
+                reportingRoles.Contains(c.FipsContactRole.Name.ToLower())))
+            .Select(p => p.CMDBID!)
+            .ToListAsync(cancellationToken);
+
+        var sysIdSet = sysIds
+            .Select(id => id.Trim())
+            .Where(id => id.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (sysIdSet.Count == 0)
+            return new List<ProductDto>();
+
+        var catalogue = await productsApi.GetAllProductsAsync(null);
+        return catalogue
+            .Where(p =>
+                p.State != null &&
+                p.State.Equals("Active", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(p.CmdbSysId) &&
+                sysIdSet.Contains(p.CmdbSysId.Trim()))
+            .ToList();
+    }
+
+    public static List<ProductDto> CombineUserReportingProducts(IEnumerable<ProductDto> products) =>
+        products
+            .GroupBy(ProductIdentityKey, StringComparer.OrdinalIgnoreCase)
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .Select(g => g.First())
+            .ToList();
+
+    private static string ProductIdentityKey(ProductDto product)
+    {
+        if (!string.IsNullOrWhiteSpace(product.FipsId))
+            return "f:" + product.FipsId.Trim();
+        if (!string.IsNullOrWhiteSpace(product.DocumentId))
+            return "d:" + product.DocumentId.Trim();
+        if (!string.IsNullOrWhiteSpace(product.CmdbSysId))
+            return "c:" + product.CmdbSysId.Trim();
+        return "";
     }
 
     public static List<ProductDto> GetAllActivePublishedEligible(IEnumerable<ProductDto> allProducts) =>
