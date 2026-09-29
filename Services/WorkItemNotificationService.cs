@@ -166,7 +166,7 @@ public sealed class WorkItemNotificationService : IWorkItemNotificationService
                            : _configuration["Docs:ApiExplorer:TestBaseUrl"])
                        ?? "https://compass.education.gov.uk").TrimEnd('/');
 
-        return $"{baseUrl}/modern/work/{projectId}";
+        return $"{baseUrl}/modern/work/detail/{projectId}";
     }
 
     private static string FormatPersonLabel(string? name, string email)

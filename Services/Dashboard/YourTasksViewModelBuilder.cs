@@ -206,20 +206,9 @@ public sealed class YourTasksViewModelBuilder : IYourTasksViewModelBuilder
 
     private async Task<List<ProductDto>> LoadMyProductsAsync(string userEmail, CancellationToken cancellationToken)
     {
-        var productsByServiceOwner = await _productsApi.GetProductsByServiceOwnerAsync(userEmail);
-        var productsByProductManager = await _productsApi.GetProductsByProductManagerAsync(userEmail);
-        var productsByDeliveryManager = await _productsApi.GetProductsByDeliveryManagerAsync(userEmail);
-        var productsByReportingUser = await _productsApi.GetProductsByReportingUserAsync(userEmail);
-
-        return productsByServiceOwner
-            .Concat(productsByProductManager)
-            .Concat(productsByDeliveryManager)
-            .Concat(productsByReportingUser)
-            .GroupBy(p => p.FipsId)
-            .Where(g => !string.IsNullOrEmpty(g.Key))
-            .Select(g => g.First())
-            .OrderBy(p => p.Title)
-            .ToList();
+        var products = await CommissionReportingProductScope.GetUserProductsForReportingAsync(
+            userEmail, _productsApi, _context, cancellationToken);
+        return products.OrderBy(p => p.Title).ToList();
     }
 
     private static YourTasksViewModel BuildCore(

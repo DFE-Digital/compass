@@ -304,10 +304,10 @@ public class HomeController : Controller
         };
     }
 
+    // Accept every verb. UseExceptionHandler re-executes the failed request with its
+    // original method; a GET-only action turns a POST failure into HTTP 405.
     [AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    [HttpGet]
-    [HttpHead]
     public IActionResult Error()
     {
         var exception = HttpContext.Features.Get<IExceptionHandlerPathFeature>()?.Error;
@@ -323,10 +323,9 @@ public class HomeController : Controller
         });
     }
 
+    // Accept every verb. Status-code re-execution keeps the original method.
     [AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    [HttpGet]
-    [HttpHead]
     public new IActionResult NotFound()
     {
         var originalPath = HttpContext.Features.Get<IStatusCodeReExecuteFeature>()?.OriginalPath

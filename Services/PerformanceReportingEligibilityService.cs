@@ -29,6 +29,14 @@ public class PerformanceReportingEligibilityService : IPerformanceReportingEligi
         cache.ProductExclusions = await _context.PerformanceReportingProductExclusions
             .Where(e => e.IsActive)
             .ToListAsync();
+
+        var cmdbRows = await _context.CMDBProducts.AsNoTracking()
+            .Where(p => p.CMDBID != null && p.CMDBID != "")
+            .Select(p => new { p.Id, p.CMDBID })
+            .ToListAsync();
+        cache.CmdbRowIdToSysId = cmdbRows
+            .GroupBy(p => p.Id.ToString(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().CMDBID!.Trim(), StringComparer.OrdinalIgnoreCase);
         
         return cache;
     }
@@ -116,7 +124,7 @@ public class PerformanceReportingEligibilityService : IPerformanceReportingEligi
         PerformanceReportingEligibilityCache cache,
         string? cmdbSysId = null) =>
         cache.ProductExclusions.Any(e =>
-            ProductExclusionMatches(e, productDocumentId, fipsId, cmdbSysId) &&
+            ProductExclusionMatches(e, productDocumentId, fipsId, cmdbSysId, cache.CmdbRowIdToSysId) &&
             IsWithinExclusionRange(year, month, e));
 
     public bool IsProductExcludedForCommission(
@@ -179,7 +187,8 @@ public class PerformanceReportingEligibilityService : IPerformanceReportingEligi
         PerformanceReportingProductExclusion exclusion,
         string? productDocumentId,
         string? fipsId,
-        string? cmdbSysId = null)
+        string? cmdbSysId = null,
+        IReadOnlyDictionary<string, string>? cmdbRowIdToSysId = null)
     {
         if (!string.IsNullOrWhiteSpace(productDocumentId) &&
             string.Equals(exclusion.ProductDocumentId, productDocumentId.Trim(), StringComparison.OrdinalIgnoreCase))
@@ -190,9 +199,24 @@ public class PerformanceReportingEligibilityService : IPerformanceReportingEligi
             string.Equals(exclusion.FipsId, fipsId.Trim(), StringComparison.OrdinalIgnoreCase))
             return true;
 
-        if (!string.IsNullOrWhiteSpace(cmdbSysId) &&
-            string.Equals(exclusion.ProductDocumentId, cmdbSysId.Trim(), StringComparison.OrdinalIgnoreCase))
-            return true;
+        var sysId = cmdbSysId?.Trim();
+        if (!string.IsNullOrWhiteSpace(sysId))
+        {
+            if (string.Equals(exclusion.ProductDocumentId, sysId, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // The service-register picker stored CMDBID (the ServiceNow sys id) in FipsId
+            // whenever it could not resolve a CMS document id.
+            if (!string.IsNullOrWhiteSpace(exclusion.FipsId) &&
+                string.Equals(exclusion.FipsId, sysId, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Same picker falls back to CMDBProducts.Id as ProductDocumentId.
+            if (cmdbRowIdToSysId != null &&
+                cmdbRowIdToSysId.TryGetValue(exclusion.ProductDocumentId, out var mappedSysId) &&
+                string.Equals(mappedSysId, sysId, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
 
         // Legacy rows may only have FIPS id populated on the exclusion record.
         if (!string.IsNullOrWhiteSpace(fipsId) &&

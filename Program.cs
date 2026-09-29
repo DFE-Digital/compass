@@ -431,6 +431,36 @@ if (builder.Environment.IsDevelopment())
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
 
+// Entra posts the login result to /signin-oidc. If the correlation cookie is missing
+// (refresh of the callback, expired cookie, or the browser withheld it), the handler
+// throws. Leave that unhandled and UseExceptionHandler re-executes the POST against
+// the GET-only error page, which the client sees as HTTP 405.
+builder.Services.PostConfigure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
+{
+    var previousRemoteFailure = options.Events.OnRemoteFailure;
+    options.Events.OnRemoteFailure = async context =>
+    {
+        if (IsOpenIdConnectCorrelationFailure(context.Failure))
+        {
+            var logger = context.HttpContext.RequestServices
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger("Compass.OpenIdConnect");
+            logger.LogWarning(
+                context.Failure,
+                "OpenID Connect sign-in correlation cookie was missing on {Method} {Path}. Restarting sign-in.",
+                context.Request.Method,
+                context.Request.Path);
+
+            context.HandleResponse();
+            context.Response.Redirect("/");
+            return;
+        }
+
+        if (previousRemoteFailure != null)
+            await previousRemoteFailure(context);
+    };
+});
+
 // Add Controllers with Views
 builder.Services.AddControllersWithViews(options =>
 {
@@ -739,6 +769,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseForwardedHeaders();
 
+app.UseMiddleware<BlockedUserAgentMiddleware>();
 app.UseMiddleware<HeadRequestAsGetMiddleware>();
 app.UseMiddleware<HttpErrorMonitoringMiddleware>();
 
@@ -2195,5 +2226,16 @@ static string GetGlobalPartitionKey(HttpContext httpContext)
     }
 
     return $"host:{httpContext.Request.Headers.Host}";
+}
+
+static bool IsOpenIdConnectCorrelationFailure(Exception? failure)
+{
+    for (var ex = failure; ex != null; ex = ex.InnerException)
+    {
+        if (ex.Message.Contains("Correlation failed", StringComparison.OrdinalIgnoreCase))
+            return true;
+    }
+
+    return false;
 }
 

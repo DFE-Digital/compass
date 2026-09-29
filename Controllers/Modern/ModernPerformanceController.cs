@@ -125,7 +125,8 @@ public class ModernPerformanceController : Controller
     {
         tab = NormalizeCommissionTab(tab);
         if (tab == "mine")
-            return await CommissionReportingProductScope.GetUserProductsForReportingAsync(userEmail, _productsApi);
+            return await CommissionReportingProductScope.GetUserProductsForReportingAsync(
+                userEmail, _productsApi, _context, cancellationToken);
 
         var allCatalog = await _productsApi.GetAllProductsAsync(null);
         return CommissionReportingProductScope.GetAllActivePublishedEligible(allCatalog);
@@ -1256,7 +1257,8 @@ public class ModernPerformanceController : Controller
 
     private async Task<Dictionary<string, ProductDto>> BuildProductLookupAsync(string userEmail, CancellationToken cancellationToken)
     {
-        var mineTask = CommissionReportingProductScope.GetUserProductsForReportingAsync(userEmail, _productsApi);
+        var mineTask = CommissionReportingProductScope.GetUserProductsForReportingAsync(
+            userEmail, _productsApi, _context, cancellationToken);
         var allTask = _productsApi.GetAllProductsAsync(null);
         await Task.WhenAll(mineTask, allTask);
 
