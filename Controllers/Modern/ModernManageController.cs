@@ -250,6 +250,20 @@ public partial class ModernManageController : Controller
         return View("Index", vm);
     }
 
+    // ── Category cuts ───────────────────────────────────────────────────────
+
+    [HttpGet("fips/by-categories")]
+    public async Task<IActionResult> ByCategories(string? scope, string? cut, string? value, CancellationToken ct)
+    {
+        var disabled = await RequireFipsDatabaseAsync();
+        if (disabled != null)
+            return disabled;
+
+        var model = await FipsCategoryCutBuilder.BuildAsync(_context, scope, cut, value, ct);
+        SetNav(FipsCategoryCutBuilder.SubNavItemFor(model.Cut));
+        return View("ByCategories", model);
+    }
+
     // ── Product detail ──────────────────────────────────────────────────────
 
     [HttpGet("fips/{id:guid}")]
