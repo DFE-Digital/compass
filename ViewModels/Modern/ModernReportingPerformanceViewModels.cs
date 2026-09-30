@@ -102,6 +102,15 @@ public class ModernReportingPerformanceCommissionDetailViewModel
     public List<ModernReportingPerformanceBusinessAreaRow> BusinessAreas { get; set; } = new();
 }
 
+/// <summary>Business area completion for one commission round.</summary>
+public sealed class CommissionBusinessAreaBreakdown
+{
+    public int CommissionId { get; init; }
+    public string Name { get; init; } = "";
+    public DateTime DueDate { get; init; }
+    public List<ModernReportingPerformanceBusinessAreaRow> BusinessAreas { get; init; } = new();
+}
+
 public class ModernReportingPerformanceBusinessAreaRow
 {
     public string BusinessArea { get; set; } = string.Empty;

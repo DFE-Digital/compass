@@ -134,47 +134,6 @@ public sealed class CommissionReportingAnalyticsService
         var summary = await BuildSummaryAsync(commission, catalogue, submissions, cancellationToken);
         var perProduct = await BuildPerProductStatsAsync(commission, catalogue, submissions, cancellationToken);
 
-        var baGroups = perProduct
-            .GroupBy(p => p.BusinessArea ?? "Not assigned", StringComparer.OrdinalIgnoreCase)
-            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var businessAreas = new List<ModernReportingPerformanceBusinessAreaRow>();
-        foreach (var g in baGroups)
-        {
-            var total = g.Count();
-            var ns = g.Count(x => x.Status == CommissionSubmissionStatus.NotStarted);
-            var ip = g.Count(x => x.Status == CommissionSubmissionStatus.InProgress);
-            var sub = g.Count(x => x.Status == CommissionSubmissionStatus.Submitted);
-            var late = g.Count(x => x.Status == CommissionSubmissionStatus.Late);
-            var returned = sub + late;
-            var rate = total == 0 ? 0 : Math.Round(100m * returned / total, 1);
-
-            var metNum = 0;
-            var metDen = 0;
-            foreach (var x in g)
-            {
-                if (x.TotalMetrics > 0)
-                {
-                    metDen += x.TotalMetrics;
-                    metNum += x.CompletedMetrics;
-                }
-            }
-
-            var metPct = metDen == 0 ? 0 : Math.Round(100m * metNum / metDen, 1);
-            businessAreas.Add(new ModernReportingPerformanceBusinessAreaRow
-            {
-                BusinessArea = g.Key,
-                Total = total,
-                NotStarted = ns,
-                InProgress = ip,
-                Submitted = sub,
-                Late = late,
-                ReturnRatePercent = rate,
-                MetricCompletionPercent = metPct
-            });
-        }
-
         return new ModernReportingPerformanceCommissionDetailViewModel
         {
             Commission = commission,
@@ -187,8 +146,96 @@ public sealed class CommissionReportingAnalyticsService
             MetricCompletionPercent = summary.MetricCompletionPercent,
             CompletedMetricCells = summary.CompletedMetricCells,
             ApplicableMetricCells = summary.ApplicableMetricCells,
-            BusinessAreas = businessAreas
+            BusinessAreas = ToBusinessAreaRows(perProduct)
         };
+    }
+
+    /// <summary>Business area completion for the given commissions, using one product catalogue load.</summary>
+    public async Task<List<CommissionBusinessAreaBreakdown>> BuildBusinessAreaBreakdownsAsync(
+        IReadOnlyList<int> commissionIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (commissionIds.Count == 0)
+            return new List<CommissionBusinessAreaBreakdown>();
+
+        var commissions = await _context.Commissions.AsNoTracking()
+            .Where(c => commissionIds.Contains(c.Id))
+            .ToListAsync(cancellationToken);
+        if (commissions.Count == 0)
+            return new List<CommissionBusinessAreaBreakdown>();
+
+        List<ProductDto> catalogue;
+        try
+        {
+            catalogue = await _productsApi.GetAllProductsAsync(null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Commission reporting analytics: failed to load product catalogue for business area breakdowns");
+            return new List<CommissionBusinessAreaBreakdown>();
+        }
+
+        catalogue = CommissionReportingProductScope.GetAllActivePublishedEligible(catalogue);
+
+        var ids = commissions.Select(c => c.Id).ToList();
+        var submissions = await _context.CommissionSubmissions.AsNoTracking()
+            .Include(cs => cs.MetricValues)
+            .Where(cs => ids.Contains(cs.CommissionId))
+            .ToListAsync(cancellationToken);
+        var subsByCommission = submissions.GroupBy(s => s.CommissionId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var order = commissionIds.Select((id, index) => (id, index)).ToDictionary(x => x.id, x => x.index);
+        var results = new List<CommissionBusinessAreaBreakdown>();
+        foreach (var commission in commissions.OrderBy(c => order.GetValueOrDefault(c.Id, int.MaxValue)))
+        {
+            subsByCommission.TryGetValue(commission.Id, out var subs);
+            var perProduct = await BuildPerProductStatsAsync(
+                commission, catalogue, subs ?? new List<CommissionSubmission>(), cancellationToken);
+            results.Add(new CommissionBusinessAreaBreakdown
+            {
+                CommissionId = commission.Id,
+                Name = commission.Name,
+                DueDate = commission.DueDate,
+                BusinessAreas = ToBusinessAreaRows(perProduct)
+            });
+        }
+
+        return results;
+    }
+
+    private static List<ModernReportingPerformanceBusinessAreaRow> ToBusinessAreaRows(List<ProductCommissionStats> perProduct)
+    {
+        var rows = new List<ModernReportingPerformanceBusinessAreaRow>();
+        foreach (var g in perProduct
+            .GroupBy(p => string.IsNullOrWhiteSpace(p.BusinessArea) ? "Not assigned" : p.BusinessArea!, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            var total = g.Count();
+            var returned = g.Count(x => x.Status is CommissionSubmissionStatus.Submitted or CommissionSubmissionStatus.Late);
+            var metNum = 0;
+            var metDen = 0;
+            foreach (var x in g)
+            {
+                if (x.TotalMetrics <= 0) continue;
+                metDen += x.TotalMetrics;
+                metNum += x.CompletedMetrics;
+            }
+
+            rows.Add(new ModernReportingPerformanceBusinessAreaRow
+            {
+                BusinessArea = g.Key,
+                Total = total,
+                NotStarted = g.Count(x => x.Status == CommissionSubmissionStatus.NotStarted),
+                InProgress = g.Count(x => x.Status == CommissionSubmissionStatus.InProgress),
+                Submitted = g.Count(x => x.Status == CommissionSubmissionStatus.Submitted),
+                Late = g.Count(x => x.Status == CommissionSubmissionStatus.Late),
+                ReturnRatePercent = total == 0 ? 0 : Math.Round(100m * returned / total, 1),
+                MetricCompletionPercent = metDen == 0 ? 0 : Math.Round(100m * metNum / metDen, 1)
+            });
+        }
+
+        return rows;
     }
 
     /// <summary>

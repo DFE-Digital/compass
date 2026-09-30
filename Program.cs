@@ -640,6 +640,7 @@ builder.Services.AddScoped<Compass.Services.Raid.IRaidRiskEditorFormService, Com
 builder.Services.AddScoped<Compass.Services.Raid.IRaidIssueEditorFormService, Compass.Services.Raid.RaidIssueEditorFormService>();
 builder.Services.AddScoped<Compass.Services.Raid.IRaidRegisterSpreadsheetLayoutService, Compass.Services.Raid.RaidRegisterSpreadsheetLayoutService>();
 builder.Services.AddScoped<CommissionReportingAnalyticsService>();
+builder.Services.AddScoped<ExecutiveReportService>();
 builder.Services.AddScoped<Compass.Services.DemandPipeline.IDemandScoringFrameworkService, Compass.Services.DemandPipeline.DemandScoringFrameworkService>();
 builder.Services.AddScoped<Compass.Services.DdtStandards.IDdtStandardsWorkflowService, Compass.Services.DdtStandards.DdtStandardsWorkflowService>();
 
