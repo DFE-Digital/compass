@@ -1,0 +1,354 @@
+@using Compass.Models.Modern.Work
+@using Compass.ViewModels.Modern
+@model ExecutiveReportViewModel
+@{
+    ViewData["Title"] = "Executive report";
+    var m = Model ?? new ExecutiveReportViewModel();
+    var generated = m.GeneratedAtUtc.ToLocalTime().ToString("d MMMM yyyy 'at' HH:mm");
+    string CompletionBadge(decimal percent)
+    {
+        var rounded = (int)Math.Round(percent, 0, MidpointRounding.AwayFromZero);
+        return WorkBadgeCss.ServiceRegisterCompletionBadgeClass(rounded);
+    }
+    string Pct(decimal value) => value.ToString("0.#") + "%";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Executive report</li>
+}
+
+<div class="mr-dash">
+  @{
+    var lede = await Html.PartialAsync("_ReportingMutedBodyLede", $"Leadership summary of work in progress, service register data quality, performance returns, and accessibility. Generated {generated}.");
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
+  {
+    Caption = "Exec reporting",
+    Title = "Executive report",
+    Lede = lede
+  })
+
+  @if (TempData["ErrorMessage"] != null)
+  {
+    <div class="govuk-error-summary" role="alert" data-module="govuk-error-summary">
+      <h2 class="govuk-error-summary__title">There is a problem</h2>
+      <p class="govuk-body govuk-!-margin-bottom-0">@TempData["ErrorMessage"]</p>
+    </div>
+  }
+
+  <section class="mr-section govuk-!-margin-bottom-8" aria-labelledby="exec-work-heading">
+    <h2 id="exec-work-heading" class="govuk-heading-m">Work</h2>
+    <p class="govuk-body">Active and paused projects, grouped by delivery priority, priority outcome, and phase.</p>
+    @if (!string.IsNullOrWhiteSpace(m.WorkError))
+    {
+      <div class="govuk-error-summary" role="alert"><p class="govuk-body govuk-!-margin-bottom-0">@m.WorkError</p></div>
+    }
+    else
+    {
+      var work = m.Work;
+      <div class="dfe-f-card-grid govuk-!-margin-bottom-4" role="region" aria-label="Work in progress">
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+          <p class="govuk-body-s dfe-f-stat-card__label">In progress</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@work.InProgressCount</p>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">@work.ActiveCount active, @work.PausedCount paused</p>
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+          <p class="govuk-body-s dfe-f-stat-card__label">Linked to a priority outcome</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@work.LinkedToPriorityOutcomeCount</p>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">@Pct(work.InProgressCount == 0 ? 0 : Math.Round(work.LinkedToPriorityOutcomeCount * 100m / work.InProgressCount, 1)) of work in progress</p>
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-orange">
+          <p class="govuk-body-s dfe-f-stat-card__label">Not linked to an outcome</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@work.NotLinkedToPriorityOutcomeCount</p>
+        </div>
+      </div>
+
+      <h3 class="govuk-heading-s">Delivery priorities</h3>
+      @await Html.PartialAsync("_ExecutiveCountTable", work.Priorities)
+
+      <h3 class="govuk-heading-s govuk-!-margin-top-6">Work against priority outcomes</h3>
+      <p class="govuk-body-s govuk-hint">Each percentage is the share of work in progress linked to that outcome. A project can sit against more than one outcome.</p>
+      @await Html.PartialAsync("_ExecutiveCountTable", work.PriorityOutcomes)
+
+      <h3 class="govuk-heading-s govuk-!-margin-top-6">Phase</h3>
+      @await Html.PartialAsync("_ExecutiveCountTable", work.Phases)
+
+      <p class="govuk-body govuk-!-margin-top-4"><a class="govuk-link" href="@Url.Action("Priorities", "ModernReporting")">Open the priorities report</a></p>
+    }
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-8" aria-labelledby="exec-services-heading">
+    <h2 id="exec-services-heading" class="govuk-heading-m">Service register</h2>
+    <p class="govuk-body">Active services and how complete the register is for the fields used in reporting.</p>
+    @if (!string.IsNullOrWhiteSpace(m.ServiceRegisterError))
+    {
+      <div class="govuk-error-summary" role="alert"><p class="govuk-body govuk-!-margin-bottom-0">@m.ServiceRegisterError</p></div>
+    }
+    else
+    {
+      var services = m.ServiceRegister;
+      <div class="dfe-f-card-grid govuk-!-margin-bottom-4" role="region" aria-label="Service register counts">
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+          <p class="govuk-body-s dfe-f-stat-card__label">Active services</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@services.ActiveCount</p>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">@services.EnterpriseCount enterprise</p>
+        </div>
+        <div class="dfe-f-stat-card">
+          <p class="govuk-body-s dfe-f-stat-card__label">Data quality</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Pct(services.OverallCompletionPercent)</p>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">Average completion across the fields below</p>
+        </div>
+        <div class="dfe-f-stat-card">
+          <p class="govuk-body-s dfe-f-stat-card__label">Other statuses</p>
+          <p class="govuk-body govuk-!-margin-bottom-0">@services.NewCount new, @services.RetiredCount retired, @services.RejectedCount rejected</p>
+        </div>
+      </div>
+
+      <div class="govuk-tabs" data-module="govuk-tabs">
+        <h3 class="govuk-tabs__title">Service register detail</h3>
+        <ul class="govuk-tabs__list">
+          <li class="govuk-tabs__list-item govuk-tabs__list-item--selected">
+            <a class="govuk-tabs__tab" href="#exec-service-quality">Data quality</a>
+          </li>
+          <li class="govuk-tabs__list-item">
+            <a class="govuk-tabs__tab" href="#exec-service-active">Active services (@services.ActiveServices.Count)</a>
+          </li>
+          <li class="govuk-tabs__list-item">
+            <a class="govuk-tabs__tab" href="#exec-service-enterprise">Enterprise (@services.EnterpriseServices.Count)</a>
+          </li>
+        </ul>
+        <div class="govuk-tabs__panel" id="exec-service-quality">
+          <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+            <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+            <table class="govuk-table govuk-table--small-text-until-tablet" aria-label="Service register data quality">
+              <caption class="govuk-table__caption govuk-table__caption--m">Data quality for active services</caption>
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Field</button></th>
+                  @await Html.PartialAsync("_SortableThNumeric", "Complete")
+                  @await Html.PartialAsync("_SortableThNumeric", "Missing")
+                  @await Html.PartialAsync("_SortableThNumeric", "Completion")
+                </tr>
+              </thead>
+              <tbody class="govuk-table__body">
+                @foreach (var row in services.DataQuality)
+                {
+                  <tr class="govuk-table__row">
+                    <th scope="row" class="govuk-table__header">@row.Field <span class="govuk-hint govuk-!-display-block govuk-!-margin-bottom-0">@row.Hint</span></th>
+                    <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.Complete</td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.Missing</td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric"><span class="@CompletionBadge(row.CompletionPercent)">@Pct(row.CompletionPercent)</span></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="govuk-tabs__panel govuk-tabs__panel--hidden" id="exec-service-active">
+          @await Html.PartialAsync("_ExecutiveServiceListTable", services.ActiveServices)
+        </div>
+        <div class="govuk-tabs__panel govuk-tabs__panel--hidden" id="exec-service-enterprise">
+          @await Html.PartialAsync("_ExecutiveServiceListTable", services.EnterpriseServices)
+        </div>
+      </div>
+      <p class="govuk-body govuk-!-margin-top-4"><a class="govuk-link" href="@Url.Action("ServiceRegister", "ModernReporting")">Open the service register report</a></p>
+    }
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-8" aria-labelledby="exec-performance-heading">
+    <h2 id="exec-performance-heading" class="govuk-heading-m">Performance returns</h2>
+    <p class="govuk-body">Average completion across commission rounds with a return, weighted by services in scope, and business area completion for the last three returns.</p>
+    @if (!string.IsNullOrWhiteSpace(m.PerformanceError))
+    {
+      <div class="govuk-error-summary" role="alert"><p class="govuk-body govuk-!-margin-bottom-0">@m.PerformanceError</p></div>
+    }
+    else if (m.Performance.CommissionCount == 0)
+    {
+      <p class="govuk-body">No commission rounds with a return to summarise.</p>
+    }
+    else
+    {
+      var performance = m.Performance;
+      <div class="dfe-f-card-grid govuk-!-margin-bottom-4" role="region" aria-label="Performance return averages">
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-blue">
+          <p class="govuk-body-s dfe-f-stat-card__label">Average return rate</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Pct(performance.AverageReturnRatePercent)</p>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">Across @performance.CommissionCount commission@(performance.CommissionCount == 1 ? "" : "s")</p>
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+          <p class="govuk-body-s dfe-f-stat-card__label">Average metric completion</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@Pct(performance.AverageMetricCompletionPercent)</p>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">Applicable metric cells completed</p>
+        </div>
+      </div>
+
+      <h3 class="govuk-heading-s">Commissions</h3>
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small-text-until-tablet" aria-label="Commission completion rates">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Commission</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Due</button></th>
+              @await Html.PartialAsync("_SortableThNumeric", "Services in scope")
+              @await Html.PartialAsync("_SortableThNumeric", "Return rate")
+              @await Html.PartialAsync("_SortableThNumeric", "Metric completion")
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in performance.Commissions)
+            {
+              <tr class="govuk-table__row">
+                <th scope="row" class="govuk-table__header">@row.Name</th>
+                <td class="govuk-table__cell">@row.DueDate.ToString("d MMM yyyy")</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.ProductsInScope</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric"><span class="@CompletionBadge(row.ReturnRatePercent)">@Pct(row.ReturnRatePercent)</span></td>
+                <td class="govuk-table__cell govuk-table__cell--numeric"><span class="@CompletionBadge(row.MetricCompletionPercent)">@Pct(row.MetricCompletionPercent)</span></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="govuk-heading-s govuk-!-margin-top-6">Business area completion</h3>
+      @if (performance.BusinessAreaRounds.Count == 0)
+      {
+        <p class="govuk-body">No returns to break down by business area.</p>
+      }
+      else
+      {
+        <div class="govuk-tabs" data-module="govuk-tabs">
+          <h4 class="govuk-tabs__title">Last returns</h4>
+          <ul class="govuk-tabs__list">
+            @for (var i = 0; i < performance.BusinessAreaRounds.Count; i++)
+            {
+              var round = performance.BusinessAreaRounds[i];
+              <li class="govuk-tabs__list-item@(i == 0 ? " govuk-tabs__list-item--selected" : "")">
+                <a class="govuk-tabs__tab" href="#exec-ba-@round.CommissionId">@round.Name</a>
+              </li>
+            }
+          </ul>
+          @for (var i = 0; i < performance.BusinessAreaRounds.Count; i++)
+          {
+            var round = performance.BusinessAreaRounds[i];
+            <div class="govuk-tabs__panel@(i == 0 ? "" : " govuk-tabs__panel--hidden")" id="exec-ba-@round.CommissionId">
+              <p class="govuk-body-s govuk-hint">Due @round.DueDate.ToString("d MMM yyyy").</p>
+              @await Html.PartialAsync("_ExecutiveBusinessAreaTable", round.BusinessAreas)
+            </div>
+          }
+        </div>
+      }
+      <p class="govuk-body govuk-!-margin-top-4"><a class="govuk-link" href="@Url.Action("Performance", "ModernReporting")">Open performance reporting</a></p>
+    }
+  </section>
+
+  <section class="mr-section govuk-!-margin-bottom-6" aria-labelledby="exec-accessibility-heading">
+    <h2 id="exec-accessibility-heading" class="govuk-heading-m">Accessibility</h2>
+    <p class="govuk-body">Conformance by WCAG and category, compliance coverage, open issues, and overdue risk by business area.</p>
+    @if (!string.IsNullOrWhiteSpace(m.AccessibilityError))
+    {
+      <div class="govuk-error-summary" role="alert"><p class="govuk-body govuk-!-margin-bottom-0">@m.AccessibilityError</p></div>
+    }
+    else if (!m.Accessibility.Loaded)
+    {
+      <p class="govuk-body">No accessibility summary was returned.</p>
+    }
+    else
+    {
+      var access = m.Accessibility;
+      @if (!string.IsNullOrWhiteSpace(access.CompassNote))
+      {
+        <div class="govuk-inset-text" role="status">@access.CompassNote</div>
+      }
+      <div class="dfe-f-card-grid govuk-!-margin-bottom-4" role="region" aria-label="Accessibility compliance">
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-teal">
+          <p class="govuk-body-s dfe-f-stat-card__label">Onboarded</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@access.Onboarded</p>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">@access.StatementInstalled with a statement installed</p>
+        </div>
+        <div class="dfe-f-stat-card">
+          <p class="govuk-body-s dfe-f-stat-card__label">Not onboarded</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@access.ProductsNotOnboarded</p>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">Of @access.ActiveProductCount active products</p>
+        </div>
+        <div class="dfe-f-stat-card dfe-f-stat-card--tint-red">
+          <p class="govuk-body-s dfe-f-stat-card__label">Open issues</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@access.OpenIssues</p>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">@access.ClosedIssues closed</p>
+        </div>
+        <div class="dfe-f-stat-card @(access.OverdueIssues > 0 ? "dfe-f-stat-card--tint-red" : "dfe-f-stat-card--tint-green")">
+          <p class="govuk-body-s dfe-f-stat-card__label">Overdue risk</p>
+          <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@access.OverdueIssues</p>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">Open issues past their planned resolution date</p>
+        </div>
+      </div>
+
+      <h3 class="govuk-heading-s">Conformance</h3>
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table govuk-table--small-text-until-tablet" aria-label="Accessibility conformance by criterion">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Criterion</button></th>
+              @await Html.PartialAsync("_SortableThNumeric", "Open")
+              @await Html.PartialAsync("_SortableThNumeric", "Overdue")
+              @await Html.PartialAsync("_SortableThNumeric", "Closed")
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in access.Conformance)
+            {
+              <tr class="govuk-table__row">
+                <th scope="row" class="govuk-table__header">@row.Criterion</th>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.Open</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.Overdue</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.Closed</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="govuk-heading-s govuk-!-margin-top-6">Business areas</h3>
+      <p class="govuk-body-s govuk-hint">Highest overdue count first.</p>
+      @if (access.BusinessAreas.Count == 0)
+      {
+        <p class="govuk-body">No business area breakdown was returned.</p>
+      }
+      else
+      {
+        <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table govuk-table--small-text-until-tablet" aria-label="Accessibility issues by business area">
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+                @await Html.PartialAsync("_SortableThNumeric", "Open")
+                @await Html.PartialAsync("_SortableThNumeric", "Overdue")
+                @await Html.PartialAsync("_SortableThNumeric", "Closed")
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var row in access.BusinessAreas)
+              {
+                <tr class="govuk-table__row">
+                  <th scope="row" class="govuk-table__header">@row.BusinessArea</th>
+                  <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.Open</td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.Overdue</td>
+                  <td class="govuk-table__cell govuk-table__cell--numeric dfe-f-u-tabular-numbers">@row.Closed</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      <p class="govuk-body govuk-!-margin-top-4"><a class="govuk-link" href="@Url.Action("Accessibility", "ModernReporting")">Open the accessibility report</a></p>
+    }
+  </section>
+</div>
+
+@section Styles {
+  @await Html.PartialAsync("_MrReportCoreStyles")
+}
