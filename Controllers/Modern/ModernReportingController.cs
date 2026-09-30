@@ -32,6 +32,7 @@ public partial class ModernReportingController : Controller
     private readonly CommissionReportingAnalyticsService _commissionReportingAnalytics;
     private readonly IServiceAssessmentApiService _serviceAssessmentApi;
     private readonly IAissSummaryService _aissSummary;
+    private readonly ExecutiveReportService _executiveReport;
     private readonly IModernWorkService _modernWork;
     private readonly IWorkScopedExcelExportService _workScopedExcelExport;
     private readonly IConfiguration _configuration;
@@ -50,6 +51,7 @@ public partial class ModernReportingController : Controller
         CommissionReportingAnalyticsService commissionReportingAnalytics,
         IServiceAssessmentApiService serviceAssessmentApi,
         IAissSummaryService aissSummary,
+        ExecutiveReportService executiveReport,
         IModernWorkService modernWork,
         IWorkScopedExcelExportService workScopedExcelExport,
         IConfiguration configuration,
@@ -67,6 +69,7 @@ public partial class ModernReportingController : Controller
         _commissionReportingAnalytics = commissionReportingAnalytics;
         _serviceAssessmentApi = serviceAssessmentApi;
         _aissSummary = aissSummary;
+        _executiveReport = executiveReport;
         _modernWork = modernWork;
         _workScopedExcelExport = workScopedExcelExport;
         _configuration = configuration;
@@ -346,6 +349,25 @@ public partial class ModernReportingController : Controller
             TempData["ErrorMessage"] = "An error occurred while loading the service register report. Please try again.";
             SetNav("reporting-service-register");
             return View("~/Views/Modern/Reporting/ServiceRegister.cshtml", new ModernServiceRegisterReportViewModel());
+        }
+    }
+
+    /// <summary>Executive report — work, service register data quality, performance returns, and accessibility.</summary>
+    [HttpGet("executive")]
+    public async Task<IActionResult> Executive(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var model = await _executiveReport.BuildAsync(cancellationToken);
+            SetNav("reporting-executive");
+            return View("~/Views/Modern/Reporting/ExecutiveReport.cshtml", model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading executive report");
+            TempData["ErrorMessage"] = "An error occurred while loading the executive report. Please try again.";
+            SetNav("reporting-executive");
+            return View("~/Views/Modern/Reporting/ExecutiveReport.cshtml", new ExecutiveReportViewModel());
         }
     }
 
