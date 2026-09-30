@@ -116,7 +116,7 @@ public sealed class SubNavDataAccessResolver
                     Ep("Issues", "GET", "/api/v1/Issues", "Issues:read"),
                     Ep("Milestones", "GET", "/api/v1/Milestones", "Milestones:read")
                 }),
-            "ModernManage" when actionName is "Fips" or "FipsDashboard" => ApiPanel(
+            "ModernManage" when actionName is "Fips" or "FipsDashboard" or "ByCategories" => ApiPanel(
                 baseUrl,
                 docs,
                 explorer,
