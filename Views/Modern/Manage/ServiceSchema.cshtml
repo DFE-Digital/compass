@@ -1,0 +1,179 @@
+@model Compass.ViewModels.Modern.ServiceSchemaDirectoryPage
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Service census";
+  string Href(string tab, int page) => Url.Action("ServiceSchema", "ModernManage", new { q = Model.Query, tab, page }) ?? "#";
+  string ProductHref(Guid id) => Url.RouteUrl("ServiceSchemaProduct", new { id }) ?? "#";
+  string Badge(string state) => state switch
+  {
+    "Complete" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--green",
+    "In progress" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--yellow",
+    "Not started" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey",
+    _ => "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey"
+  };
+}
+@section Styles {
+  <link rel="stylesheet" href="~/modern/css/service-schema.css" asp-append-version="true" />
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("FipsDashboard", "ModernManage")">Service register</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Service census</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Caption = "Service register",
+  Title = "Service census",
+  Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Your products are listed first. The queue is active products that still have schema questions to record.</p>")
+})
+
+<section class="govuk-!-margin-top-6 govuk-!-margin-bottom-6" aria-label="Census summary">
+  <div class="dfe-f-card-grid">
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "Your products",
+      Value = Model.MyProducts.Count.ToString("N0"),
+      Trend = "View your products",
+      Href = "#your-products",
+      AriaLabel = $"Your products, {Model.MyProducts.Count} products",
+      TintClass = "dfe-f-stat-card--tint-blue"
+    })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "Not started",
+      Value = Model.NotStarted.ToString("N0"),
+      Trend = "Open the queue",
+      Href = "#census-queue",
+      AriaLabel = $"Not started, {Model.NotStarted} products",
+      TintClass = "dfe-f-stat-card--tint-grey"
+    })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "In progress",
+      Value = Model.InProgress.ToString("N0"),
+      Trend = "Open the queue",
+      Href = "#census-queue",
+      AriaLabel = $"In progress, {Model.InProgress} products",
+      TintClass = "dfe-f-stat-card--tint-orange"
+    })
+    @await Html.PartialAsync("~/Views/Modern/Raid/_RaidDashboardStatCard.cshtml", new RaidDashboardStatCardVm
+    {
+      Label = "Complete",
+      Value = Model.Complete.ToString("N0"),
+      Trend = "View all products",
+      Href = "#all-products",
+      AriaLabel = $"Complete, {Model.Complete} products",
+      TintClass = "dfe-f-stat-card--tint-teal"
+    })
+  </div>
+</section>
+
+<section id="your-products" class="govuk-!-margin-bottom-8" aria-labelledby="your-products-heading">
+  <h2 class="govuk-heading-m" id="your-products-heading">Your products</h2>
+  <p class="govuk-body">Active products where you are a named contact. Ones still to record are listed first.</p>
+  @if (Model.MyProducts.Count == 0)
+  {
+    <p class="govuk-body">You are not a named contact on any active product.</p>
+  }
+  else
+  {
+    @await Html.PartialAsync("~/Views/Modern/Manage/_ServiceCensusProducts.cshtml", Model.MyProducts)
+  }
+</section>
+
+<section id="census-queue" class="govuk-!-margin-bottom-8" aria-labelledby="census-queue-heading">
+  <h2 class="govuk-heading-m" id="census-queue-heading">Census queue</h2>
+  <p class="govuk-body">@Model.QueueTotal.ToString("N0") active products are not started or still in progress. @Model.NotStarted.ToString("N0") not started, @Model.InProgress.ToString("N0") in progress.</p>
+  @if (Model.Queue.Count == 0)
+  {
+    <p class="govuk-body">Every active product has its schema recorded.</p>
+  }
+  else
+  {
+    @await Html.PartialAsync("~/Views/Modern/Manage/_ServiceCensusProducts.cshtml", Model.Queue)
+    @if (Model.QueueTotal > Model.Queue.Count)
+    {
+      <p class="govuk-body">Showing @Model.Queue.Count of @Model.QueueTotal.ToString("N0"). <a class="govuk-link" href="#all-products">All products</a></p>
+    }
+  }
+</section>
+
+<section id="all-products" aria-labelledby="all-products-heading">
+  <h2 class="govuk-heading-m" id="all-products-heading">All products</h2>
+  <div class="ss-app">
+    <form class="ss-toolbar" method="get" action="@Url.Action("ServiceSchema", "ModernManage")">
+      <input type="hidden" name="tab" value="@Model.Tab" />
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="q">Search</label>
+        <input class="govuk-input" id="q" name="q" type="search" value="@Model.Query" />
+      </div>
+      <button class="govuk-button govuk-!-margin-bottom-0" type="submit">Search</button>
+      <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" href="@Url.Action("ServiceSchema", "ModernManage")">Clear</a>
+    </form>
+    <nav class="ss-tabs" aria-label="Product lists">
+      <a class="ss-tab @(Model.Tab == "active" ? "is-active" : null)" href="@Href("active", 1)">Active <span class="ss-count">@Model.ActiveCount.ToString("N0")</span></a>
+      <a class="ss-tab @(Model.Tab == "inactive" ? "is-active" : null)" href="@Href("inactive", 1)">Inactive <span class="ss-count">@Model.InactiveCount.ToString("N0")</span></a>
+    </nav>
+    <div class="ss-table-wrap">
+      <table class="ss-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Business area</th>
+            <th>Stage</th>
+            <th>Census</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+        @if (Model.Items.Count == 0)
+        {
+          <tr><td colspan="5">No products match.</td></tr>
+        }
+        @foreach (var item in Model.Items)
+        {
+          var href = ProductHref(item.Id);
+          <tr class="is-link" data-href="@href">
+            <td>
+              <a class="govuk-link" href="@href"><strong>@item.Title</strong></a>
+              <span class="ss-meta">Unique ID @item.UniqueId</span>
+            </td>
+            <td>@item.BusinessAreas</td>
+            <td>@(string.IsNullOrWhiteSpace(item.Phase) ? "No stage" : item.Phase)</td>
+            <td>
+              @if (!string.IsNullOrEmpty(item.CensusState))
+              {
+                <span class="@Badge(item.CensusState)">@item.CensusState</span>
+              }
+              <span class="ss-meta">@item.SchemaPercent% · @item.SectionsAddressed of @item.SectionCount</span>
+            </td>
+            <td>@(item.UpdatedAt?.ToLocalTime().ToString("d MMM yyyy") ?? "—")</td>
+          </tr>
+        }
+        </tbody>
+      </table>
+    </div>
+    <p class="govuk-body govuk-!-margin-top-3">Showing @Model.Items.Count of @Model.Total. Page @Model.Page of @Model.TotalPages.</p>
+    <p class="govuk-body">
+      @if (Model.Page > 1)
+      {
+        <a class="govuk-link" href="@Href(Model.Tab, Model.Page - 1)">Previous</a>
+      }
+      @if (Model.Page < Model.TotalPages)
+      {
+        <a class="govuk-link" href="@Href(Model.Tab, Model.Page + 1)">Next</a>
+      }
+    </p>
+  </div>
+</section>
+@section Scripts {
+<script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+document.querySelectorAll(".ss-table tr.is-link").forEach(function (row) {
+  row.addEventListener("click", function (event) {
+    if (event.target.closest("a")) return;
+    var href = row.getAttribute("data-href");
+    if (href) window.location = href;
+  });
+});
+</script>
+}

@@ -1,0 +1,82 @@
+@model Compass.ViewModels.Modern.ServiceSchemaQuestionsAdminPage
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Service schema";
+  ViewBag.SchemaNav = "questions";
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Service schema</li>
+}
+<div class="admin-hub">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Service schema",
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Change the questions people see on a service schema record, and the order they appear in.</p>")
+ })
+ @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Messages.cshtml")
+ <div class="govuk-grid-row">
+  <div class="govuk-grid-column-one-quarter">
+   @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Nav.cshtml")
+  </div>
+  <div class="govuk-grid-column-three-quarters">
+   <form method="post" action="@Url.Action("SaveQuestionOrder", "ModernAdminServiceSchema")">
+    @Html.AntiForgeryToken()
+    @foreach (var area in Model.Areas)
+    {
+     <h2 class="govuk-heading-m">@area.Name</h2>
+     <div class="govuk-form-group">
+      <label class="govuk-label" for="area-order-@area.Key">Area order</label>
+      <input class="govuk-input govuk-input--width-5" id="area-order-@area.Key" name="areaOrder[@area.Key]" type="number" value="@area.SortOrder" />
+     </div>
+     <div class="govuk-form-group">
+      <label class="govuk-label" for="area-name-@area.Key">Area name</label>
+      <input class="govuk-input" id="area-name-@area.Key" name="areaName[@area.Key]" type="text" value="@area.Name" />
+     </div>
+     <div class="govuk-form-group">
+      <label class="govuk-label" for="area-summary-@area.Key">Area description</label>
+      <textarea class="govuk-textarea" id="area-summary-@area.Key" name="areaSummary[@area.Key]" rows="2">@area.Summary</textarea>
+     </div>
+     @if (area.Questions.Count == 0)
+     {
+      <p class="govuk-body">No questions in this area.</p>
+     }
+     else
+     {
+      <table class="govuk-table">
+       <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+         <th scope="col" class="govuk-table__header">Order</th>
+         <th scope="col" class="govuk-table__header">Question</th>
+         <th scope="col" class="govuk-table__header">Shown</th>
+         <th scope="col" class="govuk-table__header">Action</th>
+        </tr>
+       </thead>
+       <tbody class="govuk-table__body">
+        @foreach (var question in area.Questions)
+        {
+         <tr class="govuk-table__row">
+          <td class="govuk-table__cell">
+           <input class="govuk-input govuk-input--width-5" name="questionOrder[@question.Id]" type="number" value="@question.SortOrder" aria-label="Order for @question.Heading" />
+          </td>
+          <td class="govuk-table__cell">@question.Heading</td>
+          <td class="govuk-table__cell">@(question.IsActive ? "Yes" : "Hidden")</td>
+          <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("Question", "ModernAdminServiceSchema", new { id = question.Id })">Change</a></td>
+         </tr>
+        }
+       </tbody>
+      </table>
+     }
+     @if (area.Key != "overview")
+     {
+      <p class="govuk-body"><a class="govuk-link" href="@Url.Action("QuestionCreate", "ModernAdminServiceSchema", new { section = area.Key })">Add a question to @area.Name</a></p>
+     }
+     <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+    }
+    <button class="govuk-button" type="submit">Save order</button>
+   </form>
+  </div>
+ </div>
+</div>

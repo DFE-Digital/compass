@@ -1,0 +1,37 @@
+@model List<Compass.ViewModels.Modern.ServiceSchemaDirectoryRow>
+@{
+  string ProductHref(Guid id) => Url.RouteUrl("ServiceSchemaProduct", new { id }) ?? "#";
+  string Badge(string state) => state switch
+  {
+    "Complete" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--green",
+    "In progress" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--yellow",
+    "Not started" => "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey",
+    _ => "dfe-f-badge dfe-f-badge--small dfe-f-badge--grey"
+  };
+}
+<table class="govuk-table">
+  <thead class="govuk-table__head">
+    <tr class="govuk-table__row">
+      <th scope="col" class="govuk-table__header">Product</th>
+      <th scope="col" class="govuk-table__header">Business area</th>
+      <th scope="col" class="govuk-table__header">Phase</th>
+      <th scope="col" class="govuk-table__header">Census</th>
+      <th scope="col" class="govuk-table__header govuk-table__header--numeric">Schema</th>
+    </tr>
+  </thead>
+  <tbody class="govuk-table__body">
+    @foreach (var item in Model)
+    {
+      <tr class="govuk-table__row">
+        <th scope="row" class="govuk-table__header">
+          <a class="govuk-link govuk-link--no-visited-state" href="@ProductHref(item.Id)">@item.Title</a>
+          <div class="govuk-body-s govuk-!-margin-bottom-0">ID @item.UniqueId</div>
+        </th>
+        <td class="govuk-table__cell">@item.BusinessAreas</td>
+        <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(item.Phase) ? "—" : item.Phase)</td>
+        <td class="govuk-table__cell"><span class="@Badge(item.CensusState)">@item.CensusState</span></td>
+        <td class="govuk-table__cell govuk-table__cell--numeric">@item.SchemaPercent%<div class="govuk-body-s govuk-!-margin-bottom-0">@item.SectionsAddressed of @item.SectionCount</div></td>
+      </tr>
+    }
+  </tbody>
+</table>

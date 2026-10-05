@@ -7,6 +7,7 @@ using Compass.Services;
 using Compass.Services.Aiss;
 using Compass.Services.Fips;
 using Compass.Services.Modern;
+using Compass.Services.ServiceSchema;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -250,6 +251,20 @@ public partial class ModernManageController : Controller
         return View("Index", vm);
     }
 
+    // ── Category cuts ───────────────────────────────────────────────────────
+
+    [HttpGet("fips/by-categories")]
+    public async Task<IActionResult> ByCategories(string? scope, string? cut, string? value, CancellationToken ct)
+    {
+        var disabled = await RequireFipsDatabaseAsync();
+        if (disabled != null)
+            return disabled;
+
+        var model = await FipsCategoryCutBuilder.BuildAsync(_context, scope, cut, value, ct);
+        SetNav(FipsCategoryCutBuilder.SubNavItemFor(model.Cut));
+        return View("ByCategories", model);
+    }
+
     // ── Product detail ──────────────────────────────────────────────────────
 
     [HttpGet("fips/{id:guid}")]
@@ -271,6 +286,15 @@ public partial class ModernManageController : Controller
         }
 
         SetNav("manage-fips-products");
+
+        var schemaEnabled = await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(
+            FeatureCodes.ServiceRegisterSchema, User);
+        if (string.Equals(tab, "schema", StringComparison.OrdinalIgnoreCase))
+        {
+            if (schemaEnabled)
+                return RedirectToAction(nameof(ServiceSchemaProduct), new { id });
+            tab = null;
+        }
 
         var detailTab = NormalizeFipsDetailTab(tab);
 
@@ -301,6 +325,7 @@ public partial class ModernManageController : Controller
             NavContext = null,
             EditMode = false,
             ActiveDetailTab = detailTab,
+            ShowServiceRegisterSchema = schemaEnabled,
         };
 
         await FipsProductCategorisationPresentation.PopulateAsync(

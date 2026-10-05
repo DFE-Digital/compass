@@ -24,6 +24,11 @@ public class ProjectContact
     [MaxLength(100)]
     public string Role { get; set; } = string.Empty;
 
+    /// <summary>Set when this contact uses a staff role managed outside CMDB contact types.</summary>
+    public int? StaffRoleId { get; set; }
+
+    public ServiceSchema.StaffRole? StaffRole { get; set; }
+
     [Required]
     [MaxLength(200)]
     public string Name { get; set; } = string.Empty;

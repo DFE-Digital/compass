@@ -1,0 +1,105 @@
+@using Compass.ViewModels.Modern
+@model ServiceSchemaDqTopicPage
+@{
+    ViewData["Title"] = Model.Name + " gaps";
+    string Tone(int percent) => percent == 0 ? "empty" : percent < 25 ? "low" : percent < 60 ? "mid" : "ok";
+    string ListHref(string view) => Url.Action("ServiceSchemaTopic", "ModernReporting", new { key = Model.Key, view }) ?? "#";
+    string SchemaHref(Guid id) => Url.RouteUrl("ServiceSchemaProduct", new { id, section = Model.AreaKey, topic = Model.Key }) ?? "#";
+    var showingMissing = Model.View != "recorded";
+}
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceSchema", "ModernReporting")">Service schema</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Name</li>
+}
+@section Styles {
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/service-schema-report.css")" asp-append-version="true" />
+}
+<div class="mr-dash ss-report">
+  @{
+    var ledeText = showingMissing
+      ? Model.Empty.ToString("N0") + " of " + Model.TotalProducts.ToString("N0") + " active products have nothing recorded for this question."
+      : Model.ProductsWithInformation.ToString("N0") + " of " + Model.TotalProducts.ToString("N0") + " active products have a response or a declaration.";
+    var lede = await Html.PartialAsync("_ReportingMutedBodyLede", ledeText);
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
+  {
+    Caption = Model.AreaName,
+    Title = Model.Name,
+    Lede = lede
+  })
+
+  <section class="ss-kpis" aria-label="Question coverage">
+    <div class="ss-kpi">
+      <p class="govuk-body-s">Information present</p>
+      <p class="ss-kpi-value">@Model.Percent%</p>
+      <p class="govuk-body-s">@Model.ProductsWithInformation.ToString("N0") of @Model.TotalProducts.ToString("N0") products.</p>
+    </div>
+    <div class="ss-kpi">
+      <p class="govuk-body-s">Recorded</p>
+      <p class="ss-kpi-value">@Model.ProductsWithItems.ToString("N0")</p>
+      <p class="govuk-body-s">A saved response@(Model.Key == "responsibility" ? ", or a named contact" : "").</p>
+    </div>
+    <div class="ss-kpi">
+      <p class="govuk-body-s">Nothing to record</p>
+      <p class="ss-kpi-value">@Model.ProductsDeclared.ToString("N0")</p>
+      <p class="govuk-body-s">An explicit declaration.</p>
+    </div>
+    <a class="ss-kpi @(Model.Empty > 0 ? "is-warn" : "is-ok") @(showingMissing ? "is-current" : null)" href="@ListHref("missing")">
+      <p class="govuk-body-s">Still empty</p>
+      <p class="ss-kpi-value">@Model.Empty.ToString("N0")</p>
+      <p class="govuk-body-s">No response and no declaration.</p>
+    </a>
+  </section>
+
+  <section class="ss-panel" aria-labelledby="topic-products-heading">
+    <div class="ss-panel-head">
+      <h2 id="topic-products-heading" class="govuk-heading-m">@(showingMissing ? "Products still missing this" : "Products with information")</h2>
+      @if (showingMissing)
+      {
+        <a class="govuk-link" href="@ListHref("recorded")">Show recorded</a>
+      }
+      else
+      {
+        <a class="govuk-link" href="@ListHref("missing")">Show gaps</a>
+      }
+    </div>
+    @if (Model.Products.Count == 0)
+    {
+      <p class="govuk-body">@(showingMissing ? "Every active product has something recorded for this question." : "Nothing recorded for this question yet.")</p>
+    }
+    else
+    {
+      <table class="govuk-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Product</th>
+            <th scope="col" class="govuk-table__header">Business area</th>
+            <th scope="col" class="govuk-table__header">Phase</th>
+            <th scope="col" class="govuk-table__header">Whole schema</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var product in Model.Products)
+          {
+            <tr class="govuk-table__row ss-row @Tone(product.Percent)">
+              <th scope="row" class="govuk-table__header">
+                <a class="govuk-link govuk-link--no-visited-state" href="@SchemaHref(product.Id)">@product.Title</a>
+                <div class="govuk-body-s govuk-!-margin-bottom-0">ID @product.UniqueId</div>
+              </th>
+              <td class="govuk-table__cell">@product.BusinessAreas</td>
+              <td class="govuk-table__cell">@product.Phase</td>
+              <td class="govuk-table__cell">
+                <div class="ss-coverage">
+                  <div class="ss-bar" aria-hidden="true"><span style="width: @product.Percent%"></span></div>
+                  <span>@product.Percent%</span>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+</div>

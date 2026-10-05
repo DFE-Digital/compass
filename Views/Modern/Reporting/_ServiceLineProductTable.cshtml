@@ -1,0 +1,74 @@
+@using Compass.ViewModels.Modern
+@model (ServiceLineReportViewModel Report, string Id, string Title, string Summary, List<ServiceLineReportProductRow> Products, bool ShowLines)
+@{
+    var report = Model.Report;
+    string ProductHref(Guid id) => report.ShowSchema
+        ? Url.RouteUrl("ServiceSchemaProduct", new { id }) ?? "#"
+        : Url.Action("FipsProduct", "ModernManage", new { id }) ?? "#";
+    string Tone(int? percent) => percent is null or 0 ? "empty" : percent < 25 ? "low" : percent < 60 ? "mid" : "ok";
+}
+<section class="ss-panel" id="@Model.Id" aria-labelledby="@(Model.Id + "-heading")">
+  <div class="ss-panel-head">
+    <div>
+      <h2 id="@(Model.Id + "-heading")" class="govuk-heading-m">@Model.Title</h2>
+      <p class="govuk-body govuk-!-margin-bottom-0">@Model.Summary</p>
+    </div>
+  </div>
+  @if (Model.Products.Count == 0)
+  {
+    <p class="govuk-body">None.</p>
+  }
+  else
+  {
+    <div class="ss-scroll">
+      <table class="govuk-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Product</th>
+            <th scope="col" class="govuk-table__header">Business areas</th>
+            @if (Model.ShowLines)
+            {
+              <th scope="col" class="govuk-table__header">Service lines</th>
+            }
+            @if (report.ShowSchema)
+            {
+              <th scope="col" class="govuk-table__header">Schema</th>
+            }
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var product in Model.Products)
+          {
+            <tr class="govuk-table__row ss-row @Tone(product.SchemaPercent)">
+              <th scope="row" class="govuk-table__header">
+                <a class="govuk-link govuk-link--no-visited-state" href="@ProductHref(product.Id)">@product.Title</a>
+                <div class="govuk-body-s govuk-!-margin-bottom-0">ID @product.UniqueId</div>
+              </th>
+              <td class="govuk-table__cell">@product.BusinessAreas</td>
+              @if (Model.ShowLines)
+              {
+                <td class="govuk-table__cell">@(string.IsNullOrEmpty(product.Lines) ? "—" : product.Lines)@if (product.LineCount > 1) { <div class="govuk-body-s govuk-!-margin-bottom-0">@product.LineCount lines</div> }</td>
+              }
+              @if (report.ShowSchema)
+              {
+                <td class="govuk-table__cell">
+                  @if (product.SchemaPercent is int percent)
+                  {
+                    <div class="ss-coverage">
+                      <div class="ss-bar" aria-hidden="true"><span style="width: @percent%"></span></div>
+                      <span>@percent%</span>
+                    </div>
+                  }
+                  else
+                  {
+                    <span>—</span>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

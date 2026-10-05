@@ -60,6 +60,10 @@ public class NavigationViewFilter : IAsyncActionFilter
                         await _globalFeatures.IsFeatureEnabledForPrincipalAsync(
                             FeatureCodes.Fips, context.HttpContext.User);
 
+                    controller.ViewBag.ShowServiceRegisterSchema =
+                        await _globalFeatures.IsFeatureEnabledForPrincipalAsync(
+                            FeatureCodes.ServiceRegisterSchema, context.HttpContext.User);
+
                     controller.ViewBag.ShowRaidNavigation =
                         await _globalFeatures.IsFeatureEnabledForPrincipalAsync(
                             FeatureCodes.Raid, context.HttpContext.User);
@@ -92,6 +96,7 @@ public class NavigationViewFilter : IAsyncActionFilter
                     controller.ViewBag.ShowDemandNavigation = false;
                     controller.ViewBag.ShowStandardsNavigation = false;
                     controller.ViewBag.ShowFipsDatabaseServiceRegister = false;
+                    controller.ViewBag.ShowServiceRegisterSchema = false;
                     controller.ViewBag.ShowRaidNavigation = false;
                     controller.ViewBag.ShowDdrNavigation = false;
                     controller.ViewBag.CanAccessModernAdmin = false;

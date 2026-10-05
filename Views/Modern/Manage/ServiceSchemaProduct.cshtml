@@ -1,0 +1,363 @@
+@model Compass.ViewModels.Modern.ServiceSchemaWorkspacePage
+@{
+  ViewData["Title"] = Model.ProductTitle + " schema";
+  var nonce = Context.Items["Nonce"]?.ToString() ?? "";
+  string SchemaHref(string sectionKey, string? topicKey = null) =>
+    Url.RouteUrl("ServiceSchemaProduct", new { id = Model.ProductId, section = sectionKey, topic = topicKey })
+    ?? $"/modern/manage/service-schema/{Model.ProductId}?section={sectionKey}";
+  var shownTopics = string.IsNullOrEmpty(Model.ActiveTopic)
+    ? Model.Topics
+    : Model.Topics.Where(t => string.Equals(t.Key, Model.ActiveTopic, StringComparison.OrdinalIgnoreCase)).ToList();
+}
+@section Styles {
+  <link rel="stylesheet" href="~/modern/css/service-schema.css" asp-append-version="true" />
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceSchema", "ModernManage")">Service census</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.ProductTitle</li>
+}
+<div class="ss-app">
+  @if (TempData["ErrorMessage"] != null)
+  {
+    <div class="govuk-error-summary" data-module="govuk-error-summary"><div class="govuk-error-summary__body"><p class="govuk-body">@TempData["ErrorMessage"]</p></div></div>
+  }
+  @if (TempData["SuccessMessage"] != null)
+  {
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert"><div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">@TempData["SuccessMessage"]</p></div></div>
+  }
+  <div class="ss-record">
+    <header class="ss-strip">
+      <div>
+        <p class="govuk-caption-m govuk-!-margin-bottom-1">Service register product</p>
+        <h1 class="govuk-heading-l govuk-!-margin-bottom-2">@Model.ProductTitle</h1>
+        <p class="govuk-body govuk-!-margin-bottom-0">
+          Unique ID @Model.UniqueId
+          <span aria-hidden="true"> · </span>@Model.BusinessAreas
+          @if (!string.IsNullOrWhiteSpace(Model.Phase))
+          {
+            <span aria-hidden="true"> · </span>@Model.Phase
+          }
+          <span aria-hidden="true"> · </span>
+          <a class="govuk-link" href="@Url.Action("FipsProduct", "ModernManage", new { id = Model.ProductId })">View register entry</a>
+        </p>
+      </div>
+      <div>
+        <p class="ss-score">@Model.SchemaPercent%</p>
+        <p class="govuk-hint govuk-!-margin-bottom-0">@Model.SectionsAddressed of @Model.SectionCount schema areas have information</p>
+      </div>
+    </header>
+    <nav class="ss-sidenav" aria-label="Schema sections">
+      @foreach (var group in Model.Areas.GroupBy(a => a.Group))
+      {
+        <p class="ss-nav-label">@group.Key</p>
+        <ul class="ss-nav">
+          @foreach (var item in group)
+          {
+            var current = string.Equals(item.Key, Model.ActiveArea, StringComparison.OrdinalIgnoreCase);
+            <li>
+              <a class="@(current ? "is-active" : null)" href="@SchemaHref(item.Key)"@if (current && string.IsNullOrEmpty(Model.ActiveTopic)) { <text> aria-current="page"</text> }>
+                <span>@item.Name</span>
+                @if (!string.IsNullOrEmpty(item.State))
+                {
+                  <svg class="ss-state is-@item.State" viewBox="0 0 20 20" role="img" aria-label="@item.StateLabel" focusable="false">
+                    <title>@item.StateLabel</title>
+                    @if (item.State == "recorded")
+                    {
+                      <circle cx="10" cy="10" r="8.25" fill="currentColor" />
+                      <path fill="#fff" d="M8.4 13.35 5.7 10.65l1.05-1.05 1.65 1.65 4.05-4.05 1.05 1.05-5.1 5.1z" />
+                    }
+                    else
+                    {
+                      <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.75" />
+                    }
+                  </svg>
+                }
+              </a>
+              @if (current && Model.Topics.Count > 0)
+              {
+                <ul class="ss-subnav">
+                  @foreach (var block in Model.Topics)
+                  {
+                    var topicCurrent = string.Equals(block.Key, Model.ActiveTopic, StringComparison.OrdinalIgnoreCase);
+                    <li>
+                      <a class="@(topicCurrent ? "is-active" : null)" href="@SchemaHref(item.Key, block.Key)"@if (topicCurrent) { <text> aria-current="page"</text> }>
+                        <span>@block.Heading</span>
+                        <svg class="ss-state is-@block.State" viewBox="0 0 20 20" role="img" aria-label="@block.StateLabel" focusable="false">
+                          <title>@block.StateLabel</title>
+                          @if (block.State == "recorded")
+                          {
+                            <circle cx="10" cy="10" r="8.25" fill="currentColor" />
+                            <path fill="#fff" d="M8.4 13.35 5.7 10.65l1.05-1.05 1.65 1.65 4.05-4.05 1.05 1.05-5.1 5.1z" />
+                          }
+                          else
+                          {
+                            <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.75" />
+                          }
+                        </svg>
+                      </a>
+                    </li>
+                  }
+                </ul>
+              }
+            </li>
+          }
+        </ul>
+      }
+      <p class="govuk-!-margin-top-4"><a class="govuk-link" href="@Url.Action("ServiceSchema", "ModernManage")">All product entries</a></p>
+    </nav>
+    <div class="ss-main">
+      <p class="govuk-caption-m">@Model.AreaGroup</p>
+      <h2 class="govuk-heading-l">@Model.AreaName</h2>
+      <p class="govuk-body">@Model.AreaSummary</p>
+      @if (Model.ActiveArea == "overview")
+      {
+        <table class="govuk-table">
+          <thead class="govuk-table__head"><tr class="govuk-table__row"><th class="govuk-table__header">Area</th><th class="govuk-table__header">Status</th></tr></thead>
+          <tbody class="govuk-table__body">
+            @foreach (var item in Model.Areas.Where(a => a.Key != "overview"))
+            {
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell"><a class="govuk-link" href="@SchemaHref(item.Key)">@item.Name</a></td>
+                <td class="govuk-table__cell">@item.StateLabel</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+      @foreach (var block in shownTopics)
+      {
+        <section class="ss-topic" id="topic-@block.Key">
+          <div class="ss-topic-head">
+            <div>
+              <h3 class="govuk-heading-m govuk-!-margin-bottom-1">@block.Heading</h3>
+              <p class="govuk-body">@block.Help</p>
+            </div>
+          </div>
+          @if (block.Entries.Count == 0 && !block.NothingToRecord)
+          {
+            <p class="govuk-body">Nothing recorded.</p>
+          }
+          else if (block.Entries.Count == 0 && block.NothingToRecord && !Model.CanEdit)
+          {
+            <p class="govuk-body">Nothing to record for this entry.</p>
+          }
+          else if (block.Entries.Count > 0)
+          {
+            var canRemove = Model.CanEdit && block.Entries.Any(e => !e.FromRegister);
+            <table class="govuk-table">
+              <thead class="govuk-table__head"><tr class="govuk-table__row"><th class="govuk-table__header">@block.TitleLabel</th><th class="govuk-table__header">Detail</th>@if (canRemove) { <th class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th> }</tr></thead>
+              <tbody class="govuk-table__body">
+                @foreach (var entry in block.Entries)
+                {
+                  <tr class="govuk-table__row">
+                    <th class="govuk-table__header" scope="row">@entry.Title</th>
+                    <td class="govuk-table__cell">
+                      @if (!string.IsNullOrWhiteSpace(entry.Meta)) { <div>@entry.Meta</div> }
+                      @if (!string.IsNullOrWhiteSpace(entry.Narrative)) { <div>@entry.Narrative</div> }
+                      @if (!string.IsNullOrWhiteSpace(entry.Url))
+                      {
+                        var reference = entry.Url.Trim();
+                        var isWebLink = reference.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || reference.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
+                        <div>
+                          @if (isWebLink)
+                          {
+                            <a class="govuk-link" href="@reference">@reference</a>
+                          }
+                          else
+                          {
+                            @reference
+                          }
+                        </div>
+                      }
+                    </td>
+                    @if (canRemove)
+                    {
+                      <td class="govuk-table__cell">
+                        @if (!entry.FromRegister)
+                        {
+                          <form method="post" action="@Url.RouteUrl("RemoveSchemaEntry", new { id = Model.ProductId, entryId = entry.Id })">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="sectionKey" value="@block.Key" />
+                            <button class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" type="submit">Remove</button>
+                          </form>
+                        }
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          @if (Model.CanEdit)
+          {
+            <h4 class="govuk-heading-s">Add</h4>
+            <form method="post" action="@Url.RouteUrl("SaveSchemaEntry", new { id = Model.ProductId })" class="govuk-!-margin-bottom-0">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="sectionKey" value="@block.Key" />
+              @if (block.Mode == "catalogue")
+              {
+                <div class="govuk-form-group ss-picker" data-ss-picker>
+                  <label class="govuk-label" for="pick-@block.Key">@block.TitleLabel</label>
+                  <input class="govuk-input" id="pick-@block.Key" type="search" autocomplete="off" placeholder="Type / to see the list" data-ss-input />
+                  <input type="hidden" name="catalogueItemId" data-ss-id />
+                  <input type="hidden" name="createCatalogueName" data-ss-create />
+                  <ul class="ss-picker-list" data-ss-list hidden></ul>
+                  <script type="application/json" data-ss-options>@Html.Raw(System.Text.Json.JsonSerializer.Serialize(block.Choices.Select(c => new { id = c.Value, name = c.Label })))</script>
+                </div>
+              }
+              else if (block.Mode == "lookup")
+              {
+                <div class="govuk-form-group">
+                  <label class="govuk-label" for="lookup-@block.Key">@block.LookupLabel</label>
+                  <select class="govuk-select" id="lookup-@block.Key" name="lookupCode">
+                    <option value="">Select</option>
+                    @foreach (var choice in block.Choices)
+                    {
+                      <option value="@choice.Value">@choice.Label</option>
+                    }
+                  </select>
+                </div>
+              }
+              else
+              {
+                <div class="govuk-form-group">
+                  <label class="govuk-label" for="title-@block.Key">@block.TitleLabel</label>
+                  <input class="govuk-input" id="title-@block.Key" name="title" maxlength="300" />
+                </div>
+              }
+              @if (block.CapturePerson)
+              {
+                @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new Compass.Models.UserPickerViewModel
+                {
+                  FieldName = "personUserId",
+                  Label = "Person",
+                  Hint = "Search by name or email and select someone.",
+                  UseGovUkStyling = true,
+                  IncludeHiddenNameEmailFields = true,
+                  HiddenNameFieldName = "personName",
+                  HiddenEmailFieldName = "personEmail",
+                  InputIdSuffix = block.Key,
+                  DefaultSummaryText = "No-one selected."
+                })
+              }
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="narrative-@block.Key">@block.NarrativeLabel</label>
+                <textarea class="govuk-textarea" id="narrative-@block.Key" name="narrative" rows="3"></textarea>
+              </div>
+              @if (block.CaptureUrl)
+              {
+                <div class="govuk-form-group">
+                  <label class="govuk-label" for="url-@block.Key">Reference</label>
+                  <div class="govuk-hint">Optionally add any reference to any guidance, evidence, or resources to support your response</div>
+                  <input class="govuk-input" id="url-@block.Key" name="externalUrl" type="text" maxlength="500" />
+                </div>
+              }
+              <button class="govuk-button" type="submit">Save</button>
+            </form>
+            <form method="post" action="@Url.RouteUrl("SaveSchemaSection", new { id = Model.ProductId })" class="govuk-!-margin-top-2">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="sectionKey" value="@block.Key" />
+              @if (block.NothingToRecord)
+              {
+                <input type="hidden" name="statusCode" value="NOT_RECORDED" />
+                <p class="govuk-body">Nothing to record for this entry.</p>
+                <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" type="submit">Remove this</button>
+              }
+              else
+              {
+                <input type="hidden" name="statusCode" value="CONFIRMED_NONE" />
+                <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" type="submit">Nothing to record for this entry</button>
+              }
+            </form>
+          }
+        </section>
+      }
+      @if (!Model.CanEdit && Model.Topics.Count > 0)
+      {
+        <p class="govuk-body">Only a named contact or an operations console user can add responses.</p>
+      }
+    </div>
+  </div>
+</div>
+@section Scripts {
+<script nonce="@nonce">
+document.querySelectorAll("[data-ss-picker]").forEach(function (root) {
+  var input = root.querySelector("[data-ss-input]");
+  var idField = root.querySelector("[data-ss-id]");
+  var createField = root.querySelector("[data-ss-create]");
+  var list = root.querySelector("[data-ss-list]");
+  var raw = root.querySelector("[data-ss-options]");
+  var options = [];
+  try { options = JSON.parse(raw ? raw.textContent : "[]"); } catch (e) { options = []; }
+  function parseQuery(value) {
+    var typed = value.trim();
+    var browsing = typed.charAt(0) === "/";
+    return { browsing: browsing, query: browsing ? typed.slice(1).trim() : typed };
+  }
+  function hide() { list.hidden = true; list.innerHTML = ""; }
+  function show(items, query, listAll) {
+    list.innerHTML = "";
+    var visible = listAll ? items : items.slice(0, 12);
+    visible.forEach(function (item) {
+      var li = document.createElement("li");
+      var button = document.createElement("button");
+      button.type = "button";
+      button.textContent = item.name;
+      button.addEventListener("click", function () {
+        input.value = item.name;
+        idField.value = item.id;
+        createField.value = "";
+        hide();
+      });
+      li.appendChild(button);
+      list.appendChild(li);
+    });
+    if (listAll && items.length === 0) {
+      var empty = document.createElement("li");
+      empty.className = "ss-picker-empty";
+      empty.textContent = "Nothing in this list yet. Type a name to add one.";
+      list.appendChild(empty);
+    }
+    var exact = options.some(function (item) { return item.name.toLowerCase() === query.toLowerCase(); });
+    if (query && !exact) {
+      var add = document.createElement("li");
+      var addButton = document.createElement("button");
+      addButton.type = "button";
+      addButton.className = "is-add";
+      addButton.textContent = "Add \"" + query + "\" to the list";
+      addButton.addEventListener("click", function () {
+        input.value = query;
+        idField.value = "";
+        createField.value = query;
+        hide();
+      });
+      add.appendChild(addButton);
+      list.appendChild(add);
+    }
+    list.hidden = list.children.length === 0;
+  }
+  input.addEventListener("input", function () {
+    idField.value = "";
+    createField.value = "";
+    var parsed = parseQuery(input.value);
+    if (!parsed.browsing && !parsed.query) { hide(); return; }
+    var matches = parsed.query
+      ? options.filter(function (item) { return item.name.toLowerCase().indexOf(parsed.query.toLowerCase()) >= 0; })
+      : options.slice();
+    show(matches, parsed.query, parsed.browsing && !parsed.query);
+  });
+  input.addEventListener("focus", function () {
+    if (input.value.trim()) input.dispatchEvent(new Event("input"));
+  });
+  document.addEventListener("click", function (event) {
+    if (!root.contains(event.target)) hide();
+  });
+  root.closest("form").addEventListener("submit", function () {
+    if (idField.value || createField.value) return;
+    var parsed = parseQuery(input.value);
+    if (parsed.query) createField.value = parsed.query;
+  });
+});
+</script>
+}

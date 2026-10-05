@@ -1731,6 +1731,28 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         Console.WriteLine("✓ Created feature: FIPS service register (global toggle)");
     }
 
+    var schemaToggleFeature = await context.Features
+        .FirstOrDefaultAsync(f => f.Code == Compass.Models.FeatureCodes.ServiceRegisterSchema);
+
+    if (schemaToggleFeature == null)
+    {
+        schemaToggleFeature = new Compass.Models.Feature
+        {
+            Name = "Service register schema",
+            Code = Compass.Models.FeatureCodes.ServiceRegisterSchema,
+            Description = "Schema data section on a service register entry",
+            IsActive = true,
+            AccessMode = Compass.Models.FeatureAccessMode.OnForAll,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        context.Features.Add(schemaToggleFeature);
+        await context.SaveChangesAsync();
+        Console.WriteLine("✓ Created feature: Service register schema (global toggle)");
+    }
+
+    await Compass.Services.ServiceSchema.ServiceSchemaSeed.EnsureAsync(context);
+
     foreach (Compass.Models.PermissionType permission in Enum.GetValues<Compass.Models.PermissionType>())
     {
         var exists = await context.GroupFeaturePermissions
