@@ -47,6 +47,12 @@ public sealed record ApplicationFeatureToggleDefinition(
                 Label: "Design Decision Records (DDRs)",
                 Hint: "DDR area (/modern/design-decision-records), DDR panels on FIPS products and work items, the Reporting → Design decision records area, and the DesignOps oversight queue. Default Off — turn on for teams piloting DDRs.",
                 DefaultEnabled: false),
+            new(
+                Code: FeatureCodes.ServiceRegisterSchema,
+                Name: "Service register schema",
+                Label: "Service register schema",
+                Hint: "Service schema in the service register, in the sub-navigation before Service lines. When Off, that area is hidden. Data quality in the entry header stays visible.",
+                DefaultEnabled: true),
         };
 
     public static HashSet<string> AllowedCodes { get; } =

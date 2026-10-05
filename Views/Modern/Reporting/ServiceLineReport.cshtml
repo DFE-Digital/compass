@@ -1,0 +1,153 @@
+@using Compass.ViewModels.Modern
+@model ServiceLineReportViewModel
+@{
+    ViewData["Title"] = "Service lines";
+    var m = Model ?? new ServiceLineReportViewModel();
+    string Tone(int? percent) => percent is null or 0 ? "empty" : percent < 25 ? "low" : percent < 60 ? "mid" : "ok";
+    string LineHref(string slug) => Url.Action("ServiceLineDetail", "ModernManage", new { slug }) ?? "#";
+    string ProductHref(Guid id) => m.ShowSchema
+        ? Url.RouteUrl("ServiceSchemaProduct", new { id }) ?? "#"
+        : Url.Action("FipsProduct", "ModernManage", new { id }) ?? "#";
+}
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Service lines</li>
+}
+@section Styles {
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/service-schema-report.css")" asp-append-version="true" />
+}
+<div class="mr-dash ss-report">
+  @{
+    var ledeText = m.ShowSchema
+        ? "How active products sit in service lines, and where a line spans business areas or shares products. Schema percentages show how much of the schema is recorded."
+        : "How active products sit in service lines, and where a line spans business areas or shares products.";
+    var lede = await Html.PartialAsync("_ReportingMutedBodyLede", ledeText);
+  }
+  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
+  {
+    Caption = "Reporting",
+    Title = "Service lines",
+    Lede = lede
+  })
+
+  @if (TempData["ErrorMessage"] != null)
+  {
+    <div class="govuk-error-summary" role="alert"><div class="govuk-error-summary__body"><p class="govuk-body">@TempData["ErrorMessage"]</p></div></div>
+  }
+
+  <section class="ss-kpis" aria-label="Service line figures">
+    <a class="ss-kpi" href="#in-a-line">
+      <p class="govuk-body-s">Products in a service line</p>
+      <p class="ss-kpi-value">@m.InALine.ToString("N0")</p>
+      <p class="govuk-body-s">Of @m.ActiveProducts.ToString("N0") active products, across @m.ServiceLineCount.ToString("N0") service lines.</p>
+    </a>
+    <a class="ss-kpi @(m.NotInALine > 0 ? "is-warn" : "is-ok")" href="#not-in-a-line">
+      <p class="govuk-body-s">Not in a service line</p>
+      <p class="ss-kpi-value">@m.NotInALine.ToString("N0")</p>
+      <p class="govuk-body-s">Active products with no service line.</p>
+    </a>
+    <a class="ss-kpi @(m.InMultipleLines > 0 ? "is-warn" : null)" href="#multiple-lines">
+      <p class="govuk-body-s">In more than one service line</p>
+      <p class="ss-kpi-value">@m.InMultipleLines.ToString("N0")</p>
+      <p class="govuk-body-s">Shared across lines, so a change touches more than one grouping.</p>
+    </a>
+    <a class="ss-kpi @(m.LinesSpanningBusinessAreas > 0 ? "is-warn" : null)" href="#lines">
+      <p class="govuk-body-s">Lines across business areas</p>
+      <p class="ss-kpi-value">@m.LinesSpanningBusinessAreas.ToString("N0")</p>
+      <p class="govuk-body-s">Service lines whose products sit in more than one business area. @m.EmptyLines.ToString("N0") lines have no active products.</p>
+    </a>
+  </section>
+
+  @if (m.ShowSchema)
+  {
+    <section class="ss-panel" aria-labelledby="schema-compare-heading">
+      <h2 id="schema-compare-heading" class="govuk-heading-m">Schema recorded</h2>
+      <div class="ss-stages">
+        <div class="ss-stage">
+          <p class="govuk-body-s">Products in a service line</p>
+          <strong>@(m.SchemaInALine?.ToString() ?? "—")%</strong>
+        </div>
+        <div class="ss-stage">
+          <p class="govuk-body-s">Products not in a service line</p>
+          <strong>@(m.SchemaNotInALine?.ToString() ?? "—")%</strong>
+        </div>
+        <div class="ss-stage">
+          <p class="govuk-body-s">Products in a line and several areas</p>
+          <strong>@m.MultiAreaProducts.Count.ToString("N0")</strong>
+        </div>
+      </div>
+    </section>
+  }
+
+  <section class="ss-panel" id="lines" aria-labelledby="lines-heading">
+    <div class="ss-panel-head">
+      <div>
+        <h2 id="lines-heading" class="govuk-heading-m">Service lines</h2>
+        <p class="govuk-body govuk-!-margin-bottom-0">Lines whose products cross business areas are listed first. Product areas come from the products. Line areas are the business areas linked on the service line.</p>
+      </div>
+    </div>
+    @if (m.Lines.Count == 0)
+    {
+      <p class="govuk-body">No service lines yet.</p>
+    }
+    else
+    {
+      <div class="ss-scroll">
+        <table class="govuk-table">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Service line</th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric">Products</th>
+              <th scope="col" class="govuk-table__header">Product areas</th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric">Shared</th>
+              <th scope="col" class="govuk-table__header">Line areas</th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric">Directorates</th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric">Work</th>
+              @if (m.ShowSchema)
+              {
+                <th scope="col" class="govuk-table__header">Schema</th>
+              }
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var line in m.Lines)
+            {
+              var tone = line.ProductsSpanMultipleAreas || line.AreaMismatch ? "low" : line.ProductCount == 0 ? "empty" : Tone(line.SchemaPercent);
+              <tr class="govuk-table__row ss-row @tone">
+                <th scope="row" class="govuk-table__header"><a class="govuk-link govuk-link--no-visited-state" href="@LineHref(line.Slug)">@line.Name</a></th>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@line.ProductCount.ToString("N0")@if (line.ProductsInMultipleAreas > 0) { <div class="govuk-body-s govuk-!-margin-bottom-0">@line.ProductsInMultipleAreas in several areas</div> }</td>
+                <td class="govuk-table__cell">@line.ProductAreas</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@line.SharedProductCount.ToString("N0")</td>
+                <td class="govuk-table__cell">@line.LinkedAreas@if (line.AreaMismatch) { <div class="govuk-body-s govuk-!-margin-bottom-0">Different from the product areas</div> }</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@line.DirectorateCount.ToString("N0")</td>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@line.WorkItemCount.ToString("N0")</td>
+                @if (m.ShowSchema)
+                {
+                  <td class="govuk-table__cell">
+                    @if (line.SchemaPercent is int percent)
+                    {
+                      <div class="ss-coverage">
+                        <div class="ss-bar" aria-hidden="true"><span style="width: @percent%"></span></div>
+                        <span>@percent%</span>
+                      </div>
+                    }
+                    else
+                    {
+                      <span>—</span>
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+
+  @await Html.PartialAsync("~/Views/Modern/Reporting/_ServiceLineProductTable.cshtml", (m, "not-in-a-line", "Products not in a service line", "Active products that are not linked to any service line.", m.UnassignedProducts, false))
+  @await Html.PartialAsync("~/Views/Modern/Reporting/_ServiceLineProductTable.cshtml", (m, "multiple-lines", "Products in more than one service line", "These products are part of more than one grouping.", m.SharedProducts, true))
+  @await Html.PartialAsync("~/Views/Modern/Reporting/_ServiceLineProductTable.cshtml", (m, "complex-products", "Products in a line and more than one business area", "The product itself spans business areas, so the service line is carrying that complexity.", m.MultiAreaProducts, true))
+  @await Html.PartialAsync("~/Views/Modern/Reporting/_ServiceLineProductTable.cshtml", (m, "in-a-line", "Products in a service line", "Every active product linked to at least one service line.", m.InLineProducts, true))
+</div>

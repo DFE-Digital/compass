@@ -3239,6 +3239,7 @@ public partial class ModernWorkController : Controller
         var project = await _context.Projects.AsNoTracking()
             .Include(p => p.PrimaryContactUser)
             .Include(p => p.ProjectContacts).ThenInclude(pc => pc.User)
+            .Include(p => p.ProjectContacts).ThenInclude(pc => pc.StaffRole)
             .Include(p => p.SeniorResponsibleOfficers).ThenInclude(sro => sro.User)
             .Include(p => p.ServiceOwners).ThenInclude(so => so.User)
             .Include(p => p.PmoContacts).ThenInclude(pmo => pmo.User)
@@ -3431,6 +3432,10 @@ public partial class ModernWorkController : Controller
         ViewBag.WorkItem = work;
         ViewBag.ContactFormKind = formKind;
         ViewBag.ContactRoleTypes = await LoadWorkContactRoleTypesAsync(cancellationToken);
+        ViewBag.StaffRoles = await _context.StaffRoles.AsNoTracking()
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.Family).ThenBy(r => r.SortOrder).ThenBy(r => r.Name)
+            .ToListAsync(cancellationToken);
         ViewBag.ReturnTo = returnTo ?? "detail";
         ViewBag.ReturnToEditPeople = string.Equals(returnTo, "EditPeople", StringComparison.OrdinalIgnoreCase);
         ViewBag.WorkChromeSubPage = true;
@@ -3498,6 +3503,7 @@ public partial class ModernWorkController : Controller
             var project = await _context.Projects.AsNoTracking()
                 .Include(p => p.BudgetOwners)
                 .Include(p => p.ProjectContacts).ThenInclude(pc => pc.User)
+            .Include(p => p.ProjectContacts).ThenInclude(pc => pc.StaffRole)
                 .Include(p => p.SeniorResponsibleOfficers).ThenInclude(sro => sro.User)
                 .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, cancellationToken);
 
@@ -3844,10 +3850,53 @@ public partial class ModernWorkController : Controller
     [HttpPost("{id:int}/contact/add")]
     [HttpPost("/ModernWork/AddContact/{id:int}")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddContactPost(int id, [FromForm] int? ContactRoleTypeId, [FromForm] int AppUserId, [FromForm] string? returnTo, [FromForm] string? CustomRole, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> AddContactPost(int id, [FromForm] int? ContactRoleTypeId, [FromForm] int AppUserId, [FromForm] string? returnTo, [FromForm] string? CustomRole, [FromForm] string? ContactKind, [FromForm] int? StaffRoleId, CancellationToken cancellationToken = default)
     {
         var deny = await EnsureUserCanEditWorkAsync(id, cancellationToken);
         if (deny != null) return deny;
+
+        var outsideCmdb = string.Equals(ContactKind, "staff", StringComparison.OrdinalIgnoreCase);
+        if (outsideCmdb)
+        {
+            if (AppUserId <= 0 || StaffRoleId is null or <= 0)
+            {
+                ModelState.AddModelError("StaffRoleId", "Select a person and a staff role.");
+                return await AddContactViewAsync(id, ContactRoleTypeId, returnTo, null, cancellationToken);
+            }
+
+            var staffRole = await _context.StaffRoles.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == StaffRoleId && r.IsActive, cancellationToken);
+            if (staffRole == null)
+            {
+                ModelState.AddModelError("StaffRoleId", "Select an active staff role.");
+                return await AddContactViewAsync(id, ContactRoleTypeId, returnTo, null, cancellationToken);
+            }
+
+            var staffUser = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == AppUserId, cancellationToken);
+            if (staffUser == null)
+            {
+                ModelState.AddModelError("AppUserId", "Select a valid user from the user picker.");
+                return await AddContactViewAsync(id, ContactRoleTypeId, returnTo, null, cancellationToken);
+            }
+
+            _context.Set<ProjectContact>().Add(new ProjectContact
+            {
+                ProjectId = id,
+                UserId = AppUserId,
+                StaffRoleId = staffRole.Id,
+                Role = staffRole.Name,
+                RoleDescription = staffRole.Family,
+                Name = staffUser.Name ?? staffUser.Email ?? "—",
+                Email = staffUser.Email ?? "",
+                TeamStatus = "outside-cmdb",
+                SortOrder = 20,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync(cancellationToken);
+            TempData["SuccessMessage"] = "Contact added.";
+            return RedirectAfterContactChange(id, returnTo);
+        }
 
         if (AppUserId <= 0 || !ContactRoleTypeId.HasValue || ContactRoleTypeId == 0)
         {

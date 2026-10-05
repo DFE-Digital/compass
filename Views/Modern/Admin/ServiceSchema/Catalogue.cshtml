@@ -1,0 +1,83 @@
+@model Compass.ViewModels.Modern.CatalogueAdminPage
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = Model.Label;
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Label</li>
+}
+<div class="admin-hub">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Service schema",
+   Title = Model.Label,
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Shared definitions used when recording a service schema. Removing an item takes it off this list. Responses already recorded keep their text.</p>")
+ })
+ @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Messages.cshtml")
+ <div class="govuk-grid-row">
+  <div class="govuk-grid-column-one-quarter">
+   @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Nav.cshtml")
+  </div>
+  <div class="govuk-grid-column-three-quarters">
+   <h2 class="govuk-heading-m">Add</h2>
+   <form method="post" action="@Url.Action("SaveCatalogueItem", "ModernAdminServiceSchema", new { kind = Model.Kind })">
+    @Html.AntiForgeryToken()
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="reference">Reference</label>
+     <div class="govuk-hint">Optional. Leave blank and one will be generated.</div>
+     <input class="govuk-input govuk-!-width-one-third" id="reference" name="reference" maxlength="40" />
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="name">Name</label>
+     <input class="govuk-input govuk-!-width-two-thirds" id="name" name="name" maxlength="300" />
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="statement">Statement</label>
+     <textarea class="govuk-textarea" id="statement" name="statement" rows="3"></textarea>
+    </div>
+    @if (Model.LookupValues.Count > 0)
+    {
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="lookupCode">Classification</label>
+     <select class="govuk-select" id="lookupCode" name="lookupCode">
+      <option value="">Not set</option>
+      @foreach (var value in Model.LookupValues)
+      {
+       <option value="@value.Value">@value.Label</option>
+      }
+     </select>
+    </div>
+    }
+    <button class="govuk-button" type="submit">Save</button>
+   </form>
+   <h2 class="govuk-heading-m">Shared items</h2>
+   @if (Model.Items.Count == 0)
+   {
+    <p class="govuk-body">None yet.</p>
+   }
+   else
+   {
+    <table class="govuk-table">
+     <thead class="govuk-table__head"><tr class="govuk-table__row"><th class="govuk-table__header">Reference</th><th class="govuk-table__header">Name</th><th class="govuk-table__header">Action</th></tr></thead>
+     <tbody class="govuk-table__body">
+      @foreach (var item in Model.Items)
+      {
+       <tr class="govuk-table__row">
+        <td class="govuk-table__cell">@item.Reference</td>
+        <td class="govuk-table__cell">@item.Name@if (!string.IsNullOrWhiteSpace(item.Summary)) { <div class="govuk-hint govuk-!-margin-bottom-0">@item.Summary</div> }</td>
+        <td class="govuk-table__cell">
+         <form method="post" action="@Url.Action("RemoveCatalogueItem", "ModernAdminServiceSchema", new { kind = Model.Kind, id = item.Id })" data-confirm-title="Remove @item.Name?" data-confirm-message="This takes it off the list. It cannot be chosen for new responses. Responses already recorded keep their text.">
+          @Html.AntiForgeryToken()
+          <button class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" type="submit">Remove</button>
+         </form>
+        </td>
+       </tr>
+      }
+     </tbody>
+    </table>
+   }
+  </div>
+ </div>
+</div>

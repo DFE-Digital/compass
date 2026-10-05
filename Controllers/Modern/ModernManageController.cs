@@ -7,6 +7,7 @@ using Compass.Services;
 using Compass.Services.Aiss;
 using Compass.Services.Fips;
 using Compass.Services.Modern;
+using Compass.Services.ServiceSchema;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -286,6 +287,15 @@ public partial class ModernManageController : Controller
 
         SetNav("manage-fips-products");
 
+        var schemaEnabled = await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(
+            FeatureCodes.ServiceRegisterSchema, User);
+        if (string.Equals(tab, "schema", StringComparison.OrdinalIgnoreCase))
+        {
+            if (schemaEnabled)
+                return RedirectToAction(nameof(ServiceSchemaProduct), new { id });
+            tab = null;
+        }
+
         var detailTab = NormalizeFipsDetailTab(tab);
 
         var product = await FipsProductDetailLoader.LoadProductAsync(_context, id, detailTab, ct);
@@ -315,6 +325,7 @@ public partial class ModernManageController : Controller
             NavContext = null,
             EditMode = false,
             ActiveDetailTab = detailTab,
+            ShowServiceRegisterSchema = schemaEnabled,
         };
 
         await FipsProductCategorisationPresentation.PopulateAsync(

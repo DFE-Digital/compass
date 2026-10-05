@@ -1,0 +1,94 @@
+@model Compass.ViewModels.Modern.ServiceSchemaLookupDetailPage
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = Model.Name;
+  ViewBag.SchemaNav = "lookups";
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Lookups", "ModernAdminServiceSchema")">Service schema</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Name</li>
+}
+<div class="admin-hub">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Service schema",
+   Title = Model.Name,
+   Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{Model.Description}</p>")
+ })
+ @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Messages.cshtml")
+ <div class="govuk-grid-row">
+  <div class="govuk-grid-column-one-quarter">
+   @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Nav.cshtml")
+  </div>
+  <div class="govuk-grid-column-three-quarters">
+   <h2 class="govuk-heading-m">Add a value</h2>
+   <form method="post" action="@Url.Action("AddLookupValue", "ModernAdminServiceSchema", new { key = Model.Key })">
+    @Html.AntiForgeryToken()
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="code">Code</label>
+     <div class="govuk-hint">Capital letters, numbers and underscores. This cannot be changed later.</div>
+     <input class="govuk-input govuk-!-width-one-third" id="code" name="code" maxlength="80" />
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="label">Label</label>
+     <input class="govuk-input govuk-!-width-one-half" id="label" name="label" maxlength="200" />
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="description">Description</label>
+     <textarea class="govuk-textarea" id="description" name="description" rows="2"></textarea>
+    </div>
+    <button class="govuk-button" type="submit">Add value</button>
+   </form>
+
+   <h2 class="govuk-heading-m">Values</h2>
+   @foreach (var value in Model.Values)
+   {
+    <div class="govuk-summary-card govuk-!-margin-bottom-4">
+     <div class="govuk-summary-card__title-wrapper"><h3 class="govuk-summary-card__title">@value.Code</h3></div>
+     <div class="govuk-summary-card__content">
+      <form method="post" action="@Url.Action("UpdateLookupValue", "ModernAdminServiceSchema", new { id = value.Id })">
+       @Html.AntiForgeryToken()
+       <div class="govuk-form-group">
+        <label class="govuk-label" for="label-@value.Id">Label</label>
+        <input class="govuk-input govuk-!-width-one-half" id="label-@value.Id" name="label" value="@value.Label" maxlength="200" />
+       </div>
+       <div class="govuk-form-group">
+        <label class="govuk-label" for="description-@value.Id">Description</label>
+        <textarea class="govuk-textarea" id="description-@value.Id" name="description" rows="2">@value.Description</textarea>
+       </div>
+       <div class="govuk-form-group">
+        <label class="govuk-label" for="sort-@value.Id">Order</label>
+        <input class="govuk-input govuk-input--width-5" id="sort-@value.Id" name="sortOrder" type="number" value="@value.SortOrder" />
+       </div>
+       <div class="govuk-checkboxes govuk-checkboxes--small">
+        <div class="govuk-checkboxes__item">
+         <input class="govuk-checkboxes__input" id="active-@value.Id" name="isActive" type="checkbox" value="true" @(value.IsActive ? "checked" : null) />
+         <label class="govuk-label govuk-checkboxes__label" for="active-@value.Id">Active for new entries</label>
+        </div>
+       </div>
+       <button class="govuk-button govuk-!-margin-top-3" type="submit">Save</button>
+      </form>
+      @if (Model.Values.Count > 1)
+      {
+       <form method="post" action="@Url.Action("MergeLookupValue", "ModernAdminServiceSchema", new { id = value.Id })" class="govuk-!-margin-top-2">
+        @Html.AntiForgeryToken()
+        <div class="govuk-form-group">
+         <label class="govuk-label" for="merge-@value.Id">Merge into</label>
+         <select class="govuk-select" id="merge-@value.Id" name="targetId">
+          @foreach (var other in Model.Values.Where(v => v.Id != value.Id))
+          {
+           <option value="@other.Id">@other.Label (@other.Code)</option>
+          }
+         </select>
+        </div>
+        <button class="govuk-button govuk-button--warning" type="submit">Merge and deactivate</button>
+       </form>
+      }
+     </div>
+    </div>
+   }
+  </div>
+ </div>
+</div>

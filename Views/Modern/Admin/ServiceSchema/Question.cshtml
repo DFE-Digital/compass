@@ -1,0 +1,93 @@
+@model Compass.ViewModels.Modern.ServiceSchemaQuestionEditPage
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  var creating = Model.Id == 0;
+  ViewData["Title"] = creating ? "Add a service schema question" : "Change a service schema question";
+  ViewBag.SchemaNav = "questions";
+  var action = creating
+    ? Url.Action("CreateQuestion", "ModernAdminServiceSchema")
+    : Url.Action("UpdateQuestion", "ModernAdminServiceSchema", new { id = Model.Id });
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Questions", "ModernAdminServiceSchema")">Service schema</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@(creating ? "Add question" : Model.Heading)</li>
+}
+<div class="admin-hub">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Service schema",
+   Title = creating ? "Add a question" : Model.Heading,
+   Lede = new HtmlString(creating
+     ? "<p class=\"govuk-body govuk-!-margin-bottom-0\">New questions ask for a title and a description.</p>"
+     : "<p class=\"govuk-body govuk-!-margin-bottom-0\">The question key stays the same, so responses already saved keep their place.</p>")
+ })
+ @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Messages.cshtml")
+ <div class="govuk-grid-row">
+  <div class="govuk-grid-column-one-quarter">
+   @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Nav.cshtml")
+  </div>
+  <div class="govuk-grid-column-three-quarters">
+   <form method="post" action="@action">
+    @Html.AntiForgeryToken()
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="section">Area</label>
+     <select class="govuk-select" id="section" name="section">
+      @foreach (var area in Model.Areas)
+      {
+       if (string.Equals(area.Value, Model.AreaKey, StringComparison.OrdinalIgnoreCase))
+       {
+        <option value="@area.Value" selected>@area.Label</option>
+       }
+       else
+       {
+        <option value="@area.Value">@area.Label</option>
+       }
+      }
+     </select>
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="heading">Question</label>
+     <input class="govuk-input" id="heading" name="heading" type="text" value="@Model.Heading" />
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="help">Help text</label>
+     <textarea class="govuk-textarea" id="help" name="help" rows="3">@Model.Help</textarea>
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="titleLabel">Title label</label>
+     <div class="govuk-hint">The label on the name field when someone adds a response.</div>
+     <input class="govuk-input" id="titleLabel" name="titleLabel" type="text" value="@Model.TitleLabel" />
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="narrativeLabel">Description label</label>
+     <input class="govuk-input" id="narrativeLabel" name="narrativeLabel" type="text" value="@Model.NarrativeLabel" />
+    </div>
+    @if (!creating)
+    {
+     <div class="govuk-form-group">
+      <label class="govuk-label" for="sortOrder">Order</label>
+      <input class="govuk-input govuk-input--width-5" id="sortOrder" name="sortOrder" type="number" value="@Model.SortOrder" />
+     </div>
+    }
+    <div class="govuk-form-group">
+     <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+      <div class="govuk-checkboxes__item">
+       <input class="govuk-checkboxes__input" id="isActive" name="isActive" type="checkbox" value="true" @(Model.IsActive ? "checked" : null) />
+       <label class="govuk-label govuk-checkboxes__label" for="isActive">Show this question on service schema records</label>
+      </div>
+     </div>
+    </div>
+    <button class="govuk-button" type="submit">@(creating ? "Add question" : "Save question")</button>
+   </form>
+   @if (!creating && !Model.IsBuiltIn)
+   {
+    <form method="post" action="@Url.Action("RemoveQuestion", "ModernAdminServiceSchema", new { id = Model.Id })" data-confirm-title="Remove @Model.Heading?" data-confirm-message="@(Model.HasResponses ? "This question has responses, so it will be hidden. Those responses stay stored." : "This removes the question from the service schema.")">
+     @Html.AntiForgeryToken()
+     <button class="govuk-button govuk-button--warning" type="submit">Remove question</button>
+    </form>
+   }
+  </div>
+ </div>
+</div>
