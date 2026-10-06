@@ -35,6 +35,7 @@ public partial class ModernReportingController : Controller
     private readonly ExecutiveReportService _executiveReport;
     private readonly IModernWorkService _modernWork;
     private readonly IWorkScopedExcelExportService _workScopedExcelExport;
+    private readonly IGdsReturnExportService _gdsReturnExport;
     private readonly IConfiguration _configuration;
     private readonly IPermissionService _permissionService;
     private readonly ILogger<ModernReportingController> _logger;
@@ -54,6 +55,7 @@ public partial class ModernReportingController : Controller
         ExecutiveReportService executiveReport,
         IModernWorkService modernWork,
         IWorkScopedExcelExportService workScopedExcelExport,
+        IGdsReturnExportService gdsReturnExport,
         IConfiguration configuration,
         IPermissionService permissionService,
         ILogger<ModernReportingController> logger)
@@ -72,6 +74,7 @@ public partial class ModernReportingController : Controller
         _executiveReport = executiveReport;
         _modernWork = modernWork;
         _workScopedExcelExport = workScopedExcelExport;
+        _gdsReturnExport = gdsReturnExport;
         _configuration = configuration;
         _permissionService = permissionService;
         _logger = logger;
