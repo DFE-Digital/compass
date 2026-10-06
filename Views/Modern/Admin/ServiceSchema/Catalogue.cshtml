@@ -13,7 +13,7 @@
  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
    Caption = "Service schema",
    Title = Model.Label,
-   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Shared definitions used when recording a service schema. Removing an item takes it off this list. Responses already recorded keep their text.</p>")
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Shared definitions used when recording a service schema. Items added here are Active. Items added from a service record are New, and show who added them and which service they were added against. Removing an item takes it off this list. Responses already recorded keep their text.</p>")
  })
  @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Messages.cshtml")
  <div class="govuk-grid-row">
@@ -60,7 +60,7 @@
    else
    {
     <table class="govuk-table">
-     <thead class="govuk-table__head"><tr class="govuk-table__row"><th class="govuk-table__header">Reference</th><th class="govuk-table__header">Name</th><th class="govuk-table__header">Action</th></tr></thead>
+     <thead class="govuk-table__head"><tr class="govuk-table__row"><th class="govuk-table__header">Reference</th><th class="govuk-table__header">Name</th><th class="govuk-table__header">Status</th><th class="govuk-table__header">Added by</th><th class="govuk-table__header">Service</th><th class="govuk-table__header">Action</th></tr></thead>
      <tbody class="govuk-table__body">
       @foreach (var item in Model.Items)
       {
@@ -68,10 +68,48 @@
         <td class="govuk-table__cell">@item.Reference</td>
         <td class="govuk-table__cell">@item.Name@if (!string.IsNullOrWhiteSpace(item.Summary)) { <div class="govuk-hint govuk-!-margin-bottom-0">@item.Summary</div> }</td>
         <td class="govuk-table__cell">
-         <form method="post" action="@Url.Action("RemoveCatalogueItem", "ModernAdminServiceSchema", new { kind = Model.Kind, id = item.Id })" data-confirm-title="Remove @item.Name?" data-confirm-message="This takes it off the list. It cannot be chosen for new responses. Responses already recorded keep their text.">
-          @Html.AntiForgeryToken()
-          <button class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" type="submit">Remove</button>
-         </form>
+         @if (string.Equals(item.StatusCode, "NEW", StringComparison.OrdinalIgnoreCase))
+         {
+          <strong class="govuk-tag govuk-tag--blue">New</strong>
+         }
+         else if (string.Equals(item.StatusCode, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+         {
+          <strong class="govuk-tag govuk-tag--grey">Active</strong>
+         }
+         else
+         {
+          @item.StatusCode
+         }
+        </td>
+        <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(item.AddedBy) ? "—" : item.AddedBy)</td>
+        <td class="govuk-table__cell">
+         @if (item.AddedAgainstProductId is Guid productId && !string.IsNullOrWhiteSpace(item.AddedAgainstProductTitle))
+         {
+          <a class="govuk-link" href="@Url.Action("FipsProduct", "ModernManage", new { id = productId })">@item.AddedAgainstProductTitle</a>
+         }
+         else if (item.AddedAgainstProductId != null)
+         {
+          <span>Service no longer on the register</span>
+         }
+         else
+         {
+          <span>—</span>
+         }
+        </td>
+        <td class="govuk-table__cell">
+         <div class="admin-catalogue-actions">
+          @if (string.Equals(item.StatusCode, "NEW", StringComparison.OrdinalIgnoreCase))
+          {
+           <form method="post" action="@Url.Action("ApproveCatalogueItem", "ModernAdminServiceSchema", new { kind = Model.Kind, id = item.Id })">
+            @Html.AntiForgeryToken()
+            <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" type="submit">Approve</button>
+           </form>
+          }
+          <form method="post" action="@Url.Action("RemoveCatalogueItem", "ModernAdminServiceSchema", new { kind = Model.Kind, id = item.Id })" data-confirm-title="Remove @item.Name?" data-confirm-message="This takes it off the list. It cannot be chosen for new responses. Responses already recorded keep their text.">
+           @Html.AntiForgeryToken()
+           <button class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" type="submit">Remove</button>
+          </form>
+         </div>
         </td>
        </tr>
       }

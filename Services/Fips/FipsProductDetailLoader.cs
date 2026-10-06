@@ -23,7 +23,7 @@ public static class FipsProductDetailLoader
         string.Equals(tab, "accessibility", StringComparison.OrdinalIgnoreCase);
 
     public static bool NeedsAissSummary(string tab) =>
-        tab is "information" or "accessibility";
+        tab is "information" or "accessibility" or "additional";
 
     public static async Task<CMDBProduct?> LoadProductAsync(
         CompassDbContext db,

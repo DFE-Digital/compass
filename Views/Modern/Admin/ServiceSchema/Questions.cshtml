@@ -14,7 +14,7 @@
  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
    Caption = "Administration",
    Title = "Service schema",
-   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Change the questions people see on a service schema record, and the order they appear in.</p>")
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Change section titles, the questions people see on a service census record, and the order they appear in.</p>")
  })
  @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Messages.cshtml")
  <div class="govuk-grid-row">
@@ -26,18 +26,34 @@
     @Html.AntiForgeryToken()
     @foreach (var area in Model.Areas)
     {
-     <h2 class="govuk-heading-m">@area.Name</h2>
+     <section class="govuk-!-margin-bottom-6" aria-labelledby="area-heading-@area.Key">
+     <h2 class="govuk-heading-m" id="area-heading-@area.Key">@(string.IsNullOrWhiteSpace(area.Name) ? area.Key : area.Name)@(area.IsActive ? "" : " (Hidden)")</h2>
      <div class="govuk-form-group">
-      <label class="govuk-label" for="area-order-@area.Key">Area order</label>
+      <label class="govuk-label" for="area-name-@area.Key">Section title</label>
+      <div class="govuk-hint">Shown in the service census navigation and headings. For example, change Ownership to People and contacts.</div>
+      <input class="govuk-input govuk-!-width-two-thirds" id="area-name-@area.Key" name="areaName[@area.Key]" type="text" value="@area.Name" maxlength="200" required />
+     </div>
+     <div class="govuk-form-group">
+      <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+       <div class="govuk-checkboxes__item">
+        <input class="govuk-checkboxes__input" id="area-shown-@area.Key" name="areaShown" type="checkbox" value="@area.Key" @(area.IsActive ? "checked" : null) />
+        <label class="govuk-label govuk-checkboxes__label" for="area-shown-@area.Key">Show this section on product records</label>
+        <div class="govuk-hint govuk-checkboxes__hint">Turn off to hide the section and its questions from the service census.</div>
+       </div>
+      </div>
+     </div>
+     <div class="govuk-form-group">
+      <label class="govuk-label" for="area-order-@area.Key">Section order</label>
       <input class="govuk-input govuk-input--width-5" id="area-order-@area.Key" name="areaOrder[@area.Key]" type="number" value="@area.SortOrder" />
      </div>
      <div class="govuk-form-group">
-      <label class="govuk-label" for="area-name-@area.Key">Area name</label>
-      <input class="govuk-input" id="area-name-@area.Key" name="areaName[@area.Key]" type="text" value="@area.Name" />
+      <label class="govuk-label" for="area-summary-@area.Key">Section description</label>
+      <textarea class="govuk-textarea" id="area-summary-@area.Key" name="areaSummary[@area.Key]" rows="2">@area.Summary</textarea>
      </div>
      <div class="govuk-form-group">
-      <label class="govuk-label" for="area-summary-@area.Key">Area description</label>
-      <textarea class="govuk-textarea" id="area-summary-@area.Key" name="areaSummary[@area.Key]" rows="2">@area.Summary</textarea>
+      <label class="govuk-label" for="area-help-@area.Key">Help panel</label>
+      <div class="govuk-hint">Shown in the help blade when someone opens help for this section. Markdown is supported.</div>
+      <textarea class="govuk-textarea" id="area-help-@area.Key" name="areaHelpPanel[@area.Key]" rows="4">@area.HelpPanel</textarea>
      </div>
      @if (area.Questions.Count == 0)
      {
@@ -50,6 +66,7 @@
         <tr class="govuk-table__row">
          <th scope="col" class="govuk-table__header">Order</th>
          <th scope="col" class="govuk-table__header">Question</th>
+         <th scope="col" class="govuk-table__header">Answer</th>
          <th scope="col" class="govuk-table__header">Shown</th>
          <th scope="col" class="govuk-table__header">Action</th>
         </tr>
@@ -62,6 +79,7 @@
            <input class="govuk-input govuk-input--width-5" name="questionOrder[@question.Id]" type="number" value="@question.SortOrder" aria-label="Order for @question.Heading" />
           </td>
           <td class="govuk-table__cell">@question.Heading</td>
+          <td class="govuk-table__cell">@question.ResponseLabel</td>
           <td class="govuk-table__cell">@(question.IsActive ? "Yes" : "Hidden")</td>
           <td class="govuk-table__cell"><a class="govuk-link" href="@Url.Action("Question", "ModernAdminServiceSchema", new { id = question.Id })">Change</a></td>
          </tr>
@@ -71,12 +89,52 @@
      }
      @if (area.Key != "overview")
      {
-      <p class="govuk-body"><a class="govuk-link" href="@Url.Action("QuestionCreate", "ModernAdminServiceSchema", new { section = area.Key })">Add a question to @area.Name</a></p>
+      <p class="govuk-body"><a class="govuk-link" href="@Url.Action("QuestionCreate", "ModernAdminServiceSchema", new { section = area.Key })">Add a question to @(string.IsNullOrWhiteSpace(area.Name) ? area.Key : area.Name)</a></p>
      }
      <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
+     </section>
     }
-    <button class="govuk-button" type="submit">Save order</button>
+    <button class="govuk-button" type="submit">Save changes</button>
    </form>
+   @if (Model.NewItems.Count > 0)
+   {
+    <h2 class="govuk-heading-m">Added from a service record</h2>
+    <p class="govuk-body">These were added from an autocomplete that belongs to one question. Shared catalogues list their own new items on the catalogue page.</p>
+    <table class="govuk-table">
+     <thead class="govuk-table__head">
+      <tr class="govuk-table__row">
+       <th scope="col" class="govuk-table__header">Name</th>
+       <th scope="col" class="govuk-table__header">Question</th>
+       <th scope="col" class="govuk-table__header">Added by</th>
+       <th scope="col" class="govuk-table__header">Service</th>
+      </tr>
+     </thead>
+     <tbody class="govuk-table__body">
+      @foreach (var item in Model.NewItems)
+      {
+       <tr class="govuk-table__row">
+        <td class="govuk-table__cell">@item.Name</td>
+        <td class="govuk-table__cell">@item.Summary</td>
+        <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(item.AddedBy) ? "—" : item.AddedBy)</td>
+        <td class="govuk-table__cell">
+         @if (item.AddedAgainstProductId is Guid productId && !string.IsNullOrWhiteSpace(item.AddedAgainstProductTitle))
+         {
+          <a class="govuk-link" href="@Url.Action("FipsProduct", "ModernManage", new { id = productId })">@item.AddedAgainstProductTitle</a>
+         }
+         else if (item.AddedAgainstProductId != null)
+         {
+          <span>Service no longer on the register</span>
+         }
+         else
+         {
+          <span>—</span>
+         }
+        </td>
+       </tr>
+      }
+     </tbody>
+    </table>
+   }
   </div>
  </div>
 </div>

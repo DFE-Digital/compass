@@ -237,6 +237,9 @@ public class CensusCatalogueItem
     [Required, MaxLength(40)]
     public string StatusCode { get; set; } = "ACTIVE";
 
+    /// <summary>Service register product the item was first added from. Empty when an admin added it.</summary>
+    public Guid? AddedAgainstProductId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     [MaxLength(255)]
@@ -326,7 +329,7 @@ public class CensusSectionDeclaration
 
     public CMDBProduct Product { get; set; } = null!;
 
-    [Required, MaxLength(40)]
+    [Required, MaxLength(80)]
     public string SectionKey { get; set; } = string.Empty;
 
     [Required, MaxLength(40)]
@@ -358,7 +361,13 @@ public class ServiceSchemaAreaConfig
     [MaxLength(4000)]
     public string Summary { get; set; } = string.Empty;
 
+    /// <summary>Longer guidance shown in the product-page help blade for this section.</summary>
+    public string? HelpPanel { get; set; }
+
     public int SortOrder { get; set; }
+
+    /// <summary>When false, the section is hidden on product records.</summary>
+    public bool IsActive { get; set; } = true;
 }
 
 /// <summary>Admin-managed schema question. The key stays stable so saved responses keep their place.</summary>
@@ -378,11 +387,27 @@ public class ServiceSchemaQuestion
     [MaxLength(4000)]
     public string Help { get; set; } = string.Empty;
 
+    /// <summary>Longer guidance shown in the product-page help blade for this question.</summary>
+    public string? HelpPanel { get; set; }
+
     [Required, MaxLength(200)]
     public string TitleLabel { get; set; } = string.Empty;
 
     [Required, MaxLength(200)]
     public string NarrativeLabel { get; set; } = string.Empty;
+
+    /// <summary>text, lookup, catalogue, choice, or products. Null until the built-in default is copied in.</summary>
+    [MaxLength(20)]
+    public string? ResponseMode { get; set; }
+
+    [MaxLength(40)]
+    public string? LookupSource { get; set; }
+
+    [MaxLength(40)]
+    public string? CatalogueKind { get; set; }
+
+    [MaxLength(4000)]
+    public string? ChoiceOptions { get; set; }
 
     public int SortOrder { get; set; }
 

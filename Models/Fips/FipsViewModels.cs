@@ -198,7 +198,7 @@ public class FipsProductDetailViewModel
     /// <summary>True when the information tab shows the editable form (named contacts or operations console users on manage pages).</summary>
     public bool EditMode { get; set; }
 
-    /// <summary><c>information</c>, <c>history</c>, <c>risks</c>, <c>issues</c>, <c>assumptions</c>, <c>dependencies</c>, <c>accessibility</c>, <c>assurance</c>, <c>schema</c>, <c>work</c>, <c>strategic-alignment</c>, or <c>performance</c>.</summary>
+    /// <summary><c>information</c>, <c>history</c>, <c>risks</c>, <c>issues</c>, <c>assumptions</c>, <c>dependencies</c>, <c>accessibility</c>, <c>assurance</c>, <c>additional</c>, <c>work</c>, <c>strategic-alignment</c>, or <c>performance</c>.</summary>
     public string ActiveDetailTab { get; set; } = "information";
 
     /// <summary>Admin feature <see cref="FeatureCodes.ServiceRegisterSchema"/> is on for this user.</summary>
@@ -209,6 +209,18 @@ public class FipsProductDetailViewModel
 
     /// <summary>Service census for this register entry, when the schema feature is on and that section is open.</summary>
     public ServiceSchemaProductPage? ServiceSchema { get; set; }
+
+    /// <summary>Additional information (service census) open on this register entry.</summary>
+    public ServiceSchemaWorkspacePage? AdditionalInformation { get; set; }
+
+    /// <summary>Completed service census sections for the side nav completeness indicator.</summary>
+    public int ServiceCensusSectionsComplete { get; set; }
+
+    /// <summary>Total service census sections for the side nav completeness indicator.</summary>
+    public int ServiceCensusSectionCount { get; set; }
+
+    /// <summary>Signed-in user is a product contact or named in additional responsibilities, so show the census prompt.</summary>
+    public bool ShowServiceCensusPrompt { get; set; }
 
     /// <summary>Strategic alignment summary for the product detail tab.</summary>
     public FipsProductStrategicAlignmentPanel? StrategicAlignment { get; set; }

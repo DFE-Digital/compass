@@ -347,6 +347,56 @@ public static class ServiceSchemaWorkspace
         };
     }
 
+    public static async Task<(int SectionsComplete, int SectionCount)> LoadProgressAsync(
+        CompassDbContext db,
+        Guid productId,
+        CancellationToken ct)
+    {
+        var layout = await ServiceSchemaLayout.LoadAsync(db, ct);
+        var areas = layout.Areas.Where(a => a.Key != "overview").ToList();
+        var sectionCount = areas.Count + 1; // + product details
+
+        var domainKeys = await db.CensusEntries.AsNoTracking()
+            .Where(e => e.ProductId == productId && e.RemovedAt == null)
+            .Select(e => e.DomainKey)
+            .ToListAsync(ct);
+        var declarations = await db.CensusSectionDeclarations.AsNoTracking()
+            .Where(d => d.ProductId == productId)
+            .Select(d => new { d.SectionKey, d.StatusCode })
+            .ToListAsync(ct);
+        var nothingToRecord = declarations
+            .Where(d => IsClosingStatus(d.StatusCode))
+            .Select(d => layout.FindTopic(d.SectionKey)?.Key ?? d.SectionKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var topicsMarkedComplete = declarations
+            .Where(d => IsSectionCompleteStatus(d.StatusCode))
+            .Select(d => layout.FindTopic(d.SectionKey)?.Key ?? d.SectionKey)
+            .Where(key => !string.IsNullOrWhiteSpace(key) && !key.StartsWith(SectionCompletePrefix, StringComparison.OrdinalIgnoreCase))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+        var productDetailsComplete = declarations.Any(d =>
+            ServiceSchemaAreas.IsProductDetails(d.SectionKey) && IsSectionCompleteStatus(d.StatusCode));
+        var registerContactCount = areas.Any(a => a.Topics.Any(t => ServiceSchemaAreas.IsServiceResponsibility(t.Key)))
+            ? await db.CMDBProductContacts.AsNoTracking().CountAsync(c => c.CMDBProductId == productId, ct)
+            : 0;
+
+        var complete = productDetailsComplete ? 1 : 0;
+        foreach (var area in areas)
+        {
+            if (area.Topics.Count == 0)
+                continue;
+            var allRecorded = area.Topics.All(topic =>
+            {
+                var started = domainKeys.Any(domain => ServiceSchemaAreas.DomainMatches(topic, domain))
+                    || (ServiceSchemaAreas.IsServiceResponsibility(topic.Key) && registerContactCount > 0);
+                return TopicProgress(started, nothingToRecord.Contains(topic.Key), topicsMarkedComplete.Contains(topic.Key)) == "recorded";
+            });
+            if (allRecorded)
+                complete++;
+        }
+
+        return (complete, sectionCount);
+    }
+
     public static async Task<ServiceSchemaWorkspacePage?> LoadRecordAsync(
         CompassDbContext db,
         Guid productId,
@@ -370,23 +420,37 @@ public static class ServiceSchemaWorkspace
                 UserGroupCount = p.UserGroups.Count(),
                 ChannelCount = p.Channels.Count(),
                 HasOwner = p.Contacts.Any(c => c.FipsContactRole.Name == "Service Owner"),
-                HasSro = p.Contacts.Any(c => c.FipsContactRole.Name == "Senior Responsible Officer")
+                HasSro = p.Contacts.Any(c => c.FipsContactRole.Name == "Senior Responsible Officer"),
+                HasDescription = p.UserDescription != null && p.UserDescription != "",
+                HasDirectorate = p.Directorates.Any(),
+                HasBusinessArea = p.BusinessAreas.Any(),
+                HasType = p.Types.Count() > 0,
+                HasChannel = p.Channels.Count() > 0,
+                HasUrl = p.ProductURL != null && p.ProductURL != "",
+                HasCategorisation = p.CategorisationItems.Any()
             })
             .FirstOrDefaultAsync(ct);
         if (product == null)
             return null;
 
         var layout = await ServiceSchemaLayout.LoadAsync(db, ct);
-        var requested = layout.FindTopic(topicKey);
-        var area = layout.Find(areaKey);
+        var auditRequested = ServiceSchemaAreas.IsAudit(areaKey);
+        var productDetailsRequested = ServiceSchemaAreas.IsProductDetails(areaKey);
+        var requested = auditRequested || productDetailsRequested ? null : layout.FindTopic(topicKey);
+        var area = auditRequested || productDetailsRequested
+            ? null
+            : layout.Find(areaKey);
         if (requested != null)
             area = layout.AreaFor(requested.Key) ?? area;
         var entries = await db.CensusEntries.AsNoTracking()
             .Where(e => e.ProductId == productId && e.RemovedAt == null)
             .OrderBy(e => e.CreatedAt)
             .ToListAsync(ct);
+        var registerContactCount = await db.CMDBProductContacts.AsNoTracking()
+            .CountAsync(c => c.CMDBProductId == productId, ct);
+        var activeTopics = area?.Topics ?? Array.Empty<ServiceSchemaTopic>();
         var registerContacts = new List<ServiceSchemaEntryRow>();
-        if (area.Topics.Any(t => t.Key == "responsibility"))
+        if (activeTopics.Any(t => ServiceSchemaAreas.IsServiceResponsibility(t.Key)))
         {
             var contacts = await db.CMDBProductContacts.AsNoTracking()
                 .Where(c => c.CMDBProductId == productId)
@@ -401,16 +465,23 @@ public static class ServiceSchemaWorkspace
                 FromRegister = true
             }).ToList();
         }
-        var lookupSources = area.Topics.Select(t => t.LookupSource);
+        var lookupSources = activeTopics.Select(t => t.LookupSource);
         var lookups = await ServiceSchemaAdminLookups.LoadAsync(db, lookupSources, ct);
-        var kinds = area.Topics.Where(t => t.CatalogueKind != null).Select(t => t.CatalogueKind!).Distinct().ToList();
+        var kinds = activeTopics.Where(t => t.CatalogueKind != null).Select(t => t.CatalogueKind!).Distinct().ToList();
         var catalogue = kinds.Count == 0
             ? new List<CensusCatalogueItem>()
             : await db.CensusCatalogueItems.AsNoTracking()
-                .Where(c => kinds.Contains(c.Kind) && c.RemovedAt == null && c.StatusCode == "ACTIVE")
+                .Where(c => kinds.Contains(c.Kind) && c.RemovedAt == null && (c.StatusCode == "ACTIVE" || c.StatusCode == "NEW"))
                 .OrderBy(c => c.Name)
                 .ToListAsync(ct);
         var catalogueNames = catalogue.ToDictionary(c => c.Id, c => c.Name);
+        var ownProvidedApis = entries
+            .Where(e => e.CatalogueItemId != null && string.Equals(e.DomainKey, ServiceSchemaAreas.ApiProvideKey, StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.CatalogueItemId!.Value)
+            .ToHashSet();
+        var apiProviders = area == null
+            ? new Dictionary<Guid, string>()
+            : await ApiProviderLabelsAsync(db, area, productId, ct);
 
         var declarations = await db.CensusSectionDeclarations.AsNoTracking()
             .Where(d => d.ProductId == productId)
@@ -420,25 +491,85 @@ public static class ServiceSchemaWorkspace
             .Where(d => IsClosingStatus(d.StatusCode))
             .Select(d => layout.FindTopic(d.SectionKey)?.Key ?? d.SectionKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var coveredTopics = entries
-            .Select(e => layout.FindTopic(e.DomainKey)?.Key)
-            .Where(key => key != null)
+        var topicsMarkedComplete = declarations
+            .Where(d => IsSectionCompleteStatus(d.StatusCode))
+            .Select(d => layout.FindTopic(d.SectionKey)?.Key ?? d.SectionKey)
+            .Where(key => !string.IsNullOrWhiteSpace(key) && !key.StartsWith(SectionCompletePrefix, StringComparison.OrdinalIgnoreCase))
             .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
-        coveredTopics.UnionWith(nothingToRecord);
-        if (registerContacts.Count > 0)
-            coveredTopics.Add("responsibility");
+        var productDetailsMarkedComplete = declarations.Any(d =>
+            ServiceSchemaAreas.IsProductDetails(d.SectionKey) && IsSectionCompleteStatus(d.StatusCode));
+        var productDetailsHasInformation = product.HasDescription
+            || product.HasPhase
+            || product.HasDirectorate
+            || product.HasBusinessArea
+            || product.HasChannel
+            || product.HasType
+            || product.HasUrl
+            || product.HasCategorisation;
+        var productDetailsState = TopicProgress(productDetailsHasInformation, false, productDetailsMarkedComplete);
+        var productDetailsNav = new ServiceSchemaAreaNav
+        {
+            Key = ServiceSchemaAreas.ProductDetailsKey,
+            Name = "Product details",
+            Summary = "Check and update the core product information used on the service register.",
+            HelpPanel = "These fields come from the product Details tab. User groups are recorded in the service census, so they are not listed here. Mark this section complete when the product details are accurate.",
+            Group = "Sections",
+            State = productDetailsState,
+            StateLabel = ProgressLabel(productDetailsState),
+            TopicsRecorded = productDetailsState == "recorded" ? 1 : 0,
+            TopicCount = 1,
+            Topics = []
+        };
         var nav = layout.Areas.Select(item =>
         {
-            var recorded = item.Topics.Any(t => coveredTopics.Contains(t.Key));
+            var topicTotal = item.Topics.Count;
+            var topicNav = item.Topics.Select(topic =>
+            {
+                var started = TopicStarted(topic, entries, registerContactCount);
+                var itemCount = entries.Count(e => ServiceSchemaAreas.DomainMatches(topic, e.DomainKey));
+                if (ServiceSchemaAreas.IsServiceResponsibility(topic.Key))
+                    itemCount += registerContactCount;
+                var state = TopicProgress(
+                    started,
+                    nothingToRecord.Contains(topic.Key),
+                    topicsMarkedComplete.Contains(topic.Key));
+                return new ServiceSchemaTopicNav
+                {
+                    Key = topic.Key,
+                    Name = ServiceSchemaAreas.ShortTopicName(topic),
+                    State = state,
+                    StateLabel = ProgressLabel(state),
+                    ItemCount = itemCount
+                };
+            }).ToList();
+            var topicDone = topicNav.Count(t => t.State == "recorded");
+            var areaState = item.Key == "overview" || topicTotal == 0
+                ? ""
+                : topicNav.All(t => t.State == "recorded") ? "recorded"
+                : topicNav.All(t => t.State == "empty") ? "empty"
+                : "partial";
             return new ServiceSchemaAreaNav
             {
                 Key = item.Key,
-                Name = item.Name,
+                Name = ServiceSchemaAreas.ShortAreaName(item),
+                Summary = item.Summary,
+                HelpPanel = item.HelpPanel,
                 Group = item.Group,
-                State = item.Key == "overview" ? "" : recorded ? "recorded" : "empty",
-                StateLabel = item.Key == "overview" ? "" : recorded ? "Recorded" : "Not recorded"
+                State = areaState,
+                StateLabel = string.IsNullOrEmpty(areaState) ? "" : ProgressLabel(areaState),
+                TopicsRecorded = topicDone,
+                TopicCount = topicTotal,
+                Topics = topicNav
             };
         }).ToList();
+        var overviewIndex = nav.FindIndex(n => string.Equals(n.Key, "overview", StringComparison.OrdinalIgnoreCase));
+        if (overviewIndex >= 0)
+        {
+            nav[overviewIndex].Name = "Task summary";
+            nav.Insert(overviewIndex + 1, productDetailsNav);
+        }
+        else
+            nav.Insert(0, productDetailsNav);
         var scored = nav.Where(n => n.Key != "overview").ToList();
         var addressed = scored.Count(n => n.State == "recorded");
         var names = product.Areas.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -446,6 +577,11 @@ public static class ServiceSchemaWorkspace
             + (product.UserGroupCount > 0 ? 1 : 0) + (product.ChannelCount > 0 ? 1 : 0)
             + (product.HasOwner ? 1 : 0) + (product.HasSro ? 1 : 0);
 
+        var activeIsProductDetails = productDetailsRequested;
+        var activeIsAudit = auditRequested;
+        var auditRows = activeIsAudit
+            ? await ServiceSchemaAudit.LoadAsync(db, productId, ct)
+            : new List<ServiceSchemaAuditRow>();
         return new ServiceSchemaWorkspacePage
         {
             ProductId = product.Id,
@@ -460,40 +596,80 @@ public static class ServiceSchemaWorkspace
             SectionCount = scored.Count,
             SchemaPercent = Percent(addressed, scored.Count),
             CanEdit = canEdit,
-            ActiveArea = area.Key,
-            ActiveTopic = requested?.Key ?? "",
-            AreaName = area.Name,
-            AreaGroup = area.Group,
-            AreaSummary = area.Summary,
+            ActiveArea = activeIsAudit ? ServiceSchemaAreas.AuditKey
+                : activeIsProductDetails ? ServiceSchemaAreas.ProductDetailsKey
+                : area!.Key,
+            SectionComplete = activeIsProductDetails && productDetailsMarkedComplete,
+            ActiveTopic = activeIsAudit || activeIsProductDetails ? "" : (requested?.Key ?? ""),
+            AreaName = activeIsAudit ? "Audit"
+                : activeIsProductDetails ? productDetailsNav.Name
+                : string.Equals(area!.Key, "overview", StringComparison.OrdinalIgnoreCase) ? "Task summary"
+                : area!.Name,
+            AreaGroup = activeIsAudit ? "Audit"
+                : activeIsProductDetails ? productDetailsNav.Group
+                : area!.Group,
+            AreaSummary = activeIsAudit
+                ? "Changes recorded for this product’s service census."
+                : activeIsProductDetails ? productDetailsNav.Summary
+                : area!.Summary,
+            AreaHelpPanel = activeIsAudit
+                ? "Shows adds, removals, status changes and in-place updates for census answers on this product."
+                : activeIsProductDetails ? productDetailsNav.HelpPanel
+                : area!.HelpPanel,
             Areas = nav,
-            Topics = area.Topics.Select(topic =>
+            ProductDetails = new ServiceSchemaProductDetailsPanel
+            {
+                MarkedComplete = productDetailsMarkedComplete,
+                HasInformation = productDetailsHasInformation,
+                State = productDetailsState,
+                StateLabel = ProgressLabel(productDetailsState)
+            },
+            AuditRows = auditRows,
+            Topics = activeIsAudit || activeIsProductDetails
+                ? new List<ServiceSchemaTopicBlock>()
+                : activeTopics.Select(topic =>
             {
                 var choices = topic.Mode switch
                 {
                     "lookup" => Choices(lookups, topic.LookupSource),
                     "catalogue" => catalogue.Where(c => string.Equals(c.Kind, topic.CatalogueKind, StringComparison.OrdinalIgnoreCase))
-                        .Select(c => new ServiceSchemaChoice { Value = c.Id.ToString(), Label = c.Name }).ToList(),
+                        .Where(c => topic.Key != ServiceSchemaAreas.ApiUseKey || !ownProvidedApis.Contains(c.Id))
+                        .Select(c => new ServiceSchemaChoice
+                        {
+                            Value = c.Id.ToString(),
+                            Label = CatalogueChoiceLabel(c, topic.Key, apiProviders)
+                        }).ToList(),
+                    "choice" or "yes-choice" => topic.ChoiceOptions.ToList(),
                     _ => new List<ServiceSchemaChoice>()
                 };
                 var matched = entries.Where(e => ServiceSchemaAreas.DomainMatches(topic, e.DomainKey)).ToList();
                 var declaredNone = nothingToRecord.Contains(topic.Key);
-                var recorded = matched.Count > 0 || declaredNone || (topic.Key == "responsibility" && registerContacts.Count > 0);
+                var topicComplete = topicsMarkedComplete.Contains(topic.Key);
+                var started = matched.Count > 0 || (ServiceSchemaAreas.IsServiceResponsibility(topic.Key) && registerContacts.Count > 0);
+                var progress = TopicProgress(started, declaredNone, topicComplete);
                 var topicEntries = matched
                     .Select(e => new ServiceSchemaEntryRow
                     {
                         Id = e.Id,
                         Title = CatalogueTitle(e, catalogueNames, lookups),
                         Narrative = e.Narrative,
-                        Meta = PersonMeta(e),
-                        Url = e.ExternalUrl
+                        Meta = topic.Key == ServiceSchemaAreas.ApiUseKey && e.CatalogueItemId is Guid apiId && apiProviders.TryGetValue(apiId, out var providedBy)
+                            ? providedBy
+                            : PersonMeta(e),
+                        Url = e.ExternalUrl,
+                        AnswerCode = e.LookupCode,
+                        CategoryCode = e.SecondaryLookupCode,
+                        LinkedProductId = Guid.TryParse(e.LookupCode, out var linkedId) ? linkedId : null
                     }).ToList();
-                if (topic.Key == "responsibility")
-                    topicEntries.InsertRange(0, registerContacts);
+                if (ServiceSchemaAreas.IsServiceResponsibility(topic.Key))
+                    topicEntries = registerContacts.ToList();
                 return new ServiceSchemaTopicBlock
                 {
                     Key = topic.Key,
                     Heading = topic.Heading,
+                    NavLabel = ServiceSchemaAreas.ShortTopicName(topic),
                     Help = topic.Help,
+                    HelpPanel = topic.HelpPanel,
                     TitleLabel = topic.TitleLabel,
                     NarrativeLabel = topic.NarrativeLabel,
                     Mode = topic.Mode,
@@ -503,13 +679,64 @@ public static class ServiceSchemaWorkspace
                     CapturePerson = topic.CapturePerson,
                     CaptureUrl = topic.CaptureUrl,
                     Choices = choices,
-                    State = recorded ? "recorded" : "empty",
-                    StateLabel = recorded ? "Recorded" : "Not recorded",
+                    State = progress,
+                    StateLabel = ProgressLabel(progress),
                     NothingToRecord = declaredNone,
+                    TopicComplete = topicComplete,
                     Entries = topicEntries
                 };
             }).ToList()
         };
+    }
+
+    private static string CatalogueChoiceLabel(
+        CensusCatalogueItem item,
+        string topicKey,
+        IReadOnlyDictionary<Guid, string> apiProviders)
+    {
+        var name = string.Equals(item.StatusCode, "NEW", StringComparison.OrdinalIgnoreCase)
+            ? item.Name + " (New)"
+            : item.Name;
+        if (string.Equals(topicKey, ServiceSchemaAreas.ApiUseKey, StringComparison.OrdinalIgnoreCase)
+            && apiProviders.TryGetValue(item.Id, out var providedBy))
+            name += " — " + providedBy;
+        return name;
+    }
+
+    private static async Task<Dictionary<Guid, string>> ApiProviderLabelsAsync(
+        CompassDbContext db,
+        ServiceSchemaArea area,
+        Guid productId,
+        CancellationToken ct)
+    {
+        if (!area.Topics.Any(t => t.Key == ServiceSchemaAreas.ApiUseKey))
+            return new Dictionary<Guid, string>();
+
+        var provided = await db.CensusEntries.AsNoTracking()
+            .Where(e => e.RemovedAt == null
+                && e.ProductId != productId
+                && e.CatalogueItemId != null
+                && e.DomainKey == ServiceSchemaAreas.ApiProvideKey)
+            .Select(e => new { CatalogueItemId = e.CatalogueItemId!.Value, e.ProductId })
+            .ToListAsync(ct);
+        if (provided.Count == 0)
+            return new Dictionary<Guid, string>();
+
+        var productIds = provided.Select(p => p.ProductId).Distinct().ToList();
+        var titles = await db.CMDBProducts.AsNoTracking()
+            .Where(p => productIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.Title })
+            .ToListAsync(ct);
+        var titleById = titles.ToDictionary(p => p.Id, p => p.Title);
+        return provided
+            .Where(p => titleById.ContainsKey(p.ProductId))
+            .GroupBy(p => p.CatalogueItemId)
+            .ToDictionary(
+                g => g.Key,
+                g => "Provided by " + string.Join(", ", g
+                    .Select(p => titleById[p.ProductId])
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)));
     }
 
     private static string CatalogueTitle(
@@ -534,6 +761,30 @@ public static class ServiceSchemaWorkspace
         if (!string.IsNullOrWhiteSpace(email)) bits.Add(email.Trim());
         return bits.Count == 0 ? null : string.Join(" · ", bits);
     }
+
+    public const string SectionCompletePrefix = "done:";
+    public const string SectionCompleteStatus = "SECTION_COMPLETE";
+
+    public static string SectionCompleteKey(string areaKey) => SectionCompletePrefix + areaKey;
+
+    public static string TopicProgress(bool started, bool nothingToRecord, bool topicMarkedComplete) =>
+        nothingToRecord || topicMarkedComplete ? "recorded"
+        : started ? "partial"
+        : "empty";
+
+    public static string ProgressLabel(string state) => state switch
+    {
+        "recorded" => "Completed",
+        "partial" => "In progress",
+        _ => "Not yet started"
+    };
+
+    private static bool TopicStarted(ServiceSchemaTopic topic, IReadOnlyList<CensusEntry> entries, int registerContactCount) =>
+        entries.Any(e => ServiceSchemaAreas.DomainMatches(topic, e.DomainKey)) ||
+        (ServiceSchemaAreas.IsServiceResponsibility(topic.Key) && registerContactCount > 0);
+
+    public static bool IsSectionCompleteStatus(string? status) =>
+        string.Equals(status, SectionCompleteStatus, StringComparison.OrdinalIgnoreCase);
 
     public static bool IsClosingStatus(string? status) =>
         string.Equals(status, "CONFIRMED_NONE", StringComparison.OrdinalIgnoreCase) ||

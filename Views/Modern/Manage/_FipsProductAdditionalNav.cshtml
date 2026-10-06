@@ -1,0 +1,63 @@
+@model FipsProductDetailViewModel
+@using Compass.Services.ServiceSchema
+@{
+  var p = Model.Product;
+  var census = Model.AdditionalInformation!;
+  string SectionHref(string sectionKey, string? topicKey = null) =>
+      Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "additional", section = sectionKey, topic = topicKey }) ?? "#";
+  string BackHref() =>
+      Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "information" }) ?? "#";
+  ServiceSchemaTopicNav Mark(string state, string label) => new() { State = state, StateLabel = label };
+  var auditCurrent = string.Equals(census.ActiveArea, ServiceSchemaAreas.AuditKey, StringComparison.OrdinalIgnoreCase);
+}
+<nav class="fips-additional-nav" aria-label="Service census">
+  <a class="govuk-back-link govuk-!-margin-bottom-4" href="@BackHref()">Back to service information</a>
+  <h2 class="govuk-heading-m govuk-!-margin-bottom-1">Service census</h2>
+  <p class="govuk-body-s govuk-!-margin-bottom-3">@census.SectionsAddressed of @census.SectionCount sections complete</p>
+  <h3 class="govuk-heading-s govuk-!-margin-bottom-1">Sections</h3>
+  <ul class="fips-additional-sections">
+    @foreach (var item in census.Areas)
+    {
+      var current = string.Equals(item.Key, census.ActiveArea, StringComparison.OrdinalIgnoreCase);
+      var open = current && item.Topics.Count > 0;
+      <li class="fips-additional-section@(current ? " is-current" : "")@(open ? " is-open" : "")">
+        <a class="govuk-link govuk-link--no-visited-state fips-additional-row" href="@SectionHref(item.Key)"@if (current && string.IsNullOrEmpty(census.ActiveTopic)) { <text> aria-current="page"</text> }>
+          <span class="fips-additional-label">@item.Name</span>
+          <span class="fips-additional-mark">
+            @if (!string.IsNullOrEmpty(item.State))
+            {
+              @await Html.PartialAsync("~/Views/Modern/Manage/_SchemaStateIcon.cshtml", Mark(item.State, item.StateLabel))
+            }
+          </span>
+        </a>
+        @if (open)
+        {
+          <ul class="fips-additional-topics" aria-label="@item.Name questions">
+            @foreach (var topic in item.Topics)
+            {
+              var topicCurrent = string.Equals(topic.Key, census.ActiveTopic, StringComparison.OrdinalIgnoreCase);
+              <li>
+                <a class="govuk-link govuk-link--no-visited-state fips-additional-row@(topicCurrent ? " is-current" : "")" href="@SectionHref(item.Key, topic.Key)"@if (topicCurrent) { <text> aria-current="page"</text> }>
+                  <span class="fips-additional-label"><span class="fips-additional-hyphen" aria-hidden="true">-</span>@topic.Name</span>
+                  <span class="fips-additional-mark">
+                    @await Html.PartialAsync("~/Views/Modern/Manage/_SchemaStateIcon.cshtml", Mark(topic.State, topic.StateLabel))
+                  </span>
+                </a>
+              </li>
+            }
+          </ul>
+        }
+      </li>
+    }
+  </ul>
+  <div class="fips-additional-nav__divider" role="separator" aria-hidden="true"></div>
+  <h3 class="govuk-heading-s govuk-!-margin-bottom-1">History</h3>
+  <ul class="fips-additional-sections">
+    <li class="fips-additional-section@(auditCurrent ? " is-current" : "")">
+      <a class="govuk-link govuk-link--no-visited-state fips-additional-row" href="@SectionHref(ServiceSchemaAreas.AuditKey)"@if (auditCurrent) { <text> aria-current="page"</text> }>
+        <span class="fips-additional-label">Audit</span>
+        <span class="fips-additional-mark"></span>
+      </a>
+    </li>
+  </ul>
+</nav>

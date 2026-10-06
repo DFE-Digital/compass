@@ -205,12 +205,15 @@
   }
 
   function wireClose(dialog) {
-    dialog.querySelectorAll('[data-dfe-modal-close]').forEach(function (btn) {
-      if (btn.dataset.fipsOverviewCloseWired === '1') return;
-      btn.dataset.fipsOverviewCloseWired = '1';
-      btn.addEventListener('click', function () {
-        if (typeof dialog.close === 'function') dialog.close();
-      });
+    if (dialog.dataset.fipsOverviewCloseWired === '1') return;
+    dialog.dataset.fipsOverviewCloseWired = '1';
+
+    dialog.addEventListener('click', function (e) {
+      var closeBtn = e.target.closest('[data-dfe-modal-close]');
+      if (!closeBtn || !dialog.contains(closeBtn)) return;
+      e.preventDefault();
+      if (typeof dialog.close === 'function') dialog.close();
+      else dialog.removeAttribute('open');
     });
 
     dialog.addEventListener('close', function () {

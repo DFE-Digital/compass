@@ -11,7 +11,7 @@ namespace Compass.Controllers.Modern;
 public partial class ModernManageController
 {
     [HttpGet("service-schema")]
-    public async Task<IActionResult> ServiceSchema(string? q, string? tab, int page = 1, CancellationToken ct = default)
+    public async Task<IActionResult> ServiceSchema(CancellationToken ct = default)
     {
         var disabled = await RequireFipsDatabaseAsync();
         if (disabled != null)
@@ -19,46 +19,36 @@ public partial class ModernManageController
         if (!await SchemaFeatureEnabledAsync())
             return NotFound();
 
-        SetNav("manage-service-schema");
-        var model = await ServiceSchemaWorkspace.LoadDirectoryAsync(_context, q, tab, page, ct);
-        var report = await ServiceSchemaReport.LoadAsync(_context, ct);
-        var byId = report.Products.ToDictionary(p => p.Id);
-        foreach (var item in model.Items)
+        // Census is recorded on each product's Additional information tab.
+        return RedirectToAction(nameof(Fips), new { tab = "active" });
+    }
+
+    [HttpGet("service-schema/pick-products")]
+    public async Task<IActionResult> SchemaPickProducts(string? q, Guid? exclude, CancellationToken ct)
+    {
+        if (!await SchemaFeatureEnabledAsync())
+            return NotFound();
+
+        var term = (q ?? "").Trim().TrimStart('/').Trim();
+        if (term.Length < 2)
+            return Json(new { results = Array.Empty<object>() });
+
+        var rows = await _context.CMDBProducts.AsNoTracking()
+            .Where(p =>
+                p.Status != CMDBProductStatus.Rejected &&
+                p.Id != exclude &&
+                p.Title != null &&
+                p.Title.Contains(term))
+            .OrderBy(p => p.Title)
+            .Take(20)
+            .Select(p => new { p.Id, p.Title, p.UniqueID, p.IsEnterpriseService })
+            .ToListAsync(ct);
+        var results = rows.Select(p => new
         {
-            if (!byId.TryGetValue(item.Id, out var covered))
-                continue;
-            item.SchemaPercent = covered.Percent;
-            item.SectionsAddressed = covered.TopicsRecorded;
-            item.SectionCount = covered.TopicCount;
-            item.CensusState = CensusState(covered);
-        }
-
-        var email = CurrentUserEmail.Trim();
-        var myIds = string.IsNullOrWhiteSpace(email)
-            ? new HashSet<Guid>()
-            : (await _context.CMDBProductContacts.AsNoTracking()
-                .Where(c => c.UserEmail != null && c.UserEmail.ToLower() == email.ToLower())
-                .Select(c => c.CMDBProductId)
-                .Distinct()
-                .ToListAsync(ct)).ToHashSet();
-
-        model.NotStarted = report.NotStarted;
-        model.InProgress = report.InProgress;
-        model.Complete = report.Complete;
-        model.MyProducts = report.Products
-            .Where(p => myIds.Contains(p.Id))
-            .OrderBy(p => p.TopicCount > 0 && p.TopicsRecorded >= p.TopicCount)
-            .ThenBy(p => p.Percent)
-            .ThenBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
-            .Select(ToDirectoryRow)
-            .ToList();
-        model.Queue = report.Products
-            .Where(p => p.TopicCount == 0 || p.TopicsRecorded < p.TopicCount)
-            .Take(25)
-            .Select(ToDirectoryRow)
-            .ToList();
-        model.QueueTotal = report.NotStarted + report.InProgress;
-        return View("~/Views/Modern/Manage/ServiceSchema.cshtml", model);
+            id = p.Id,
+            name = p.Title + " (" + p.UniqueID + ")" + (p.IsEnterpriseService ? " — Enterprise" : "")
+        });
+        return Json(new { results });
     }
 
     [HttpGet("service-schema/{id:guid}", Name = "ServiceSchemaProduct")]
@@ -71,9 +61,6 @@ public partial class ModernManageController
         if (!await SchemaFeatureEnabledAsync())
             return NotFound();
 
-        SetNav("manage-service-schema");
-        var canEdit = await UserIsNamedProductContactAsync(id, CurrentUserEmail, ct)
-            || await CanEditFipsProductInformationAsync(ct);
         var areaKey = section;
         if (string.IsNullOrWhiteSpace(areaKey))
         {
@@ -81,10 +68,8 @@ public partial class ModernManageController
             if (!string.IsNullOrWhiteSpace(legacyArea))
                 areaKey = legacyArea;
         }
-        var pageModel = await ServiceSchemaWorkspace.LoadRecordAsync(_context, id, areaKey, topic, canEdit, ct);
-        if (pageModel == null)
-            return NotFound();
-        return View("~/Views/Modern/Manage/ServiceSchemaProduct.cshtml", pageModel);
+
+        return RedirectToAction(nameof(FipsProduct), new { id, tab = "additional", section = areaKey, topic });
     }
 
     [HttpPost("service-schema/{id:guid}/entries", Name = "SaveSchemaEntry")]
@@ -214,6 +199,79 @@ public partial class ModernManageController
             return gate;
 
         var layout = await ServiceSchemaLayout.LoadAsync(_context, ct);
+        var status = statusCode?.Trim();
+        if (ServiceSchemaAreas.IsProductDetails(sectionKey) &&
+            (ServiceSchemaWorkspace.IsSectionCompleteStatus(status) ||
+             string.Equals(status, "SECTION_OPEN", StringComparison.OrdinalIgnoreCase)))
+        {
+            var detailsEmail = CurrentUserEmail;
+            var detailsRow = await _context.CensusSectionDeclarations
+                .FirstOrDefaultAsync(d => d.ProductId == id && d.SectionKey == ServiceSchemaAreas.ProductDetailsKey, ct);
+            if (string.Equals(status, "SECTION_OPEN", StringComparison.OrdinalIgnoreCase))
+            {
+                if (detailsRow != null && ServiceSchemaWorkspace.IsSectionCompleteStatus(detailsRow.StatusCode))
+                    _context.CensusSectionDeclarations.Remove(detailsRow);
+                await _context.SaveChangesAsync(ct);
+                TempData["SuccessMessage"] = "Product details set back to in progress.";
+                return await SchemaBack(id, ServiceSchemaAreas.ProductDetailsKey, null);
+            }
+
+            if (!await ProductDetailsHasInformationAsync(id, ct))
+                return await SchemaBack(id, ServiceSchemaAreas.ProductDetailsKey, "Add or update product details before marking this section complete.");
+
+            if (detailsRow == null)
+            {
+                detailsRow = new CensusSectionDeclaration { ProductId = id, SectionKey = ServiceSchemaAreas.ProductDetailsKey };
+                _context.CensusSectionDeclarations.Add(detailsRow);
+            }
+
+            detailsRow.StatusCode = ServiceSchemaWorkspace.SectionCompleteStatus;
+            detailsRow.Explanation = null;
+            detailsRow.UpdatedAt = DateTime.UtcNow;
+            detailsRow.UpdatedBy = detailsEmail;
+            await _context.SaveChangesAsync(ct);
+            TempData["SuccessMessage"] = "Product details marked complete.";
+            return await SchemaBack(id, ServiceSchemaAreas.ProductDetailsKey, null);
+        }
+
+        if (ServiceSchemaWorkspace.IsSectionCompleteStatus(status) ||
+            string.Equals(status, "SECTION_OPEN", StringComparison.OrdinalIgnoreCase))
+        {
+            var topicMatch = layout.FindTopic(sectionKey);
+            if (topicMatch == null)
+                return await SchemaBack(id, sectionKey, "Choose a schema question.");
+
+            var completeEmail = CurrentUserEmail;
+            var completeRow = await _context.CensusSectionDeclarations
+                .FirstOrDefaultAsync(d => d.ProductId == id && d.SectionKey == topicMatch.Key, ct);
+            var topicName = ServiceSchemaAreas.ShortTopicName(topicMatch);
+            if (string.Equals(status, "SECTION_OPEN", StringComparison.OrdinalIgnoreCase))
+            {
+                if (completeRow != null && ServiceSchemaWorkspace.IsSectionCompleteStatus(completeRow.StatusCode))
+                    _context.CensusSectionDeclarations.Remove(completeRow);
+                await _context.SaveChangesAsync(ct);
+                TempData["SuccessMessage"] = topicName + " set back to in progress.";
+                return await SchemaBack(id, topicMatch.Key, null);
+            }
+
+            if (!await TopicHasRecordedInformationAsync(id, topicMatch, ct))
+                return await SchemaBack(id, topicMatch.Key, "Add a response, or mark nothing to record, before marking this question complete.");
+
+            if (completeRow == null)
+            {
+                completeRow = new CensusSectionDeclaration { ProductId = id, SectionKey = topicMatch.Key };
+                _context.CensusSectionDeclarations.Add(completeRow);
+            }
+
+            completeRow.StatusCode = ServiceSchemaWorkspace.SectionCompleteStatus;
+            completeRow.Explanation = null;
+            completeRow.UpdatedAt = DateTime.UtcNow;
+            completeRow.UpdatedBy = completeEmail;
+            await _context.SaveChangesAsync(ct);
+            TempData["SuccessMessage"] = topicName + " marked complete.";
+            return await SchemaBack(id, topicMatch.Key, null);
+        }
+
         var topic = layout.FindTopic(sectionKey);
         var section = ServiceSchemaCatalog.FindSection(sectionKey);
         var area = layout.Areas.FirstOrDefault(a => string.Equals(a.Key, sectionKey, StringComparison.OrdinalIgnoreCase));
@@ -221,7 +279,6 @@ public partial class ModernManageController
         if (key == null)
             return await SchemaBack(id, sectionKey, "Choose a schema section.");
 
-        var status = statusCode?.Trim();
         var email = CurrentUserEmail;
         var row = await _context.CensusSectionDeclarations
             .FirstOrDefaultAsync(d => d.ProductId == id && d.SectionKey == key, ct);
@@ -236,6 +293,9 @@ public partial class ModernManageController
 
         if (!ServiceSchemaWorkspace.IsClosingStatus(status))
             return await SchemaBack(id, key, "Choose confirmed none or not applicable.");
+
+        if (topic != null && await TopicHasRecordedInformationAsync(id, topic, ct))
+            return await SchemaBack(id, key, "Information added for this question. Check your submission and if correct, mark the question complete.");
 
         if (row == null)
         {
@@ -252,35 +312,36 @@ public partial class ModernManageController
         return await SchemaBack(id, key, null);
     }
 
-    private static ServiceSchemaDirectoryRow ToDirectoryRow(ServiceSchemaDqProductRow row) =>
-        new()
-        {
-            Id = row.Id,
-            UniqueId = row.UniqueId,
-            Title = row.Title,
-            BusinessAreas = row.BusinessAreas,
-            Phase = row.Phase,
-            Status = "Active",
-            CensusState = CensusState(row),
-            SchemaPercent = row.Percent,
-            SectionsAddressed = row.TopicsRecorded,
-            SectionCount = row.TopicCount
-        };
-
-    private static string CensusState(ServiceSchemaDqProductRow row) =>
-        row.TopicCount > 0 && row.TopicsRecorded >= row.TopicCount ? "Complete"
-        : row.TopicsRecorded == 0 ? "Not started"
-        : "In progress";
-
     private async Task<IActionResult> SaveTopicEntryAsync(Guid id, ServiceSchemaTopic topic, SchemaEntryInput input, CancellationToken ct)
     {
+        if (ServiceSchemaAreas.IsServiceResponsibility(topic.Key))
+            return await SchemaBack(id, topic.Key, "Service offering contacts are managed on the product record.");
+
         var narrative = TrimTo(input.Narrative, 10000);
         var url = TrimTo(input.ExternalUrl, 500);
         string? title = TrimTo(input.Title, 300);
         string? lookup = null;
+        string? secondary = null;
         Guid? catalogueId = input.CatalogueItemId is Guid existing && existing != Guid.Empty ? existing : null;
 
-        if (topic.Mode == "lookup")
+        if (string.Equals(topic.Key, "dependency", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(input.DependencyScope, "internal", StringComparison.OrdinalIgnoreCase))
+        {
+            if (input.ProductId is not Guid productId || productId == Guid.Empty || productId == id)
+                return await SchemaBack(id, topic.Key, "Choose a service register product.");
+            var linked = await _context.CMDBProducts.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == productId && p.Status != CMDBProductStatus.Rejected, ct);
+            if (linked == null)
+                return await SchemaBack(id, topic.Key, "Choose a product from the register, including Enterprise services.");
+            var productKey = productId.ToString("D");
+            var duplicate = await _context.CensusEntries.AnyAsync(e =>
+                e.ProductId == id && e.RemovedAt == null && e.DomainKey == topic.Key && e.LookupCode == productKey, ct);
+            if (duplicate)
+                return await SchemaBack(id, topic.Key, "That product is already an internal dependency.");
+            title = linked.IsEnterpriseService ? linked.Title + " (Enterprise)" : linked.Title;
+            lookup = productKey;
+        }
+        else if (topic.Mode == "lookup")
         {
             lookup = TrimTo(input.LookupCode, 80);
             var lookups = await ServiceSchemaAdminLookups.LoadAsync(_context, new[] { topic.LookupSource }, ct);
@@ -291,6 +352,62 @@ public partial class ModernManageController
                 return await SchemaBack(id, topic.Key, "Choose a value from the list.");
             title ??= ServiceSchemaAdminLookups.LabelFor(lookups, lookup);
         }
+        else if (topic.Mode == "choice")
+        {
+            lookup = TrimTo(input.LookupCode, 80);
+            var chosen = topic.ChoiceOptions.FirstOrDefault(c => string.Equals(c.Value, lookup, StringComparison.OrdinalIgnoreCase));
+            if (chosen == null)
+                return await SchemaBack(id, topic.Key, "Choose one of the options.");
+            title = chosen.Label;
+        }
+        else if (topic.Mode == "yes-choice")
+        {
+            lookup = TrimTo(input.LookupCode, 80);
+            if (string.Equals(lookup, "no", StringComparison.OrdinalIgnoreCase))
+            {
+                title = "No";
+                lookup = "no";
+                narrative = null;
+            }
+            else if (string.Equals(lookup, "yes", StringComparison.OrdinalIgnoreCase))
+            {
+                var chosen = (input.SecondaryLookupCodes ?? [])
+                    .Select(code => topic.ChoiceOptions.FirstOrDefault(c => string.Equals(c.Value, code?.Trim(), StringComparison.OrdinalIgnoreCase)))
+                    .Where(c => c != null)
+                    .DistinctBy(c => c!.Value, StringComparer.OrdinalIgnoreCase)
+                    .Cast<ServiceSchemaChoice>()
+                    .ToList();
+                if (chosen.Count == 0)
+                    return await SchemaBack(id, topic.Key, "Choose the kind of enabling functionality.");
+                if (chosen.Any(c => string.Equals(c.Value, "other", StringComparison.OrdinalIgnoreCase)) && string.IsNullOrWhiteSpace(narrative))
+                    return await SchemaBack(id, topic.Key, "Describe the other enabling functionality.");
+                title = "Yes — " + string.Join(", ", chosen.Select(c => c.Label));
+                lookup = "yes";
+                secondary = string.Join(",", chosen.Select(c => c.Value));
+                if (secondary.Length > 80)
+                    return await SchemaBack(id, topic.Key, "Choose fewer kinds of enabling functionality.");
+            }
+            else
+            {
+                return await SchemaBack(id, topic.Key, "Choose yes or no.");
+            }
+        }
+        else if (topic.Mode == "products")
+        {
+            if (input.ProductId is not Guid productId || productId == Guid.Empty || productId == id)
+                return await SchemaBack(id, topic.Key, "Choose another service register product.");
+            var linked = await _context.CMDBProducts.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == productId && p.Status != CMDBProductStatus.Rejected, ct);
+            if (linked == null)
+                return await SchemaBack(id, topic.Key, "Choose a product from the register.");
+            var productKey = productId.ToString("D");
+            var duplicate = await _context.CensusEntries.AnyAsync(e =>
+                e.ProductId == id && e.RemovedAt == null && e.DomainKey == topic.Key && e.LookupCode == productKey, ct);
+            if (duplicate)
+                return await SchemaBack(id, topic.Key, "That product is already on this list.");
+            title = linked.Title;
+            lookup = productKey;
+        }
         else if (topic.Mode == "catalogue")
         {
             var createName = TrimTo(input.CreateCatalogueName, 300) ?? title;
@@ -300,7 +417,8 @@ public partial class ModernManageController
             if (catalogueId != null)
             {
                 var item = await _context.CensusCatalogueItems.FirstOrDefaultAsync(c =>
-                    c.Id == catalogueId && c.RemovedAt == null && c.Kind == topic.CatalogueKind && c.StatusCode == "ACTIVE", ct);
+                    c.Id == catalogueId && c.RemovedAt == null && c.Kind == topic.CatalogueKind &&
+                    (c.StatusCode == "ACTIVE" || c.StatusCode == "NEW"), ct);
                 if (item == null)
                     return await SchemaBack(id, topic.Key, "Choose an item from the list.");
                 title = item.Name;
@@ -308,7 +426,8 @@ public partial class ModernManageController
             else
             {
                 var match = await _context.CensusCatalogueItems.FirstOrDefaultAsync(c =>
-                    c.Kind == topic.CatalogueKind && c.RemovedAt == null && c.StatusCode == "ACTIVE" && c.Name == createName, ct);
+                    c.Kind == topic.CatalogueKind && c.RemovedAt == null &&
+                    (c.StatusCode == "ACTIVE" || c.StatusCode == "NEW") && c.Name == createName, ct);
                 if (match == null)
                 {
                     match = new CensusCatalogueItem
@@ -316,7 +435,8 @@ public partial class ModernManageController
                         Kind = topic.CatalogueKind!,
                         Reference = Guid.NewGuid().ToString("N")[..32].ToUpperInvariant(),
                         Name = createName!,
-                        StatusCode = "ACTIVE",
+                        StatusCode = "NEW",
+                        AddedAgainstProductId = id,
                         CreatedAt = DateTime.UtcNow,
                         CreatedBy = CurrentUserEmail,
                         UpdatedAt = DateTime.UtcNow,
@@ -327,6 +447,25 @@ public partial class ModernManageController
                 catalogueId = match.Id;
                 title = match.Name;
             }
+
+            if (catalogueId != null && string.Equals(topic.Key, ServiceSchemaAreas.ApiUseKey, StringComparison.OrdinalIgnoreCase))
+            {
+                var providesIt = await _context.CensusEntries.AnyAsync(e =>
+                    e.ProductId == id && e.RemovedAt == null && e.CatalogueItemId == catalogueId &&
+                    e.DomainKey == ServiceSchemaAreas.ApiProvideKey, ct);
+                if (providesIt)
+                    return await SchemaBack(id, topic.Key, "This product provides that API. Choose an API another product provides, or add one from outside the register.");
+            }
+
+            if (catalogueId != null &&
+                (string.Equals(topic.Key, ServiceSchemaAreas.ApiUseKey, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(topic.Key, ServiceSchemaAreas.ApiProvideKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                var duplicate = await _context.CensusEntries.AnyAsync(e =>
+                    e.ProductId == id && e.RemovedAt == null && e.DomainKey == topic.Key && e.CatalogueItemId == catalogueId, ct);
+                if (duplicate)
+                    return await SchemaBack(id, topic.Key, "That API is already on this list.");
+            }
         }
         else if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(narrative))
         {
@@ -335,25 +474,36 @@ public partial class ModernManageController
 
         var now = DateTime.UtcNow;
         var email = CurrentUserEmail;
-        _context.CensusEntries.Add(new CensusEntry
+        var entry = topic.Mode == "yes-choice"
+            ? await _context.CensusEntries.FirstOrDefaultAsync(e =>
+                e.ProductId == id && e.RemovedAt == null && e.DomainKey == topic.Key, ct)
+            : null;
+        var created = entry == null;
+        if (entry == null)
         {
-            ProductId = id,
-            DomainKey = topic.Key,
-            Title = title,
-            Narrative = narrative,
-            LookupCode = lookup,
-            CatalogueItemId = catalogueId,
-            PersonName = TrimTo(input.PersonName, 200),
-            PersonEmail = TrimTo(input.PersonEmail, 255),
-            ExternalUrl = url,
-            VerificationStatusCode = "UNVERIFIED",
-            CreatedAt = now,
-            CreatedBy = email,
-            UpdatedAt = now,
-            UpdatedBy = email
-        });
+            entry = new CensusEntry
+            {
+                ProductId = id,
+                DomainKey = topic.Key,
+                CreatedAt = now,
+                CreatedBy = email,
+                VerificationStatusCode = "UNVERIFIED"
+            };
+            _context.CensusEntries.Add(entry);
+        }
+
+        entry.Title = title ?? "";
+        entry.Narrative = narrative;
+        entry.LookupCode = lookup;
+        entry.SecondaryLookupCode = secondary;
+        entry.CatalogueItemId = catalogueId;
+        entry.ExternalUrl = url;
+        entry.PersonName = TrimTo(input.PersonName, 200);
+        entry.PersonEmail = TrimTo(input.PersonEmail, 255);
+        entry.UpdatedAt = now;
+        entry.UpdatedBy = email;
         await _context.SaveChangesAsync(ct);
-        TempData["SuccessMessage"] = "Saved.";
+        TempData["SuccessMessage"] = created ? "Saved." : "Answer updated.";
         return await SchemaBack(id, topic.Key, null);
     }
 
@@ -426,9 +576,10 @@ public partial class ModernManageController
             return NotFound();
 
         var canEdit = await UserIsNamedProductContactAsync(id, CurrentUserEmail, ct)
+            || await UserIsNamedInAdditionalResponsibilitiesAsync(id, CurrentUserEmail, ct)
             || await CanEditFipsProductInformationAsync(ct);
         if (!canEdit)
-            return await SchemaBack(id, sectionKey, "Only a named contact or an operations console user can change this schema.");
+            return await SchemaBack(id, sectionKey, "Only a named contact, someone named in additional responsibilities, or an operations console user can change this schema.");
 
         return null;
     }
@@ -445,23 +596,66 @@ public partial class ModernManageController
             v.LookupSet.Key == setKey, ct);
     }
 
-    private async Task<IActionResult> SchemaBack(Guid id, string? sectionKey, string? error, CancellationToken ct = default)
+    private async Task<bool> TopicHasRecordedInformationAsync(Guid productId, ServiceSchemaTopic topic, CancellationToken ct)
+    {
+        var domains = await _context.CensusEntries.AsNoTracking()
+            .Where(e => e.ProductId == productId && e.RemovedAt == null)
+            .Select(e => e.DomainKey)
+            .ToListAsync(ct);
+        if (domains.Any(domain => ServiceSchemaAreas.DomainMatches(topic, domain)))
+            return true;
+        return ServiceSchemaAreas.IsServiceResponsibility(topic.Key) &&
+            await _context.CMDBProductContacts.AnyAsync(c => c.CMDBProductId == productId, ct);
+    }
+
+    private async Task<bool> ProductDetailsHasInformationAsync(Guid productId, CancellationToken ct)
+    {
+        var product = await _context.CMDBProducts.AsNoTracking()
+            .Where(p => p.Id == productId)
+            .Select(p => new
+            {
+                HasDescription = p.UserDescription != null && p.UserDescription != "",
+                HasPhase = p.PhaseId != null,
+                HasDirectorate = p.Directorates.Any(),
+                HasBusinessArea = p.BusinessAreas.Any(),
+                HasChannel = p.Channels.Any(),
+                HasType = p.Types.Any(),
+                HasUrl = p.ProductURL != null && p.ProductURL != "",
+                HasCategorisation = p.CategorisationItems.Any()
+            })
+            .FirstOrDefaultAsync(ct);
+        if (product == null)
+            return false;
+        return product.HasDescription
+            || product.HasPhase
+            || product.HasDirectorate
+            || product.HasBusinessArea
+            || product.HasChannel
+            || product.HasType
+            || product.HasUrl
+            || product.HasCategorisation;
+    }
+
+    private async Task<IActionResult> SchemaBack(Guid id, string? sectionKey, string? error, CancellationToken ct = default, bool areaOnly = false)
     {
         if (!string.IsNullOrWhiteSpace(error))
             TempData["ErrorMessage"] = error;
 
         string? section = sectionKey;
         string? topic = null;
-        var layout = await ServiceSchemaLayout.LoadAsync(_context, ct);
-        var found = layout.FindTopic(sectionKey);
-        if (found != null)
+        if (!areaOnly)
         {
-            topic = found.Key;
-            section = layout.AreaFor(found.Key)?.Key ?? sectionKey;
+            var layout = await ServiceSchemaLayout.LoadAsync(_context, ct);
+            var found = layout.FindTopic(sectionKey);
+            if (found != null)
+            {
+                topic = found.Key;
+                section = layout.AreaFor(found.Key)?.Key ?? sectionKey;
+            }
         }
 
-        var url = Url.RouteUrl("ServiceSchemaProduct", new { id, section, topic })
-            ?? $"/modern/manage/service-schema/{id}";
+        var url = Url.Action(nameof(FipsProduct), new { id, tab = "additional", section, topic })
+            ?? $"/modern/manage/fips/{id}?tab=additional";
         return LocalRedirect(url);
     }
 
@@ -543,6 +737,7 @@ public class SchemaEntryInput
     public string? Narrative { get; set; }
     public string? LookupCode { get; set; }
     public string? SecondaryLookupCode { get; set; }
+    public List<string>? SecondaryLookupCodes { get; set; }
     public Guid? CatalogueItemId { get; set; }
     public int? StaffRoleId { get; set; }
     public string? PersonName { get; set; }
@@ -550,6 +745,8 @@ public class SchemaEntryInput
     public string? ExternalUrl { get; set; }
     public string? VerificationStatusCode { get; set; }
     public string? CreateCatalogueName { get; set; }
+    public Guid? ProductId { get; set; }
+    public string? DependencyScope { get; set; }
     public string[]? ResponseTitle { get; set; }
     public string[]? ResponseNarrative { get; set; }
     public string[]? ResponseLookup { get; set; }

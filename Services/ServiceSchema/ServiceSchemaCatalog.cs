@@ -94,7 +94,7 @@ public static class ServiceSchemaCatalog
         Section("user-needs", "User needs", "Needs met or intended to be met, expressed independently of a solution.", "user_need", "need_type", "Need type", "need_criticality", "Criticality if unmet", catalogue: "user_need", titleLabel: "Need", narrativeLabel: "How this service supports the need"),
         Section("journeys", "Journeys", "End-to-end journeys this service supports. A journey can cross several services.", "journey", "journey_type", "Journey type", catalogue: "journey", titleLabel: "Journey", narrativeLabel: "Which part of the journey this service supports"),
         Section("fulfilment", "Unmet or poorly met needs", "Assessment of how well a need is met. Mark verified only with a narrative.", "need_fulfilment", "need_fulfilment_status", "Fulfilment", catalogue: "user_need", titleLabel: "Need", narrativeLabel: "Assessment and evidence"),
-        Section("responsibilities", "Responsibilities", "People named on the service register, and any further responsibilities.", "responsibility", capturePerson: true, captureStaffRole: true, titleLabel: "Responsibility", narrativeLabel: "What this person is accountable for"),
+        Section("responsibilities", "Additional roles and responsibilities", "Further people with a role or responsibility who are not already named as service offering contacts.", "responsibility", capturePerson: true, captureStaffRole: true, titleLabel: "Role or responsibility", narrativeLabel: "What this person is accountable for"),
         Section("capabilities", "Capabilities", "Capabilities this service provides, supports or depends on.", "capability", "relationship_type", "Relationship", titleLabel: "Capability", narrativeLabel: "How the capability is used"),
         Section("features", "Features", "Functionality, including whether it is custom, configured or reused.", "feature", "feature_type", "Feature type", "reuse_status", "Reuse", catalogue: "feature", titleLabel: "Feature", narrativeLabel: "How it is implemented on this service"),
         Section("technology", "Technology", "Technology and platforms this service uses.", "technology", titleLabel: "Technology or platform", narrativeLabel: "How it is used", url: true),
@@ -112,11 +112,12 @@ public static class ServiceSchemaCatalog
 
     public static IReadOnlyList<(string Kind, string Label, string LookupSetKey)> CatalogueKinds { get; } =
     [
-        ("pattern", "Patterns, components and APIs", ""),
+        ("pattern", "Patterns and components", ""),
+        ("api", "APIs", ""),
         ("technology", "Technologies and components", ""),
         ("stack", "Stacks and platforms", ""),
         ("integration", "Integrations", ""),
-        ("dependency", "Dependencies", ""),
+        ("dependency", "External dependencies", ""),
         ("user_group", "User groups", "user_group_type"),
         ("user_need", "User needs", "need_type"),
         ("journey", "Journeys", "journey_type"),

@@ -17,6 +17,6 @@ public static class FeatureCodes
     /// <summary>Design Decision Records (<c>/modern/design-decision-records</c>) plus DDR panels on FIPS products and work items, and the Reporting → DDR area.</summary>
     public const string Ddr = "ddr";
 
-    /// <summary>Service schema in the service register (<c>/modern/manage/service-schema</c>).</summary>
+    /// <summary>Service census on each service register product (<c>?tab=additional</c>).</summary>
     public const string ServiceRegisterSchema = "service_register_schema";
 }
