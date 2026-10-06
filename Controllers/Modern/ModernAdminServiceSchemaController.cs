@@ -267,18 +267,9 @@ public class ModernAdminServiceSchemaController : Controller
             return NotFound();
         SetChrome();
         ViewBag.SchemaNav = kind;
-        var items = await _db.CensusCatalogueItems.AsNoTracking()
-            .Where(c => c.Kind == kind && c.RemovedAt == null)
-            .OrderBy(c => c.Name)
-            .Select(c => new CensusRecordRow
-            {
-                Id = c.Id,
-                Reference = c.Reference,
-                Name = c.Name,
-                Summary = c.Statement,
-                StatusCode = c.StatusCode
-            })
-            .ToListAsync(ct);
+        var items = await CatalogueRowsAsync(
+            _db.CensusCatalogueItems.AsNoTracking().Where(c => c.Kind == kind && c.RemovedAt == null),
+            ct);
         return View("~/Views/Modern/Admin/ServiceSchema/Catalogue.cshtml", new CatalogueAdminPage
         {
             Kind = meta.Kind,
@@ -363,6 +354,33 @@ public class ModernAdminServiceSchemaController : Controller
         return RedirectToAction(nameof(Catalogue), new { kind });
     }
 
+    [HttpPost("catalogue/{kind}/{id:guid}/approve")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApproveCatalogueItem(string kind, Guid id, CancellationToken ct)
+    {
+        var meta = ServiceSchemaCatalog.CatalogueKinds.FirstOrDefault(k => k.Kind == kind);
+        if (meta.Kind == null)
+            return NotFound();
+
+        var item = await _db.CensusCatalogueItems.FirstOrDefaultAsync(
+            c => c.Id == id && c.Kind == kind && c.RemovedAt == null, ct);
+        if (item == null)
+            return NotFound();
+        if (!string.Equals(item.StatusCode, "NEW", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["AdminError"] = "Only new items can be approved.";
+            return RedirectToAction(nameof(Catalogue), new { kind });
+        }
+
+        var now = DateTime.UtcNow;
+        item.StatusCode = "ACTIVE";
+        item.UpdatedAt = now;
+        item.UpdatedBy = Actor;
+        await _db.SaveChangesAsync(ct);
+        TempData["AdminMessage"] = $"{item.Name} is now active.";
+        return RedirectToAction(nameof(Catalogue), new { kind });
+    }
+
     private async Task<string?> SaveLineOrServiceAsync(
         bool isService, string? reference, string? name, string? description, string? boundaryIn, string? boundaryOut,
         string? statusCode, string? serviceType, CancellationToken ct)
@@ -436,6 +454,16 @@ public class ModernAdminServiceSchemaController : Controller
         var questions = await _db.ServiceSchemaQuestions.AsNoTracking()
             .OrderBy(q => q.SortOrder).ThenBy(q => q.Heading)
             .ToListAsync(ct);
+        var knownKinds = ServiceSchemaCatalog.CatalogueKinds.Select(k => k.Kind).ToList();
+        var newItems = await CatalogueRowsAsync(
+            _db.CensusCatalogueItems.AsNoTracking()
+                .Where(c => c.RemovedAt == null && c.StatusCode == "NEW" && !knownKinds.Contains(c.Kind)),
+            ct);
+        foreach (var item in newItems)
+        {
+            var question = questions.FirstOrDefault(q => string.Equals(q.Key, item.Kind, StringComparison.OrdinalIgnoreCase));
+            item.Summary = question?.Heading ?? item.Kind;
+        }
         return View("~/Views/Modern/Admin/ServiceSchema/Questions.cshtml", new ServiceSchemaQuestionsAdminPage
         {
             Areas = areas.Select(area => new ServiceSchemaAreaAdminRow
@@ -443,7 +471,9 @@ public class ModernAdminServiceSchemaController : Controller
                 Key = area.Key,
                 Name = area.Name,
                 Summary = area.Summary,
+                HelpPanel = area.HelpPanel,
                 SortOrder = area.SortOrder,
+                IsActive = area.IsActive,
                 Questions = questions
                     .Where(q => string.Equals(q.AreaKey, area.Key, StringComparison.OrdinalIgnoreCase))
                     .Select(q => new ServiceSchemaQuestionAdminRow
@@ -452,39 +482,47 @@ public class ModernAdminServiceSchemaController : Controller
                         Key = q.Key,
                         Heading = q.Heading,
                         SortOrder = q.SortOrder,
-                        IsActive = q.IsActive
+                        IsActive = q.IsActive,
+                        ResponseLabel = ServiceSchemaResponseModes.Label(q)
                     })
                     .ToList()
-            }).ToList()
+            }).ToList(),
+            NewItems = newItems
         });
     }
 
     [HttpPost("questions/order")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveQuestionOrder(
-        Dictionary<string, int>? areaOrder,
-        Dictionary<string, string>? areaName,
-        Dictionary<string, string>? areaSummary,
-        Dictionary<int, int>? questionOrder,
+        [FromForm] Dictionary<string, int>? areaOrder,
+        [FromForm] Dictionary<string, string>? areaName,
+        [FromForm] Dictionary<string, string>? areaSummary,
+        [FromForm] Dictionary<string, string>? areaHelpPanel,
+        [FromForm] string[]? areaShown,
+        [FromForm] Dictionary<int, int>? questionOrder,
         CancellationToken ct)
     {
+        var shown = new HashSet<string>(areaShown ?? [], StringComparer.OrdinalIgnoreCase);
         var areas = await _db.ServiceSchemaAreaConfigs.ToListAsync(ct);
         foreach (var area in areas)
         {
             if (areaOrder != null && areaOrder.TryGetValue(area.Key, out var order))
                 area.SortOrder = order;
-            if (areaName != null && areaName.TryGetValue(area.Key, out var name))
+            if (areaName != null && areaName.TryGetValue(area.Key, out var name) && name != null)
             {
                 var trimmed = name.Trim();
                 if (trimmed.Length is < 1 or > 200)
                 {
-                    TempData["AdminError"] = "Enter an area name up to 200 characters.";
+                    TempData["AdminError"] = "Enter a section title up to 200 characters.";
                     return RedirectToAction(nameof(Questions));
                 }
                 area.Name = trimmed;
             }
             if (areaSummary != null && areaSummary.TryGetValue(area.Key, out var summary))
                 area.Summary = Trim(summary, 4000) ?? "";
+            if (areaHelpPanel != null && areaHelpPanel.TryGetValue(area.Key, out var helpPanel))
+                area.HelpPanel = Trim(helpPanel, 20000);
+            area.IsActive = shown.Contains(area.Key);
         }
 
         if (questionOrder != null)
@@ -498,7 +536,7 @@ public class ModernAdminServiceSchemaController : Controller
         }
 
         await _db.SaveChangesAsync(ct);
-        TempData["AdminMessage"] = "Service schema order saved.";
+        TempData["AdminMessage"] = "Service schema sections saved.";
         return RedirectToAction(nameof(Questions));
     }
 
@@ -518,14 +556,18 @@ public class ModernAdminServiceSchemaController : Controller
             TitleLabel = "Title",
             NarrativeLabel = "How this applies",
             IsActive = true,
-            Areas = areas
+            ResponseMode = ServiceSchemaResponseModes.Text,
+            Areas = areas,
+            Lookups = LookupChoices(),
+            CatalogueKinds = CatalogueChoices()
         });
     }
 
     [HttpPost("questions/new")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateQuestion(
-        string? section, string? heading, string? help, string? titleLabel, string? narrativeLabel, bool isActive, CancellationToken ct)
+        string? section, string? heading, string? help, string? helpPanel, string? titleLabel, string? narrativeLabel, bool isActive,
+        string? responseMode, string? lookupSource, string? catalogueKind, string? choiceOptions, CancellationToken ct)
     {
         var areas = await AreaChoicesAsync(ct);
         var areaKey = (section ?? "").Trim();
@@ -549,12 +591,13 @@ public class ModernAdminServiceSchemaController : Controller
             .Where(q => q.AreaKey == areaKey)
             .Select(q => (int?)q.SortOrder)
             .MaxAsync(ct) ?? 0;
-        _db.ServiceSchemaQuestions.Add(new ServiceSchemaQuestion
+        var question = new ServiceSchemaQuestion
         {
             Key = key,
             AreaKey = areaKey,
             Heading = display,
             Help = Trim(help, 4000) ?? "",
+            HelpPanel = Trim(helpPanel, 20000),
             TitleLabel = title,
             NarrativeLabel = narrative,
             SortOrder = sort + 1,
@@ -562,7 +605,14 @@ public class ModernAdminServiceSchemaController : Controller
             IsBuiltIn = false,
             UpdatedAt = DateTime.UtcNow,
             UpdatedBy = Actor
-        });
+        };
+        var responseError = ServiceSchemaResponseModes.Apply(question, responseMode, lookupSource, catalogueKind, choiceOptions);
+        if (responseError != null)
+        {
+            TempData["AdminError"] = responseError;
+            return RedirectToAction(nameof(QuestionCreate), new { section = areaKey });
+        }
+        _db.ServiceSchemaQuestions.Add(question);
         await _db.SaveChangesAsync(ct);
         TempData["AdminMessage"] = "Question added.";
         return RedirectToAction(nameof(Questions));
@@ -582,7 +632,8 @@ public class ModernAdminServiceSchemaController : Controller
     [HttpPost("questions/{id:int}")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateQuestion(
-        int id, string? section, string? heading, string? help, string? titleLabel, string? narrativeLabel, int sortOrder, bool isActive, CancellationToken ct)
+        int id, string? section, string? heading, string? help, string? helpPanel, string? titleLabel, string? narrativeLabel, int sortOrder, bool isActive,
+        string? responseMode, string? lookupSource, string? catalogueKind, string? choiceOptions, CancellationToken ct)
     {
         var question = await _db.ServiceSchemaQuestions.FirstOrDefaultAsync(q => q.Id == id, ct);
         if (question == null)
@@ -608,10 +659,17 @@ public class ModernAdminServiceSchemaController : Controller
         question.AreaKey = areaKey;
         question.Heading = display;
         question.Help = Trim(help, 4000) ?? "";
+        question.HelpPanel = Trim(helpPanel, 20000);
         question.TitleLabel = title;
         question.NarrativeLabel = narrative;
         question.SortOrder = sortOrder;
         question.IsActive = isActive;
+        var responseError = ServiceSchemaResponseModes.Apply(question, responseMode, lookupSource, catalogueKind, choiceOptions);
+        if (responseError != null)
+        {
+            TempData["AdminError"] = responseError;
+            return RedirectToAction(nameof(Question), new { id });
+        }
         question.UpdatedAt = DateTime.UtcNow;
         question.UpdatedBy = Actor;
         await _db.SaveChangesAsync(ct);
@@ -659,14 +717,34 @@ public class ModernAdminServiceSchemaController : Controller
             AreaKey = question.AreaKey,
             Heading = question.Heading,
             Help = question.Help,
+            HelpPanel = question.HelpPanel,
             TitleLabel = question.TitleLabel,
             NarrativeLabel = question.NarrativeLabel,
             SortOrder = question.SortOrder,
             IsActive = question.IsActive,
             IsBuiltIn = question.IsBuiltIn,
             HasResponses = await QuestionHasResponsesAsync(question.Key, ct),
-            Areas = await AreaChoicesAsync(ct)
+            ResponseMode = string.IsNullOrWhiteSpace(question.ResponseMode) ? ServiceSchemaResponseModes.Text : question.ResponseMode,
+            LookupSource = question.LookupSource,
+            CatalogueKind = string.Equals(question.CatalogueKind, question.Key, StringComparison.OrdinalIgnoreCase)
+                ? ServiceSchemaResponseModes.QuestionList
+                : question.CatalogueKind,
+            ChoiceOptions = question.ChoiceOptions ?? "",
+            Areas = await AreaChoicesAsync(ct),
+            Lookups = LookupChoices(),
+            CatalogueKinds = CatalogueChoices()
         };
+
+    private static List<ServiceSchemaChoice> LookupChoices() =>
+        ServiceSchemaAdminLookups.Sources
+            .Select(s => new ServiceSchemaChoice { Value = s.Key, Label = s.Label })
+            .ToList();
+
+    private static List<ServiceSchemaChoice> CatalogueChoices() =>
+        ServiceSchemaCatalog.CatalogueKinds
+            .Where(k => string.IsNullOrEmpty(k.LookupSetKey))
+            .Select(k => new ServiceSchemaChoice { Value = k.Kind, Label = k.Label })
+            .ToList();
 
     private async Task<List<ServiceSchemaChoice>> AreaChoicesAsync(CancellationToken ct) =>
         await _db.ServiceSchemaAreaConfigs.AsNoTracking()
@@ -699,6 +777,47 @@ public class ModernAdminServiceSchemaController : Controller
             suffix++;
         }
         return candidate;
+    }
+
+    private async Task<List<CensusRecordRow>> CatalogueRowsAsync(IQueryable<CensusCatalogueItem> query, CancellationToken ct)
+    {
+        var rows = await query
+            .Select(c => new CensusRecordRow
+            {
+                Id = c.Id,
+                Reference = c.Reference,
+                Name = c.Name,
+                Summary = c.Statement,
+                StatusCode = c.StatusCode,
+                Kind = c.Kind,
+                AddedBy = c.CreatedBy,
+                AddedAgainstProductId = c.AddedAgainstProductId
+            })
+            .ToListAsync(ct);
+
+        var productIds = rows
+            .Where(r => r.AddedAgainstProductId != null)
+            .Select(r => r.AddedAgainstProductId!.Value)
+            .Distinct()
+            .ToList();
+        if (productIds.Count > 0)
+        {
+            var titles = await _db.CMDBProducts.AsNoTracking()
+                .Where(p => productIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.Title })
+                .ToListAsync(ct);
+            var byId = titles.ToDictionary(p => p.Id, p => p.Title);
+            foreach (var row in rows)
+            {
+                if (row.AddedAgainstProductId is Guid productId && byId.TryGetValue(productId, out var title))
+                    row.AddedAgainstProductTitle = title;
+            }
+        }
+
+        return rows
+            .OrderBy(r => string.Equals(r.StatusCode, "NEW", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private async Task<List<ServiceSchemaChoice>> ActiveChoicesAsync(string setKey, CancellationToken ct) =>

@@ -100,6 +100,23 @@ public partial class ModernManageController : Controller
             string.Equals(contact.Trim(), actor, StringComparison.OrdinalIgnoreCase));
     }
 
+    private async Task<bool> UserIsNamedInAdditionalResponsibilitiesAsync(Guid productId, string email, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return false;
+
+        var actor = email.Trim();
+        var emails = await _context.CensusEntries.AsNoTracking()
+            .Where(e => e.ProductId == productId
+                && e.RemovedAt == null
+                && e.DomainKey == ServiceSchemaAreas.AdditionalResponsibilityKey
+                && e.PersonEmail != null
+                && e.PersonEmail != "")
+            .Select(e => e.PersonEmail!)
+            .ToListAsync(ct);
+        return emails.Any(person => string.Equals(person.Trim(), actor, StringComparison.OrdinalIgnoreCase));
+    }
+
     private string CurrentUserEmail =>
         User.Identity?.Name
         ?? User.FindFirst(ClaimTypes.Email)?.Value
@@ -131,6 +148,7 @@ public partial class ModernManageController : Controller
             _ when string.Equals(tab, "workitems", StringComparison.OrdinalIgnoreCase) => "work",
             _ when string.Equals(tab, "strategic-alignment", StringComparison.OrdinalIgnoreCase) => "strategic-alignment",
             _ when string.Equals(tab, "strategicalignment", StringComparison.OrdinalIgnoreCase) => "strategic-alignment",
+            _ when string.Equals(tab, "additional", StringComparison.OrdinalIgnoreCase) => "additional",
             _ when string.Equals(tab, "details", StringComparison.OrdinalIgnoreCase) => "information",
             _ => "information"
         };
@@ -268,7 +286,7 @@ public partial class ModernManageController : Controller
     // ── Product detail ──────────────────────────────────────────────────────
 
     [HttpGet("fips/{id:guid}")]
-    public async Task<IActionResult> FipsProduct(Guid id, string? nc, string? tab, bool edit, CancellationToken ct)
+    public async Task<IActionResult> FipsProduct(Guid id, string? nc, string? tab, bool edit, string? section, string? topic, CancellationToken ct)
     {
         var disabled = await RequireFipsDatabaseAsync();
         if (disabled != null)
@@ -289,12 +307,12 @@ public partial class ModernManageController : Controller
 
         var schemaEnabled = await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(
             FeatureCodes.ServiceRegisterSchema, User);
-        if (string.Equals(tab, "schema", StringComparison.OrdinalIgnoreCase))
-        {
-            if (schemaEnabled)
-                return RedirectToAction(nameof(ServiceSchemaProduct), new { id });
+        var wantsAdditional = string.Equals(tab, "schema", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(tab, "additional", StringComparison.OrdinalIgnoreCase);
+        if (wantsAdditional && !schemaEnabled)
             tab = null;
-        }
+        else if (wantsAdditional)
+            tab = "additional";
 
         var detailTab = NormalizeFipsDetailTab(tab);
 
@@ -307,10 +325,13 @@ public partial class ModernManageController : Controller
         var isNamedContact = product.Contacts.Any(c =>
             !string.IsNullOrWhiteSpace(c.UserEmail) &&
             string.Equals(c.UserEmail.Trim(), email, StringComparison.OrdinalIgnoreCase));
+        var isNamedInResponsibilities = schemaEnabled
+            && await UserIsNamedInAdditionalResponsibilitiesAsync(id, email, ct);
         var canManage = product.Contacts.Any(c =>
             c.CanManage &&
             string.Equals(c.UserEmail, email, StringComparison.OrdinalIgnoreCase));
         var canEditInformation = isNamedContact || await CanEditFipsProductInformationAsync(ct);
+        var canEditSchema = canEditInformation || isNamedInResponsibilities;
 
         if (edit && canEditInformation && detailTab == "information")
             return RedirectToAction(nameof(FipsProductEditInformation), new { id, nc });
@@ -328,11 +349,30 @@ public partial class ModernManageController : Controller
             ShowServiceRegisterSchema = schemaEnabled,
         };
 
+        if (schemaEnabled)
+        {
+            var progress = await ServiceSchemaWorkspace.LoadProgressAsync(_context, id, ct);
+            vm.ServiceCensusSectionsComplete = progress.SectionsComplete;
+            vm.ServiceCensusSectionCount = progress.SectionCount;
+            vm.ShowServiceCensusPrompt = (isNamedContact || isNamedInResponsibilities)
+                && progress.SectionCount > 0
+                && progress.SectionsComplete < progress.SectionCount;
+        }
+
+        if (detailTab == "additional")
+        {
+            vm.AdditionalInformation = await ServiceSchemaWorkspace.LoadRecordAsync(
+                _context, id, section, topic, canEditSchema, ct);
+        }
+
         await FipsProductCategorisationPresentation.PopulateAsync(
             _context,
             vm,
             includeEditSections: false,
             ct);
+
+        if (detailTab == "additional" && vm.AdditionalInformation?.ProductDetails != null)
+            AttachProductDetailsPanel(vm);
 
         if (FipsProductDetailLoader.NeedsStrategicAlignment(detailTab))
             await FipsProductStrategicAlignmentPresentation.PopulateAsync(_context, vm, product, ct);
@@ -381,6 +421,88 @@ public partial class ModernManageController : Controller
         }
 
         return View("Detail", vm);
+    }
+
+    private void AttachProductDetailsPanel(FipsProductDetailViewModel vm)
+    {
+        var panel = vm.AdditionalInformation?.ProductDetails;
+        if (panel == null)
+            return;
+
+        var p = vm.Product;
+        var nc = ViewBag.FipsNavContext as string;
+        panel.CanEditFields = vm.CanEditInformation || (vm.IsOperationsServiceRegisterProduct && vm.CanManage);
+        panel.EditBaseUrl = Url.Action(nameof(FipsProductEditInformation), new { id = p.Id, nc }) ?? "#";
+        panel.Fields =
+        [
+            new ServiceSchemaProductDetailsField
+            {
+                Label = "Description",
+                Value = p.UserDescription,
+                FieldKey = FipsProductInformationFieldKeys.Description,
+                ChangeVisuallyHidden = "description"
+            },
+            new ServiceSchemaProductDetailsField
+            {
+                Label = "Phase",
+                Value = p.Phase?.Name,
+                FieldKey = FipsProductInformationFieldKeys.Phase,
+                ChangeVisuallyHidden = "phase"
+            },
+            new ServiceSchemaProductDetailsField
+            {
+                Label = "Directorate",
+                Value = vm.DirectoratesDisplay,
+                FieldKey = FipsProductInformationFieldKeys.Directorate,
+                ChangeVisuallyHidden = "directorate"
+            },
+            new ServiceSchemaProductDetailsField
+            {
+                Label = "Business area",
+                Value = vm.BusinessAreasDisplay,
+                FieldKey = FipsProductInformationFieldKeys.BusinessArea,
+                ChangeVisuallyHidden = "business area"
+            },
+            new ServiceSchemaProductDetailsField
+            {
+                Label = "Channel",
+                Value = vm.ChannelsDisplay,
+                FieldKey = FipsProductInformationFieldKeys.Channel,
+                ChangeVisuallyHidden = "channel"
+            },
+            new ServiceSchemaProductDetailsField
+            {
+                Label = "Type",
+                Value = vm.TypesDisplay,
+                FieldKey = FipsProductInformationFieldKeys.Type,
+                ChangeVisuallyHidden = "type"
+            },
+            new ServiceSchemaProductDetailsField
+            {
+                Label = "Enterprise service",
+                Value = p.IsEnterpriseService ? "Yes" : "No",
+                FieldKey = FipsProductInformationFieldKeys.EnterpriseService,
+                ChangeVisuallyHidden = "enterprise service"
+            },
+            new ServiceSchemaProductDetailsField
+            {
+                Label = "Product URL",
+                Value = p.ProductURL,
+                IsUrl = true,
+                FieldKey = FipsProductInformationFieldKeys.ProductUrl,
+                ChangeVisuallyHidden = "product URL"
+            }
+        ];
+        foreach (var cat in vm.CategorisationSummaryLines)
+        {
+            panel.Fields.Add(new ServiceSchemaProductDetailsField
+            {
+                Label = cat.GroupName,
+                Value = cat.ItemsDisplay,
+                FieldKey = FipsProductInformationFieldKeys.Categorisation(cat.GroupId),
+                ChangeVisuallyHidden = cat.GroupName
+            });
+        }
     }
 
     private async Task PopulateFipsProductExtendedContextAsync(

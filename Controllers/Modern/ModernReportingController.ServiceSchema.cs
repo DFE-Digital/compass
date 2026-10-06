@@ -7,36 +7,41 @@ namespace Compass.Controllers.Modern;
 public partial class ModernReportingController
 {
     [HttpGet("service-schema")]
-    public async Task<IActionResult> ServiceSchema(string? stage, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> ServiceSchema(string? area, CancellationToken cancellationToken = default)
     {
         if (!SchemaReportEnabled())
             return NotFound();
 
         try
         {
-            var model = await ServiceSchemaReport.LoadAsync(_context, cancellationToken);
-            model.Stage = NormaliseStage(stage);
+            var model = await ServiceSchemaReport.LoadAsync(_context, area, cancellationToken);
             SetNav("reporting-service-schema");
             return View("~/Views/Modern/Reporting/ServiceSchema.cshtml", model);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading service schema data quality report");
-            TempData["ErrorMessage"] = "An error occurred while loading the service schema report. Please try again.";
+            _logger.LogError(ex, "Error loading service census report");
+            TempData["ErrorMessage"] = "An error occurred while loading the service census report. Please try again.";
             SetNav("reporting-service-schema");
             return View("~/Views/Modern/Reporting/ServiceSchema.cshtml", new ServiceSchemaDqReportViewModel());
         }
     }
 
     [HttpGet("service-schema/topics/{key}")]
-    public async Task<IActionResult> ServiceSchemaTopic(string key, string? view, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> ServiceSchemaTopic(
+        string key,
+        string? view,
+        string? value,
+        string? area,
+        int? page,
+        CancellationToken cancellationToken = default)
     {
         if (!SchemaReportEnabled())
             return NotFound();
 
         try
         {
-            var model = await ServiceSchemaReport.LoadTopicAsync(_context, key, view, cancellationToken);
+            var model = await ServiceSchemaReport.LoadTopicAsync(_context, key, view, value, area, page, cancellationToken);
             if (model == null)
                 return NotFound();
             SetNav("reporting-service-schema");
@@ -44,8 +49,8 @@ public partial class ModernReportingController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading service schema topic report");
-            TempData["ErrorMessage"] = "An error occurred while loading this schema question. Please try again.";
+            _logger.LogError(ex, "Error loading service census question report");
+            TempData["ErrorMessage"] = "An error occurred while loading this census question. Please try again.";
             return RedirectToAction(nameof(ServiceSchema));
         }
     }
@@ -53,10 +58,4 @@ public partial class ModernReportingController
     private bool SchemaReportEnabled() =>
         ViewBag.ShowFipsDatabaseServiceRegister as bool? == true
         && ViewBag.ShowServiceRegisterSchema as bool? == true;
-
-    private static string NormaliseStage(string? stage) => stage?.Trim().ToLowerInvariant() switch
-    {
-        "not-started" or "in-progress" or "complete" => stage.Trim().ToLowerInvariant(),
-        _ => ""
-    };
 }

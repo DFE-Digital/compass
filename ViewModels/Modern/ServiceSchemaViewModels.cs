@@ -4,6 +4,7 @@ public class ServiceSchemaChoice
 {
     public string Value { get; set; } = "";
     public string Label { get; set; } = "";
+    public string? Hint { get; set; }
     public string? Group { get; set; }
 }
 
@@ -14,6 +15,9 @@ public class ServiceSchemaEntryRow
     public string? Narrative { get; set; }
     public string? Meta { get; set; }
     public string? Url { get; set; }
+    public Guid? LinkedProductId { get; set; }
+    public string? AnswerCode { get; set; }
+    public string? CategoryCode { get; set; }
     public bool FromRegister { get; set; }
     public string VerificationLabel { get; set; } = "Unverified";
 }
@@ -102,6 +106,10 @@ public class CensusRecordRow
     public string Name { get; set; } = "";
     public string? Summary { get; set; }
     public string StatusCode { get; set; } = "";
+    public string Kind { get; set; } = "";
+    public string? AddedBy { get; set; }
+    public Guid? AddedAgainstProductId { get; set; }
+    public string? AddedAgainstProductTitle { get; set; }
 }
 
 public class CatalogueAdminPage
@@ -222,16 +230,32 @@ public class ServiceSchemaAreaNav
 {
     public string Key { get; set; } = "";
     public string Name { get; set; } = "";
+    public string Summary { get; set; } = "";
+    public string? HelpPanel { get; set; }
     public string Group { get; set; } = "";
     public string State { get; set; } = "empty";
     public string StateLabel { get; set; } = "Not recorded";
+    public int TopicsRecorded { get; set; }
+    public int TopicCount { get; set; }
+    public List<ServiceSchemaTopicNav> Topics { get; set; } = new();
+}
+
+public class ServiceSchemaTopicNav
+{
+    public string Key { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string State { get; set; } = "empty";
+    public string StateLabel { get; set; } = "Not recorded";
+    public int ItemCount { get; set; }
 }
 
 public class ServiceSchemaTopicBlock
 {
     public string Key { get; set; } = "";
     public string Heading { get; set; } = "";
+    public string NavLabel { get; set; } = "";
     public string Help { get; set; } = "";
+    public string? HelpPanel { get; set; }
     public string TitleLabel { get; set; } = "Title";
     public string NarrativeLabel { get; set; } = "Narrative";
     public string Mode { get; set; } = "text";
@@ -243,6 +267,7 @@ public class ServiceSchemaTopicBlock
     public string State { get; set; } = "empty";
     public string StateLabel { get; set; } = "Not recorded";
     public bool NothingToRecord { get; set; }
+    public bool TopicComplete { get; set; }
     public List<ServiceSchemaChoice> Choices { get; set; } = new();
     public List<ServiceSchemaEntryRow> Entries { get; set; } = new();
 }
@@ -262,20 +287,60 @@ public class ServiceSchemaWorkspacePage
     public string Phase { get; set; } = "";
     public string Status { get; set; } = "";
     public string ActiveArea { get; set; } = "overview";
+    public bool SectionComplete { get; set; }
     public string ActiveTopic { get; set; } = "";
     public string AreaName { get; set; } = "";
     public string AreaGroup { get; set; } = "";
     public string AreaSummary { get; set; } = "";
+    public string? AreaHelpPanel { get; set; }
     public List<ServiceSchemaNavItem> Nav { get; set; } = new();
     public List<ServiceSchemaAreaNav> Areas { get; set; } = new();
     public List<ServiceSchemaTopicBlock> Topics { get; set; } = new();
     public ServiceSchemaSectionWorkspace Section { get; set; } = new();
     public List<ServiceSchemaChoice> StaffRoles { get; set; } = new();
+    public ServiceSchemaProductDetailsPanel? ProductDetails { get; set; }
+    public List<ServiceSchemaAuditRow> AuditRows { get; set; } = new();
+}
+
+public class ServiceSchemaProductDetailsPanel
+{
+    public bool MarkedComplete { get; set; }
+    public bool HasInformation { get; set; }
+    public string State { get; set; } = "empty";
+    public string StateLabel { get; set; } = "Not yet started";
+    public bool CanEditFields { get; set; }
+    public string EditBaseUrl { get; set; } = "#";
+    public List<ServiceSchemaProductDetailsField> Fields { get; set; } = new();
+}
+
+public class ServiceSchemaProductDetailsField
+{
+    public string Label { get; set; } = "";
+    public string? Value { get; set; }
+    public bool IsUrl { get; set; }
+    public string FieldKey { get; set; } = "";
+    public string ChangeVisuallyHidden { get; set; } = "";
+}
+
+public class ServiceSchemaAuditRow
+{
+    public string Id { get; set; } = "";
+    public string AreaName { get; set; } = "";
+    public string QuestionName { get; set; } = "";
+    public string Action { get; set; } = "";
+    public string ActorName { get; set; } = "";
+    public string ActorEmail { get; set; } = "";
+    public DateTime AtUtc { get; set; }
+    public string AtDisplay { get; set; } = "";
+    public string? OldValue { get; set; }
+    public string? NewValue { get; set; }
+    public string? Detail { get; set; }
 }
 
 public class ServiceSchemaQuestionsAdminPage
 {
     public List<ServiceSchemaAreaAdminRow> Areas { get; set; } = new();
+    public List<CensusRecordRow> NewItems { get; set; } = new();
 }
 
 public class ServiceSchemaAreaAdminRow
@@ -283,7 +348,9 @@ public class ServiceSchemaAreaAdminRow
     public string Key { get; set; } = "";
     public string Name { get; set; } = "";
     public string Summary { get; set; } = "";
+    public string? HelpPanel { get; set; }
     public int SortOrder { get; set; }
+    public bool IsActive { get; set; } = true;
     public List<ServiceSchemaQuestionAdminRow> Questions { get; set; } = new();
 }
 
@@ -294,6 +361,7 @@ public class ServiceSchemaQuestionAdminRow
     public string Heading { get; set; } = "";
     public int SortOrder { get; set; }
     public bool IsActive { get; set; }
+    public string ResponseLabel { get; set; } = "";
 }
 
 public class ServiceSchemaQuestionEditPage
@@ -303,11 +371,18 @@ public class ServiceSchemaQuestionEditPage
     public string AreaKey { get; set; } = "";
     public string Heading { get; set; } = "";
     public string Help { get; set; } = "";
+    public string? HelpPanel { get; set; }
     public string TitleLabel { get; set; } = "";
     public string NarrativeLabel { get; set; } = "";
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsBuiltIn { get; set; }
     public bool HasResponses { get; set; }
+    public string ResponseMode { get; set; } = "text";
+    public string? LookupSource { get; set; }
+    public string? CatalogueKind { get; set; }
+    public string ChoiceOptions { get; set; } = "";
     public List<ServiceSchemaChoice> Areas { get; set; } = new();
+    public List<ServiceSchemaChoice> Lookups { get; set; } = new();
+    public List<ServiceSchemaChoice> CatalogueKinds { get; set; } = new();
 }

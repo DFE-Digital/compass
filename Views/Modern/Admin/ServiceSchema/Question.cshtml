@@ -19,9 +19,7 @@
  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
    Caption = "Service schema",
    Title = creating ? "Add a question" : Model.Heading,
-   Lede = new HtmlString(creating
-     ? "<p class=\"govuk-body govuk-!-margin-bottom-0\">New questions ask for a title and a description.</p>"
-     : "<p class=\"govuk-body govuk-!-margin-bottom-0\">The question key stays the same, so responses already saved keep their place.</p>")
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Choose how people answer. The question key stays the same, so responses already saved keep their place.</p>")
  })
  @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Messages.cshtml")
  <div class="govuk-grid-row">
@@ -52,8 +50,14 @@
      <input class="govuk-input" id="heading" name="heading" type="text" value="@Model.Heading" />
     </div>
     <div class="govuk-form-group">
-     <label class="govuk-label" for="help">Help text</label>
+     <label class="govuk-label" for="help">Short help</label>
+     <div class="govuk-hint">Optional one or two sentences under the question. Prefer the help panel for longer guidance.</div>
      <textarea class="govuk-textarea" id="help" name="help" rows="3">@Model.Help</textarea>
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="helpPanel">Help panel</label>
+     <div class="govuk-hint">Shown in the help blade when someone clicks Help on this question. Markdown is supported.</div>
+     <textarea class="govuk-textarea" id="helpPanel" name="helpPanel" rows="8">@Model.HelpPanel</textarea>
     </div>
     <div class="govuk-form-group">
      <label class="govuk-label" for="titleLabel">Title label</label>
@@ -71,6 +75,78 @@
       <input class="govuk-input govuk-input--width-5" id="sortOrder" name="sortOrder" type="number" value="@Model.SortOrder" />
      </div>
     }
+    <fieldset class="govuk-fieldset govuk-!-margin-bottom-6">
+     <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">How people answer</legend>
+     <div class="govuk-radios" data-module="govuk-radios" id="response-mode">
+      @foreach (var mode in new (string Value, string Label, string Hint)[]
+      {
+        ("text", "Text", "A title and a description, typed on the product."),
+        ("lookup", "Select from a list", "A dropdown. Choose which list it uses."),
+        ("catalogue", "Autocomplete", "A shared list. People can search it and add a new name."),
+        ("choice", "Choice", "One option from a short list you write here."),
+        ("yes-choice", "Yes or no, then a choice", "Yes or no. A yes answer then chooses from the list and can include a description."),
+        ("products", "Service register products", "Other products already on the service register.")
+      })
+      {
+       var modeId = "response-mode-" + mode.Value;
+       var selected = string.Equals(Model.ResponseMode, mode.Value, StringComparison.OrdinalIgnoreCase);
+       <div class="govuk-radios__item">
+        <input class="govuk-radios__input" id="@modeId" name="responseMode" type="radio" value="@mode.Value" @(selected ? "checked" : null) />
+        <label class="govuk-label govuk-radios__label" for="@modeId">@mode.Label</label>
+        <div class="govuk-hint govuk-radios__hint">@mode.Hint</div>
+       </div>
+      }
+     </div>
+     <div class="govuk-form-group govuk-!-margin-top-4" id="response-panel-lookup" hidden>
+      <label class="govuk-label" for="lookupSource">List</label>
+      <select class="govuk-select" id="lookupSource" name="lookupSource">
+       <option value="">Select a list</option>
+       @foreach (var lookup in Model.Lookups)
+       {
+        if (string.Equals(lookup.Value, Model.LookupSource, StringComparison.OrdinalIgnoreCase))
+        {
+         <option value="@lookup.Value" selected>@lookup.Label</option>
+        }
+        else
+        {
+         <option value="@lookup.Value">@lookup.Label</option>
+        }
+       }
+      </select>
+     </div>
+     <div class="govuk-form-group govuk-!-margin-top-4" id="response-panel-catalogue" hidden>
+      <label class="govuk-label" for="catalogueKind">Autocomplete list</label>
+      <select class="govuk-select" id="catalogueKind" name="catalogueKind">
+       @{
+        var ownList = string.Equals(Model.CatalogueKind, "question", StringComparison.OrdinalIgnoreCase);
+       }
+       @if (ownList)
+       {
+        <option value="question" selected>A list for this question</option>
+       }
+       else
+       {
+        <option value="question">A list for this question</option>
+       }
+       @foreach (var kind in Model.CatalogueKinds)
+       {
+        if (!ownList && string.Equals(kind.Value, Model.CatalogueKind, StringComparison.OrdinalIgnoreCase))
+        {
+         <option value="@kind.Value" selected>@kind.Label</option>
+        }
+        else
+        {
+         <option value="@kind.Value">@kind.Label</option>
+        }
+       }
+      </select>
+     </div>
+     <div class="govuk-form-group govuk-!-margin-top-4" id="response-panel-choice" hidden>
+      <label class="govuk-label" for="choiceOptions">Choices</label>
+      <div class="govuk-hint">One choice on each line. At least two.</div>
+      <textarea class="govuk-textarea" id="choiceOptions" name="choiceOptions" rows="5">@Model.ChoiceOptions</textarea>
+     </div>
+    </fieldset>
     <div class="govuk-form-group">
      <div class="govuk-checkboxes" data-module="govuk-checkboxes">
       <div class="govuk-checkboxes__item">
@@ -88,6 +164,24 @@
      <button class="govuk-button govuk-button--warning" type="submit">Remove question</button>
     </form>
    }
+   <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+   (function () {
+     var extras = ["lookup", "catalogue", "choice"];
+     function show() {
+       var selected = document.querySelector("#response-mode input:checked");
+       var value = selected ? selected.value : "text";
+       extras.forEach(function (mode) {
+         var panel = document.getElementById("response-panel-" + mode);
+         if (!panel) return;
+         panel.hidden = mode !== value && !(mode === "choice" && value === "yes-choice");
+       });
+     }
+     document.querySelectorAll("#response-mode input").forEach(function (input) {
+       input.addEventListener("change", show);
+     });
+     show();
+   })();
+   </script>
   </div>
  </div>
 </div>

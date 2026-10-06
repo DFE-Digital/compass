@@ -1,307 +1,443 @@
+@using Compass.Models.Modern.Work
 @using Compass.ViewModels.Modern
 @model ServiceSchemaDqReportViewModel
 @{
-    ViewData["Title"] = "Service schema data quality";
+    ViewData["Title"] = "Service census";
     var m = Model ?? new ServiceSchemaDqReportViewModel();
+    string TopicHref(string key, string? view = null, string? value = null) =>
+        Url.Action("ServiceSchemaTopic", "ModernReporting", new { key, view, value, area = m.BusinessAreaFilter }) ?? "#";
+    string AreaHref(string? area) =>
+        Url.Action("ServiceSchema", "ModernReporting", new { area }) ?? "#";
     string Tone(int percent) => percent == 0 ? "empty" : percent < 25 ? "low" : percent < 60 ? "mid" : "ok";
-    string StageHref(string stage) => Url.Action("ServiceSchema", "ModernReporting", new { stage }) ?? "#";
-    string TopicHref(string key) => Url.Action("ServiceSchemaTopic", "ModernReporting", new { key, view = "missing" }) ?? "#";
-    string SchemaHref(Guid id) => Url.RouteUrl("ServiceSchemaProduct", new { id }) ?? "#";
-    var weakest = m.Topics.OrderBy(t => t.Percent).ThenByDescending(t => t.Empty).Take(6).ToList();
-    var lowest = m.Products.Take(8).ToList();
-    var shown = m.Stage switch
-    {
-        "not-started" => m.Products.Where(p => p.TopicsRecorded == 0).ToList(),
-        "in-progress" => m.Products.Where(p => p.TopicsRecorded > 0 && p.TopicsRecorded < p.TopicCount).ToList(),
-        "complete" => m.Products.Where(p => p.TopicCount > 0 && p.TopicsRecorded >= p.TopicCount).ToList(),
-        _ => m.Products
-    };
-    var stageLabel = m.Stage switch
-    {
-        "not-started" => "not started",
-        "in-progress" => "in progress",
-        "complete" => "complete",
-        _ => ""
-    };
-    var maxPhase = Math.Max(m.Phases.Select(p => p.Count).DefaultIfEmpty(0).Max(), 1);
-    var topicGroups = m.Topics.GroupBy(t => t.AreaName).ToList();
 }
 @section Breadcrumbs {
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
-  <li class="govuk-breadcrumbs__list-item" aria-current="page">Service schema</li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Service census</li>
 }
-@section Styles {
-  <link rel="stylesheet" href="@Url.Content("~/modern/css/service-schema-report.css")" asp-append-version="true" />
-}
-<div class="mr-dash ss-report">
+
+<div class="mr-dash">
   @{
-    var lede = await Html.PartialAsync("_ReportingMutedBodyLede", "Find gaps in the service schema. Percentages show how much information is still missing.");
+    var lede = await Html.PartialAsync("_ReportingMutedBodyLede",
+      "How complete the service census is across active products, and what the estate has recorded for objectives, users, technology, APIs and dependencies.");
   }
   @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
   {
     Caption = "Reporting",
-    Title = "Service schema data quality",
+    Title = "Service census",
     Lede = lede
   })
 
   @if (TempData["ErrorMessage"] != null)
   {
-    <div class="govuk-error-summary" role="alert"><div class="govuk-error-summary__body"><p class="govuk-body">@TempData["ErrorMessage"]</p></div></div>
+    <div class="dfe-c-error-summary" role="alert" style="margin-bottom:1.5rem;">
+      <p class="dfe-c-body" style="margin:0;">@TempData["ErrorMessage"]</p>
+    </div>
   }
 
-  <section class="ss-kpis" aria-label="Headline figures">
-    <div class="ss-kpi">
-      <p class="govuk-body-s">Schema coverage</p>
-      <p class="ss-kpi-value">@m.OverallPercent%</p>
-      <p class="govuk-body-s">Average across @m.TopicCount questions and @m.ActiveProducts.ToString("N0") active products. Empty questions still count.</p>
-    </div>
-    <a class="ss-kpi @(m.NotStarted > 0 ? "is-warn" : null) @(m.Stage == "not-started" ? "is-current" : null)" href="@StageHref("not-started")">
-      <p class="govuk-body-s">Not started</p>
-      <p class="ss-kpi-value">@m.NotStarted.ToString("N0")</p>
-      <p class="govuk-body-s">No question recorded yet.</p>
-    </a>
-    <a class="ss-kpi @(m.Stage == "in-progress" ? "is-current" : null)" href="@StageHref("in-progress")">
-      <p class="govuk-body-s">In progress</p>
-      <p class="ss-kpi-value">@m.InProgress.ToString("N0")</p>
-      <p class="govuk-body-s">Some questions recorded, some still empty.</p>
-    </a>
-    <a class="ss-kpi is-ok @(m.Stage == "complete" ? "is-current" : null)" href="@StageHref("complete")">
-      <p class="govuk-body-s">Complete</p>
-      <p class="ss-kpi-value">@m.Complete.ToString("N0")</p>
-      <p class="govuk-body-s">@m.WithAnyRecording.ToString("N0") products have at least one response.</p>
-    </a>
-  </section>
-
-  @if (weakest.Count > 0)
-  {
-    <section class="ss-panel" aria-labelledby="attention-heading">
-      <div class="ss-panel-head">
-        <div>
-          <h2 id="attention-heading" class="govuk-heading-m">Needs attention</h2>
-          <p class="govuk-body govuk-!-margin-bottom-0">Questions with the least recorded information. Open a question to see the products still missing it.</p>
-        </div>
-        <a class="govuk-link" href="#schema-coverage">All questions</a>
-      </div>
-      <div class="ss-attention">
-        @foreach (var topic in weakest)
+  <div class="mr-toolbar mr-toolbar--compact govuk-!-margin-bottom-3">
+    <form method="get" action="@Url.Action("ServiceSchema", "ModernReporting")" class="mr-toolbar__filters mr-toolbar__filters--compact" data-page-loading>
+      <label class="govuk-visually-hidden" for="ss-ba-filter">Business area</label>
+      <select name="area" id="ss-ba-filter" class="govuk-select" aria-label="Business area" onchange="this.form.submit()">
+        <option value="">All business areas</option>
+        @foreach (var option in m.BusinessAreaOptions)
         {
-          <a class="ss-card @Tone(topic.Percent)" href="@TopicHref(topic.Key)">
-            <p class="govuk-body-s">@topic.AreaName</p>
-            <strong>@topic.Name</strong>
-            <p class="ss-card-pct">@topic.Percent%</p>
-            <p class="govuk-body-s">@topic.ProductsWithItems.ToString("N0") recorded · @topic.ProductsDeclared.ToString("N0") nothing to record · @topic.Empty.ToString("N0") still empty</p>
-          </a>
-        }
-      </div>
-    </section>
-  }
-
-  <section class="ss-panel" id="schema-coverage" aria-labelledby="schema-heading">
-    <div class="ss-panel-head">
-      <div>
-        <h2 id="schema-heading" class="govuk-heading-m">Schema coverage</h2>
-        <p class="govuk-body govuk-!-margin-bottom-0">Recorded is a saved response. Nothing to record is an explicit declaration. A named contact counts as recorded for responsibilities.</p>
-      </div>
-    </div>
-    @if (m.Topics.Count == 0)
-    {
-      <p class="govuk-body">No schema questions are switched on.</p>
-    }
-    else
-    {
-      <div class="ss-scroll">
-        <table class="govuk-table">
-          <thead class="govuk-table__head">
-            <tr class="govuk-table__row">
-              <th scope="col" class="govuk-table__header">Question</th>
-              <th scope="col" class="govuk-table__header govuk-table__header--numeric">Recorded</th>
-              <th scope="col" class="govuk-table__header govuk-table__header--numeric">Nothing to record</th>
-              <th scope="col" class="govuk-table__header">Information present</th>
-              <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Action</span></th>
-            </tr>
-          </thead>
-          <tbody class="govuk-table__body">
-            @foreach (var group in topicGroups)
-            {
-              <tr class="govuk-table__row ss-group">
-                <th scope="colgroup" colspan="5" class="govuk-table__header">@group.Key</th>
-              </tr>
-              @foreach (var topic in group.OrderBy(t => t.Percent).ThenBy(t => t.Name))
-              {
-                <tr class="govuk-table__row ss-row @Tone(topic.Percent)">
-                  <th scope="row" class="govuk-table__header"><a class="govuk-link govuk-link--no-visited-state" href="@TopicHref(topic.Key)">@topic.Name</a></th>
-                  <td class="govuk-table__cell govuk-table__cell--numeric">@topic.ProductsWithItems.ToString("N0")</td>
-                  <td class="govuk-table__cell govuk-table__cell--numeric">@topic.ProductsDeclared.ToString("N0")</td>
-                  <td class="govuk-table__cell">
-                    <div class="ss-coverage">
-                      <div class="ss-bar" aria-hidden="true"><span style="width: @topic.Percent%"></span></div>
-                      <span>@topic.Percent%</span>
-                    </div>
-                  </td>
-                  <td class="govuk-table__cell"><a class="govuk-link" href="@TopicHref(topic.Key)">See gaps</a></td>
-                </tr>
-              }
-            }
-          </tbody>
-        </table>
-      </div>
-    }
-  </section>
-
-  <div class="ss-split govuk-!-margin-bottom-5">
-    <section class="ss-panel" aria-labelledby="areas-heading">
-      <div class="ss-panel-head">
-        <div>
-          <h2 id="areas-heading" class="govuk-heading-m">By business area</h2>
-          <p class="govuk-body govuk-!-margin-bottom-0">Average schema coverage. Lowest first. A product in more than one area is counted in each.</p>
-        </div>
-      </div>
-      @if (m.BusinessAreas.Count == 0)
-      {
-        <p class="govuk-body">No active products.</p>
-      }
-      else
-      {
-        <div class="ss-scroll">
-          <table class="govuk-table">
-            <thead class="govuk-table__head">
-              <tr class="govuk-table__row">
-                <th scope="col" class="govuk-table__header">Business area</th>
-                <th scope="col" class="govuk-table__header govuk-table__header--numeric">Products</th>
-                <th scope="col" class="govuk-table__header">Schema recorded</th>
-              </tr>
-            </thead>
-            <tbody class="govuk-table__body">
-              @foreach (var area in m.BusinessAreas)
-              {
-                <tr class="govuk-table__row ss-row @Tone(area.AveragePercent)">
-                  <th scope="row" class="govuk-table__header">@area.Name</th>
-                  <td class="govuk-table__cell govuk-table__cell--numeric">@area.ProductCount.ToString("N0")</td>
-                  <td class="govuk-table__cell">
-                    <div class="ss-coverage">
-                      <div class="ss-bar" aria-hidden="true"><span style="width: @area.AveragePercent%"></span></div>
-                      <span>@area.AveragePercent% · @area.NotStarted not started</span>
-                    </div>
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
-    </section>
-    <section class="ss-panel" aria-labelledby="phase-heading">
-      <h2 id="phase-heading" class="govuk-heading-m">By phase</h2>
-      <p class="govuk-body">Phase on the active product record.</p>
-      @if (m.Phases.Count == 0)
-      {
-        <p class="govuk-body">No active products.</p>
-      }
-      else
-      {
-        <ul class="ss-mix">
-          @foreach (var phase in m.Phases)
+          if (string.Equals(m.BusinessAreaFilter, option, StringComparison.OrdinalIgnoreCase))
           {
-            var width = (int)Math.Round(100d * phase.Count / maxPhase);
-            <li>
-              <div class="ss-mix-top">
-                <span>@phase.Name</span>
-                <strong>@phase.Count.ToString("N0")</strong>
-              </div>
-              <div class="ss-mix-track" aria-hidden="true"><span style="width: @width%"></span></div>
-            </li>
+            <option value="@option" selected>@option</option>
           }
-        </ul>
+          else
+          {
+            <option value="@option">@option</option>
+          }
+        }
+      </select>
+      @if (!string.IsNullOrWhiteSpace(m.BusinessAreaFilter))
+      {
+        <a class="govuk-link govuk-link--no-visited-state" href="@AreaHref(null)">Clear filter</a>
       }
-    </section>
+    </form>
   </div>
 
-  @if (lowest.Count > 0 && string.IsNullOrEmpty(m.Stage))
-  {
-    <section class="ss-panel" aria-labelledby="lowest-heading">
-      <div class="ss-panel-head">
-        <div>
-          <h2 id="lowest-heading" class="govuk-heading-m">Lowest coverage</h2>
-          <p class="govuk-body govuk-!-margin-bottom-0">Active products with the least of the schema recorded.</p>
-        </div>
-        <a class="govuk-link" href="#products">All products</a>
-      </div>
-      <table class="govuk-table">
-        <thead class="govuk-table__head">
-          <tr class="govuk-table__row">
-            <th scope="col" class="govuk-table__header">Product</th>
-            <th scope="col" class="govuk-table__header">Business area</th>
-            <th scope="col" class="govuk-table__header">Schema</th>
-          </tr>
-        </thead>
-        <tbody class="govuk-table__body">
-          @foreach (var product in lowest)
-          {
-            <tr class="govuk-table__row ss-row @Tone(product.Percent)">
-              <th scope="row" class="govuk-table__header"><a class="govuk-link govuk-link--no-visited-state" href="@SchemaHref(product.Id)">@product.Title</a></th>
-              <td class="govuk-table__cell">@product.BusinessAreas</td>
-              <td class="govuk-table__cell">
-                <div class="ss-coverage">
-                  <div class="ss-bar" aria-hidden="true"><span style="width: @product.Percent%"></span></div>
-                  <span>@product.Percent% · @product.TopicsRecorded of @product.TopicCount</span>
-                </div>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
-  }
+  <ul class="govuk-list govuk-!-margin-bottom-4 ss-kpi-strip" aria-label="Headline figures">
+    <li><strong>@m.OverallPercent%</strong> average coverage</li>
+    <li><strong>@m.ActiveProducts.ToString("N0")</strong> active products</li>
+    <li><strong>@m.TotalEntries.ToString("N0")</strong> recorded answers</li>
+    <li><strong>@m.NotStarted.ToString("N0")</strong> not started · <strong>@m.InProgress.ToString("N0")</strong> in progress · <strong>@m.Complete.ToString("N0")</strong> complete</li>
+  </ul>
 
-  <section class="ss-panel" id="products" aria-labelledby="products-heading">
-    <div class="ss-panel-head">
-      <div>
-        <h2 id="products-heading" class="govuk-heading-m">@(string.IsNullOrEmpty(stageLabel) ? "Products" : "Products " + stageLabel)</h2>
-        <p class="govuk-body govuk-!-margin-bottom-0">@shown.Count.ToString("N0") shown. Lowest coverage first.</p>
+  <div class="dfe-f-toggle-group mr-report-toggle-group govuk-!-margin-bottom-3" data-module="dfe-f-toggle-group" id="ss-report-sections">
+    <div class="mr-report-view-controls govuk-!-margin-bottom-3" role="toolbar" aria-label="Report section controls">
+      <span class="mr-report-view-controls__label govuk-body-s govuk-!-font-weight-bold">Sections</span>
+      <div class="mr-report-view-controls__actions">
+        <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-dfe-toggle-expand-all>Expand all sections</button>
+        <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-dfe-toggle-collapse-all>Collapse all sections</button>
       </div>
-      @if (!string.IsNullOrEmpty(m.Stage))
-      {
-        <a class="govuk-link" href="@Url.Action("ServiceSchema", "ModernReporting")">Show all products</a>
-      }
     </div>
-    @if (shown.Count == 0)
-    {
-      <p class="govuk-body">No products in this group.</p>
-    }
-    else
-    {
-      <div class="ss-scroll">
-        <table class="govuk-table">
-          <thead class="govuk-table__head">
-            <tr class="govuk-table__row">
-              <th scope="col" class="govuk-table__header">Product</th>
-              <th scope="col" class="govuk-table__header">Business area</th>
-              <th scope="col" class="govuk-table__header">Phase</th>
-              <th scope="col" class="govuk-table__header">Schema</th>
-            </tr>
-          </thead>
-          <tbody class="govuk-table__body">
-            @foreach (var product in shown)
+    <div class="dfe-f-toggle-group__items">
+
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="completion" data-mr-section-title="Completion by business area">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="ss-toggle-ba-content" id="ss-toggle-ba-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Completion by business area</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.BusinessAreas.Count)">@m.BusinessAreas.Count</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="ss-toggle-ba-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <p class="govuk-body-s govuk-hint">Average census coverage for active products. A product in more than one area is counted in each.</p>
+            @if (m.BusinessAreas.Count == 0)
             {
-              <tr class="govuk-table__row ss-row @Tone(product.Percent)">
-                <th scope="row" class="govuk-table__header">
-                  <a class="govuk-link govuk-link--no-visited-state" href="@SchemaHref(product.Id)">@product.Title</a>
-                  <div class="govuk-body-s govuk-!-margin-bottom-0">ID @product.UniqueId</div>
-                </th>
-                <td class="govuk-table__cell">@product.BusinessAreas</td>
-                <td class="govuk-table__cell">@product.Phase</td>
-                <td class="govuk-table__cell">
-                  <div class="ss-coverage">
-                    <div class="ss-bar" aria-hidden="true"><span style="width: @product.Percent%"></span></div>
-                    <span>@product.Percent% · @product.TopicsRecorded of @product.TopicCount</span>
-                  </div>
-                </td>
-              </tr>
+              <p class="govuk-body">No active products.</p>
             }
-          </tbody>
-        </table>
+            else
+            {
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header">Business area</th>
+                      <th scope="col" class="govuk-table__header govuk-table__header--numeric">Products</th>
+                      <th scope="col" class="govuk-table__header">Coverage</th>
+                      <th scope="col" class="govuk-table__header govuk-table__header--numeric">Not started</th>
+                      <th scope="col" class="govuk-table__header govuk-table__header--numeric">In progress</th>
+                      <th scope="col" class="govuk-table__header govuk-table__header--numeric">Complete</th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var ba in m.BusinessAreas)
+                    {
+                      <tr class="govuk-table__row ss-row @Tone(ba.AveragePercent)">
+                        <th scope="row" class="govuk-table__header">
+                          <a class="govuk-link govuk-link--no-visited-state" href="@AreaHref(ba.Name)">@ba.Name</a>
+                        </th>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@ba.ProductCount.ToString("N0")</td>
+                        <td class="govuk-table__cell">
+                          <div class="ss-coverage">
+                            <div class="ss-bar" aria-hidden="true"><span style="width: @ba.AveragePercent%"></span></div>
+                            <span>@ba.AveragePercent%</span>
+                          </div>
+                        </td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@ba.NotStarted.ToString("N0")</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@ba.InProgress.ToString("N0")</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@ba.Complete.ToString("N0")</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        </div>
       </div>
-    }
-  </section>
+
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="sections" data-mr-section-title="Progress by census section">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="ss-toggle-sections-content" id="ss-toggle-sections-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Progress by census section</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.Sections.Count)">@m.Sections.Count</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="ss-toggle-sections-content" class="dfe-f-toggle__content" hidden>
+          <div class="dfe-f-toggle__body govuk-body">
+            <p class="govuk-body-s govuk-hint">Each section expands to its questions. Open a question for answers or products still empty.</p>
+            @if (m.Sections.Count == 0)
+            {
+              <p class="govuk-body">No census questions are switched on.</p>
+            }
+            else
+            {
+              <div class="dfe-f-toggle-group" data-module="dfe-f-toggle-group">
+                <div class="dfe-f-toggle-group__items">
+                  @for (var i = 0; i < m.Sections.Count; i++)
+                  {
+                    var group = m.Sections[i];
+                    var toggleId = "ss-sec-" + i;
+                    var contentId = toggleId + "-content";
+                    <div class="dfe-f-toggle govuk-!-margin-bottom-2" data-module="dfe-f-toggle">
+                      <div class="dfe-f-toggle__title-wrapper">
+                        <h3 class="dfe-f-toggle__heading">
+                          <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="@contentId" id="@(toggleId)-button">
+                            <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                            <span class="dfe-f-toggle__title">@group.Name</span>
+                            <span class="mr-toggle-panel__meta">
+                              <span class="@WorkBadgeCss.ToggleCountBadgeClass(group.AveragePercent, highlightWhenPositive: true)">@group.AveragePercent%</span>
+                              <span class="govuk-body-s">@group.EntryCount.ToString("N0") answers · @group.EmptyQuestions gaps</span>
+                            </span>
+                          </button>
+                        </h3>
+                      </div>
+                      <div id="@contentId" class="dfe-f-toggle__content" hidden>
+                        <div class="dfe-f-toggle__body govuk-body">
+                          <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                            <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                              <thead class="govuk-table__head">
+                                <tr class="govuk-table__row">
+                                  <th scope="col" class="govuk-table__header">Question</th>
+                                  <th scope="col" class="govuk-table__header govuk-table__header--numeric">Products</th>
+                                  <th scope="col" class="govuk-table__header govuk-table__header--numeric">Answers</th>
+                                  <th scope="col" class="govuk-table__header govuk-table__header--numeric">Empty</th>
+                                  <th scope="col" class="govuk-table__header">Coverage</th>
+                                  <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Open</span></th>
+                                </tr>
+                              </thead>
+                              <tbody class="govuk-table__body">
+                                @foreach (var topic in group.Topics)
+                                {
+                                  <tr class="govuk-table__row ss-row @Tone(topic.Percent)">
+                                    <th scope="row" class="govuk-table__header">
+                                      <a class="govuk-link govuk-link--no-visited-state" href="@TopicHref(topic.Key, topic.HasSelectableValues ? "answers" : "missing")">@topic.Name</a>
+                                    </th>
+                                    <td class="govuk-table__cell govuk-table__cell--numeric">@topic.ProductsWithItems.ToString("N0")</td>
+                                    <td class="govuk-table__cell govuk-table__cell--numeric">@topic.EntryCount.ToString("N0")</td>
+                                    <td class="govuk-table__cell govuk-table__cell--numeric">@topic.Empty.ToString("N0")</td>
+                                    <td class="govuk-table__cell">
+                                      <div class="ss-coverage">
+                                        <div class="ss-bar" aria-hidden="true"><span style="width: @topic.Percent%"></span></div>
+                                        <span>@topic.Percent%</span>
+                                      </div>
+                                    </td>
+                                    <td class="govuk-table__cell">
+                                      <a class="govuk-link" href="@TopicHref(topic.Key, topic.HasSelectableValues ? "answers" : "missing")">
+                                        @(topic.HasSelectableValues ? "Values" : "Gaps")
+                                      </a>
+                                    </td>
+                                  </tr>
+                                }
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="estate" data-mr-section-title="Estate insights">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="ss-toggle-estate-content" id="ss-toggle-estate-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">Estate insights</span>
+              <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.Insights.Count)">@m.Insights.Count</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="ss-toggle-estate-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <p class="govuk-body-s govuk-hint">Cross-product answers for the structured questions people fill in most: objectives, users, technology, APIs, patterns and dependencies. Expand one, then open a value to see the products.</p>
+            @if (m.Insights.Count == 0)
+            {
+              <p class="govuk-body">No structured answers have been recorded yet.</p>
+            }
+            else
+            {
+              <div class="dfe-f-toggle-group" data-module="dfe-f-toggle-group">
+                <div class="dfe-f-toggle-group__items">
+                  @for (var i = 0; i < m.Insights.Count; i++)
+                  {
+                    var insight = m.Insights[i];
+                    var toggleId = "ss-insight-" + i;
+                    var contentId = toggleId + "-content";
+                    <div class="dfe-f-toggle govuk-!-margin-bottom-2" data-module="dfe-f-toggle">
+                      <div class="dfe-f-toggle__title-wrapper">
+                        <h3 class="dfe-f-toggle__heading">
+                          <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="@contentId" id="@(toggleId)-button">
+                            <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                            <span class="dfe-f-toggle__title">@insight.Title</span>
+                            <span class="mr-toggle-panel__meta">
+                              <span class="@WorkBadgeCss.ToggleCountBadgeClass(insight.EntryCount)">@insight.EntryCount.ToString("N0")</span>
+                              <span class="govuk-body-s">@insight.DistinctValues.ToString("N0") values · @insight.ProductsWithAnswers.ToString("N0") products</span>
+                            </span>
+                          </button>
+                        </h3>
+                      </div>
+                      <div id="@contentId" class="dfe-f-toggle__content" hidden>
+                        <div class="dfe-f-toggle__body govuk-body">
+                          <p class="govuk-body-s">@insight.Blurb <a class="govuk-link" href="@TopicHref(insight.TopicKey, "answers")">Open full question</a></p>
+                          @if (insight.Values.Count == 0)
+                          {
+                            <p class="govuk-body">Nothing recorded for this question yet.</p>
+                          }
+                          else
+                          {
+                            <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                              <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                                <thead class="govuk-table__head">
+                                  <tr class="govuk-table__row">
+                                    <th scope="col" class="govuk-table__header">Value</th>
+                                    <th scope="col" class="govuk-table__header govuk-table__header--numeric">Products</th>
+                                    <th scope="col" class="govuk-table__header govuk-table__header--numeric">Answers</th>
+                                    <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Open</span></th>
+                                  </tr>
+                                </thead>
+                                <tbody class="govuk-table__body">
+                                  @foreach (var value in insight.Values)
+                                  {
+                                    <tr class="govuk-table__row">
+                                      <th scope="row" class="govuk-table__header">
+                                        <a class="govuk-link govuk-link--no-visited-state" href="@TopicHref(insight.TopicKey, "answers", value.Code)">@value.Label</a>
+                                      </th>
+                                      <td class="govuk-table__cell govuk-table__cell--numeric">@value.ProductCount.ToString("N0")</td>
+                                      <td class="govuk-table__cell govuk-table__cell--numeric">@value.EntryCount.ToString("N0")</td>
+                                      <td class="govuk-table__cell"><a class="govuk-link" href="@TopicHref(insight.TopicKey, "answers", value.Code)">Show products</a></td>
+                                    </tr>
+                                  }
+                                </tbody>
+                              </table>
+                            </div>
+                            @if (insight.DistinctValues > insight.Values.Count)
+                            {
+                              <p class="govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                                <a class="govuk-link" href="@TopicHref(insight.TopicKey, "answers")">Show all @insight.DistinctValues.ToString("N0") values</a>
+                              </p>
+                            }
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      @if (m.ProductsBehind.Count > 0)
+      {
+        <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="products" data-mr-section-title="Products furthest behind">
+          <div class="dfe-f-toggle__title-wrapper">
+            <h2 class="dfe-f-toggle__heading">
+              <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="ss-toggle-products-content" id="ss-toggle-products-button">
+                <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                <span class="dfe-f-toggle__title">Products furthest behind</span>
+                <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.ProductsBehind.Count)">@m.ProductsBehind.Count</span></span>
+              </button>
+            </h2>
+          </div>
+          <div id="ss-toggle-products-content" class="dfe-f-toggle__content" hidden>
+            <div class="dfe-f-toggle__body govuk-body">
+              <p class="govuk-body-s govuk-hint">Active products with the lowest census coverage. Open the product to continue recording.</p>
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header">Product</th>
+                      <th scope="col" class="govuk-table__header">Business area</th>
+                      <th scope="col" class="govuk-table__header">Phase</th>
+                      <th scope="col" class="govuk-table__header govuk-table__header--numeric">Questions</th>
+                      <th scope="col" class="govuk-table__header">Coverage</th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var product in m.ProductsBehind)
+                    {
+                      var schemaHref = Url.Action("FipsProduct", "ModernManage", new { id = product.Id, tab = "additional", section = "overview" }) ?? "#";
+                      <tr class="govuk-table__row ss-row @Tone(product.Percent)">
+                        <th scope="row" class="govuk-table__header">
+                          <a class="govuk-link govuk-link--no-visited-state" href="@schemaHref">@product.Title</a>
+                          <div class="govuk-body-s govuk-!-margin-bottom-0">ID @product.UniqueId</div>
+                        </th>
+                        <td class="govuk-table__cell">@product.BusinessAreas</td>
+                        <td class="govuk-table__cell">@product.Phase</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@product.TopicsRecorded / @product.TopicCount</td>
+                        <td class="govuk-table__cell">
+                          <div class="ss-coverage">
+                            <div class="ss-bar" aria-hidden="true"><span style="width: @product.Percent%"></span></div>
+                            <span>@product.Percent%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (m.WeakestQuestions.Count > 0)
+      {
+        <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle" data-mr-section-id="attention" data-mr-section-title="Needs attention">
+          <div class="dfe-f-toggle__title-wrapper">
+            <h2 class="dfe-f-toggle__heading">
+              <button type="button" class="dfe-f-toggle__button" aria-expanded="false" aria-controls="ss-toggle-attention-content" id="ss-toggle-attention-button">
+                <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                <span class="dfe-f-toggle__title">Needs attention</span>
+                <span class="mr-toggle-panel__meta"><span class="@WorkBadgeCss.ToggleCountBadgeClass(m.WeakestQuestions.Count)">@m.WeakestQuestions.Count</span></span>
+              </button>
+            </h2>
+          </div>
+          <div id="ss-toggle-attention-content" class="dfe-f-toggle__content" hidden>
+            <div class="dfe-f-toggle__body govuk-body">
+              <p class="govuk-body-s govuk-hint">Questions with the least coverage. Open gaps to chase missing products.</p>
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header">Question</th>
+                      <th scope="col" class="govuk-table__header">Section</th>
+                      <th scope="col" class="govuk-table__header govuk-table__header--numeric">Empty</th>
+                      <th scope="col" class="govuk-table__header">Coverage</th>
+                      <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Open</span></th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var topic in m.WeakestQuestions)
+                    {
+                      <tr class="govuk-table__row ss-row @Tone(topic.Percent)">
+                        <th scope="row" class="govuk-table__header">@topic.Name</th>
+                        <td class="govuk-table__cell">@topic.AreaName</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@topic.Empty.ToString("N0")</td>
+                        <td class="govuk-table__cell">
+                          <div class="ss-coverage">
+                            <div class="ss-bar" aria-hidden="true"><span style="width: @topic.Percent%"></span></div>
+                            <span>@topic.Percent%</span>
+                          </div>
+                        </td>
+                        <td class="govuk-table__cell"><a class="govuk-link" href="@TopicHref(topic.Key, "missing")">See gaps</a></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+    </div>
+  </div>
 </div>
+
+@section Styles {
+  @await Html.PartialAsync("_MrReportCoreStyles")
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/service-schema-report.css")" asp-append-version="true" />
+  <style>
+    .ss-kpi-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.5rem;
+      padding: 0.85rem 1rem;
+      background: #fff;
+      border: 1px solid #b1b4b6;
+      list-style: none;
+      margin: 0 0 1.25rem;
+    }
+    .ss-kpi-strip li { margin: 0; color: #505a5f; }
+    .ss-kpi-strip strong { color: #0b0c0c; }
+  </style>
+}

@@ -154,7 +154,7 @@ public partial class CompassDbContext
 
         modelBuilder.Entity<CensusSectionDeclaration>(e =>
         {
-            e.Property(x => x.SectionKey).HasMaxLength(40);
+            e.Property(x => x.SectionKey).HasMaxLength(80);
             e.Property(x => x.StatusCode).HasMaxLength(40);
             e.Property(x => x.Explanation).HasColumnType("nvarchar(max)");
             e.Property(x => x.UpdatedBy).HasMaxLength(255);
@@ -172,6 +172,8 @@ public partial class CompassDbContext
             e.Property(a => a.Name).HasMaxLength(200);
             e.Property(a => a.Group).HasMaxLength(80);
             e.Property(a => a.Summary).HasMaxLength(4000);
+            e.Property(a => a.HelpPanel);
+            e.Property(a => a.IsActive).HasDefaultValue(true);
         });
 
         modelBuilder.Entity<ServiceSchemaQuestion>(e =>
@@ -182,8 +184,13 @@ public partial class CompassDbContext
             e.Property(q => q.AreaKey).HasMaxLength(40);
             e.Property(q => q.Heading).HasMaxLength(200);
             e.Property(q => q.Help).HasMaxLength(4000);
+            e.Property(q => q.HelpPanel);
             e.Property(q => q.TitleLabel).HasMaxLength(200);
             e.Property(q => q.NarrativeLabel).HasMaxLength(200);
+            e.Property(q => q.ResponseMode).HasMaxLength(20);
+            e.Property(q => q.LookupSource).HasMaxLength(40);
+            e.Property(q => q.CatalogueKind).HasMaxLength(40);
+            e.Property(q => q.ChoiceOptions).HasMaxLength(4000);
             e.Property(q => q.UpdatedBy).HasMaxLength(255);
         });
 

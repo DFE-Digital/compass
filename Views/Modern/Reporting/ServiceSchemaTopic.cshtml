@@ -1,105 +1,271 @@
 @using Compass.ViewModels.Modern
 @model ServiceSchemaDqTopicPage
 @{
-    ViewData["Title"] = Model.Name + " gaps";
+    ViewData["Title"] = Model.Name + " — Service census";
     string Tone(int percent) => percent == 0 ? "empty" : percent < 25 ? "low" : percent < 60 ? "mid" : "ok";
-    string ListHref(string view) => Url.Action("ServiceSchemaTopic", "ModernReporting", new { key = Model.Key, view }) ?? "#";
-    string SchemaHref(Guid id) => Url.RouteUrl("ServiceSchemaProduct", new { id, section = Model.AreaKey, topic = Model.Key }) ?? "#";
-    var showingMissing = Model.View != "recorded";
+    string ListHref(string view, string? value = null, int? page = null) =>
+        Url.Action("ServiceSchemaTopic", "ModernReporting", new
+        {
+            key = Model.Key,
+            view,
+            value,
+            page,
+            area = Model.BusinessAreaFilter
+        }) ?? "#";
+    string SchemaHref(Guid id) =>
+        Url.Action("FipsProduct", "ModernManage", new { id, tab = "additional", section = Model.AreaKey, topic = Model.Key }) ?? "#";
+    var showingMissing = Model.View == "missing" && string.IsNullOrEmpty(Model.SelectedValue);
+    var showingAnswers = Model.View == "answers" || !string.IsNullOrEmpty(Model.SelectedValue);
+    var showingRecorded = Model.View == "recorded" && string.IsNullOrEmpty(Model.SelectedValue);
+    var showAnswerColumn = showingAnswers || showingRecorded || !string.IsNullOrEmpty(Model.SelectedValue);
+    var totalPages = Model.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(Model.ProductMatchCount / (double)Model.PageSize));
 }
 @section Breadcrumbs {
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
-  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceSchema", "ModernReporting")">Service schema</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("ServiceSchema", "ModernReporting", new { area = Model.BusinessAreaFilter })">Service census</a></li>
   <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Name</li>
 }
-@section Styles {
-  <link rel="stylesheet" href="@Url.Content("~/modern/css/service-schema-report.css")" asp-append-version="true" />
-}
-<div class="mr-dash ss-report">
+
+<div class="mr-dash">
   @{
-    var ledeText = showingMissing
-      ? Model.Empty.ToString("N0") + " of " + Model.TotalProducts.ToString("N0") + " active products have nothing recorded for this question."
-      : Model.ProductsWithInformation.ToString("N0") + " of " + Model.TotalProducts.ToString("N0") + " active products have a response or a declaration.";
+    string ledeText = !string.IsNullOrEmpty(Model.SelectedValue)
+      ? Model.ProductMatchCount.ToString("N0") + " products selected “" + (Model.SelectedValueLabel ?? Model.SelectedValue) + "”."
+      : showingMissing
+        ? Model.Empty.ToString("N0") + " of " + Model.TotalProducts.ToString("N0") + " products have nothing recorded."
+        : Model.EntryCount.ToString("N0") + " answers across " + Model.ProductsWithItems.ToString("N0") + " products.";
+    if (!string.IsNullOrWhiteSpace(Model.Help))
+      ledeText += " " + Model.Help;
     var lede = await Html.PartialAsync("_ReportingMutedBodyLede", ledeText);
   }
   @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
   {
-    Caption = Model.AreaName,
+    Caption = "Service census · " + Model.AreaName,
     Title = Model.Name,
     Lede = lede
   })
 
-  <section class="ss-kpis" aria-label="Question coverage">
-    <div class="ss-kpi">
-      <p class="govuk-body-s">Information present</p>
-      <p class="ss-kpi-value">@Model.Percent%</p>
-      <p class="govuk-body-s">@Model.ProductsWithInformation.ToString("N0") of @Model.TotalProducts.ToString("N0") products.</p>
-    </div>
-    <div class="ss-kpi">
-      <p class="govuk-body-s">Recorded</p>
-      <p class="ss-kpi-value">@Model.ProductsWithItems.ToString("N0")</p>
-      <p class="govuk-body-s">A saved response@(Model.Key == "responsibility" ? ", or a named contact" : "").</p>
-    </div>
-    <div class="ss-kpi">
-      <p class="govuk-body-s">Nothing to record</p>
-      <p class="ss-kpi-value">@Model.ProductsDeclared.ToString("N0")</p>
-      <p class="govuk-body-s">An explicit declaration.</p>
-    </div>
-    <a class="ss-kpi @(Model.Empty > 0 ? "is-warn" : "is-ok") @(showingMissing ? "is-current" : null)" href="@ListHref("missing")">
-      <p class="govuk-body-s">Still empty</p>
-      <p class="ss-kpi-value">@Model.Empty.ToString("N0")</p>
-      <p class="govuk-body-s">No response and no declaration.</p>
-    </a>
-  </section>
-
-  <section class="ss-panel" aria-labelledby="topic-products-heading">
-    <div class="ss-panel-head">
-      <h2 id="topic-products-heading" class="govuk-heading-m">@(showingMissing ? "Products still missing this" : "Products with information")</h2>
-      @if (showingMissing)
+  <div class="mr-toolbar mr-toolbar--compact govuk-!-margin-bottom-3">
+    <form method="get" action="@Url.Action("ServiceSchemaTopic", "ModernReporting", new { key = Model.Key })" class="mr-toolbar__filters mr-toolbar__filters--compact" data-page-loading>
+      <input type="hidden" name="view" value="@Model.View" />
+      @if (!string.IsNullOrEmpty(Model.SelectedValue))
       {
-        <a class="govuk-link" href="@ListHref("recorded")">Show recorded</a>
+        <input type="hidden" name="value" value="@Model.SelectedValue" />
       }
-      else
-      {
-        <a class="govuk-link" href="@ListHref("missing")">Show gaps</a>
-      }
-    </div>
-    @if (Model.Products.Count == 0)
-    {
-      <p class="govuk-body">@(showingMissing ? "Every active product has something recorded for this question." : "Nothing recorded for this question yet.")</p>
-    }
-    else
-    {
-      <table class="govuk-table">
-        <thead class="govuk-table__head">
-          <tr class="govuk-table__row">
-            <th scope="col" class="govuk-table__header">Product</th>
-            <th scope="col" class="govuk-table__header">Business area</th>
-            <th scope="col" class="govuk-table__header">Phase</th>
-            <th scope="col" class="govuk-table__header">Whole schema</th>
-          </tr>
-        </thead>
-        <tbody class="govuk-table__body">
-          @foreach (var product in Model.Products)
+      <label class="govuk-visually-hidden" for="ss-topic-ba">Business area</label>
+      <select name="area" id="ss-topic-ba" class="govuk-select" aria-label="Business area" onchange="this.form.submit()">
+        <option value="">All business areas</option>
+        @foreach (var option in Model.BusinessAreaOptions)
+        {
+          if (string.Equals(Model.BusinessAreaFilter, option, StringComparison.OrdinalIgnoreCase))
           {
-            <tr class="govuk-table__row ss-row @Tone(product.Percent)">
-              <th scope="row" class="govuk-table__header">
-                <a class="govuk-link govuk-link--no-visited-state" href="@SchemaHref(product.Id)">@product.Title</a>
-                <div class="govuk-body-s govuk-!-margin-bottom-0">ID @product.UniqueId</div>
-              </th>
-              <td class="govuk-table__cell">@product.BusinessAreas</td>
-              <td class="govuk-table__cell">@product.Phase</td>
-              <td class="govuk-table__cell">
-                <div class="ss-coverage">
-                  <div class="ss-bar" aria-hidden="true"><span style="width: @product.Percent%"></span></div>
-                  <span>@product.Percent%</span>
-                </div>
-              </td>
-            </tr>
+            <option value="@option" selected>@option</option>
           }
-        </tbody>
-      </table>
+          else
+          {
+            <option value="@option">@option</option>
+          }
+        }
+      </select>
+    </form>
+    <div class="ss-view-links govuk-!-margin-left-3">
+      @if (Model.HasSelectableValues)
+      {
+        <a class="govuk-link @(showingAnswers && string.IsNullOrEmpty(Model.SelectedValue) ? "ss-view-current" : null)" href="@ListHref("answers")">Values</a>
+      }
+      <a class="govuk-link @(showingRecorded ? "ss-view-current" : null)" href="@ListHref("recorded")">Recorded</a>
+      <a class="govuk-link @(showingMissing ? "ss-view-current" : null)" href="@ListHref("missing")">Gaps</a>
+    </div>
+  </div>
+
+  <ul class="govuk-list govuk-!-margin-bottom-4 ss-kpi-strip" aria-label="Question figures">
+    <li><strong>@Model.Percent%</strong> coverage</li>
+    <li><strong>@Model.EntryCount.ToString("N0")</strong> answers</li>
+    <li><strong>@Model.ProductsWithItems.ToString("N0")</strong> products with a response</li>
+    <li><strong>@Model.Empty.ToString("N0")</strong> still empty</li>
+    @if (Model.HasSelectableValues)
+    {
+      <li><strong>@Model.Values.Count.ToString("N0")</strong> distinct values</li>
     }
-  </section>
+  </ul>
+
+  <div class="dfe-f-toggle-group mr-report-toggle-group" data-module="dfe-f-toggle-group">
+    <div class="dfe-f-toggle-group__items">
+
+      @if (Model.HasSelectableValues && Model.Values.Count > 0)
+      {
+        <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+          <div class="dfe-f-toggle__title-wrapper">
+            <h2 class="dfe-f-toggle__heading">
+              <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="ss-topic-values-content" id="ss-topic-values-button">
+                <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+                <span class="dfe-f-toggle__title">Selected values</span>
+                <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">@Model.Values.Count</span></span>
+              </button>
+            </h2>
+          </div>
+          <div id="ss-topic-values-content" class="dfe-f-toggle__content">
+            <div class="dfe-f-toggle__body govuk-body">
+              @if (!string.IsNullOrEmpty(Model.SelectedValue))
+              {
+                <p class="govuk-body-s">Filtered to “@Model.SelectedValueLabel”. <a class="govuk-link" href="@ListHref("answers")">Clear value filter</a></p>
+              }
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header">Value</th>
+                      <th scope="col" class="govuk-table__header govuk-table__header--numeric">Products</th>
+                      <th scope="col" class="govuk-table__header govuk-table__header--numeric">Answers</th>
+                      <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Open</span></th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var value in Model.Values)
+                    {
+                      var selected = string.Equals(Model.SelectedValue, value.Code, StringComparison.OrdinalIgnoreCase);
+                      <tr class="govuk-table__row @(selected ? "ss-row-selected" : null)">
+                        <th scope="row" class="govuk-table__header">
+                          <a class="govuk-link govuk-link--no-visited-state" href="@ListHref("answers", value.Code)">@value.Label</a>
+                        </th>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@value.ProductCount.ToString("N0")</td>
+                        <td class="govuk-table__cell govuk-table__cell--numeric">@value.EntryCount.ToString("N0")</td>
+                        <td class="govuk-table__cell"><a class="govuk-link" href="@ListHref("answers", value.Code)">@(selected ? "Showing" : "Show products")</a></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <div class="mr-report-section-panel dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+        <div class="dfe-f-toggle__title-wrapper">
+          <h2 class="dfe-f-toggle__heading">
+            <button type="button" class="dfe-f-toggle__button" aria-expanded="true" aria-controls="ss-topic-products-content" id="ss-topic-products-button">
+              <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+              <span class="dfe-f-toggle__title">
+                @if (!string.IsNullOrEmpty(Model.SelectedValue))
+                {
+                  @:Products with this value
+                }
+                else if (showingMissing)
+                {
+                  @:Products still missing this
+                }
+                else
+                {
+                  @:Products and answers
+                }
+              </span>
+              <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">@Model.ProductMatchCount</span></span>
+            </button>
+          </h2>
+        </div>
+        <div id="ss-topic-products-content" class="dfe-f-toggle__content">
+          <div class="dfe-f-toggle__body govuk-body">
+            <p class="govuk-body-s">Showing @Model.Products.Count.ToString("N0") of @Model.ProductMatchCount.ToString("N0")@(totalPages > 1 ? " · page " + Model.Page + " of " + totalPages : "").</p>
+            @if (Model.Products.Count == 0)
+            {
+              <p class="govuk-body">No products in this view.</p>
+            }
+            else
+            {
+              <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+                <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+                  <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                      <th scope="col" class="govuk-table__header">Product</th>
+                      <th scope="col" class="govuk-table__header">Business area</th>
+                      @if (showAnswerColumn)
+                      {
+                        <th scope="col" class="govuk-table__header">Answer</th>
+                      }
+                      <th scope="col" class="govuk-table__header">Phase</th>
+                      <th scope="col" class="govuk-table__header">Census</th>
+                    </tr>
+                  </thead>
+                  <tbody class="govuk-table__body">
+                    @foreach (var product in Model.Products)
+                    {
+                      <tr class="govuk-table__row ss-row @Tone(product.Percent)">
+                        <th scope="row" class="govuk-table__header">
+                          <a class="govuk-link govuk-link--no-visited-state" href="@SchemaHref(product.Id)">@product.Title</a>
+                          <div class="govuk-body-s govuk-!-margin-bottom-0">ID @product.UniqueId</div>
+                        </th>
+                        <td class="govuk-table__cell">@product.BusinessAreas</td>
+                        @if (showAnswerColumn)
+                        {
+                          <td class="govuk-table__cell">
+                            @if (string.IsNullOrWhiteSpace(product.Answer))
+                            {
+                              <span class="govuk-body-s">—</span>
+                            }
+                            else
+                            {
+                              <div>@product.Answer</div>
+                              @if (!string.IsNullOrWhiteSpace(product.AnswerDetail))
+                              {
+                                <div class="govuk-body-s govuk-!-margin-bottom-0">@product.AnswerDetail</div>
+                              }
+                            }
+                          </td>
+                        }
+                        <td class="govuk-table__cell">@product.Phase</td>
+                        <td class="govuk-table__cell">
+                          <div class="ss-coverage">
+                            <div class="ss-bar" aria-hidden="true"><span style="width: @product.Percent%"></span></div>
+                            <span>@product.Percent%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              @if (totalPages > 1)
+              {
+                <p class="govuk-body-s govuk-!-margin-top-3">
+                  @if (Model.Page > 1)
+                  {
+                    <a class="govuk-link" href="@ListHref(Model.View, Model.SelectedValue, Model.Page - 1)">Previous</a>
+                    <span aria-hidden="true"> · </span>
+                  }
+                  Page @Model.Page of @totalPages
+                  @if (Model.Page < totalPages)
+                  {
+                    <span aria-hidden="true"> · </span>
+                    <a class="govuk-link" href="@ListHref(Model.View, Model.SelectedValue, Model.Page + 1)">Next</a>
+                  }
+                </p>
+              }
+            }
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
 </div>
+
+@section Styles {
+  @await Html.PartialAsync("_MrReportCoreStyles")
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/service-schema-report.css")" asp-append-version="true" />
+  <style>
+    .ss-kpi-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.5rem;
+      padding: 0.85rem 1rem;
+      background: #fff;
+      border: 1px solid #b1b4b6;
+      list-style: none;
+      margin: 0 0 1.25rem;
+    }
+    .ss-kpi-strip li { margin: 0; color: #505a5f; }
+    .ss-kpi-strip strong { color: #0b0c0c; }
+    .mr-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+  </style>
+}
