@@ -13,6 +13,8 @@ public class WorkRegisterViewModel
     public int PausedCount { get; set; }
     public int CompletedCount { get; set; }
     public int CancelledCount { get; set; }
+    /// <summary>Count of work items with lifecycle status Horizon (pipeline).</summary>
+    public int HorizonCount { get; set; }
     public int RagRedCount { get; set; }
     public int AwaitingMonthlyCount { get; set; }
     public bool AwaitingMonthlyOverdue { get; set; }

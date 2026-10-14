@@ -22,6 +22,7 @@ public class WorkItem
     public string? Description { get; set; }
 
     [Required, MaxLength(50)]
+    /// <summary>Lifecycle status: Active, Horizon, Paused, Completed, or Cancelled.</summary>
     public string Status { get; set; } = "Active";
 
     public int? RagStatusId { get; set; }
@@ -218,6 +219,10 @@ public class MonthlyUpdate
     public DateTime? SubmittedAt { get; set; }
     public int? SubmittedByUserId { get; set; }
     public decimal? PermFte { get; set; }
+    public decimal? AdminFte { get; set; }
+    public decimal? ProgrammeFte { get; set; }
+    public decimal? CapitalFte { get; set; }
+    public decimal? OtherPermFte { get; set; }
     public decimal? MspFte { get; set; }
     public string? PeopleNarrative { get; set; }
 }

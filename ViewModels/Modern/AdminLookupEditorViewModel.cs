@@ -116,6 +116,8 @@ public enum AdminLookupEditorKind
     Raid,
     RiskTierLike,
     ActivityType,
+    ActivityTimeType,
+    ActivityTimeTheme,
     WorkItemTag,
     ResourceBand,
     MissionPillar,

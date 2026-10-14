@@ -62,9 +62,8 @@ public partial class ModernMonthlyReportService
             if (periodUpdate == null)
                 continue;
 
-            var perm = periodUpdate.MonthlyPermFte ?? 0m;
-            var msp = periodUpdate.MonthlyMspFte ?? 0m;
-            if (perm == 0m && msp == 0m)
+            var fte = ResolveMonthlyResourcingFte(periodUpdate);
+            if (fte.Perm == 0m && fte.Msp == 0m)
                 continue;
 
             var directorateNames = project.Directorates
@@ -83,9 +82,12 @@ public partial class ModernMonthlyReportService
                 Directorates = directorateNames.Count == 0 ? "Not set" : string.Join(", ", directorateNames),
                 Rag = RagBucket(project),
                 Priority = project.DeliveryPriority?.Name,
-                PermFte = perm,
-                MspFte = msp,
-                ResourcingFte = perm + msp
+                AdminFte = fte.Admin,
+                ProgrammeFte = fte.Programme,
+                CapitalFte = fte.Capital,
+                PermFte = fte.Perm,
+                MspFte = fte.Msp,
+                ResourcingFte = fte.Perm + fte.Msp
             });
         }
 

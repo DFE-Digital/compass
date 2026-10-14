@@ -1,0 +1,78 @@
+@model Compass.ViewModels.Modern.ActivityTimeIndexViewModel
+@using System.Globalization
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Activity time";
+  var enGb = CultureInfo.GetCultureInfo("en-GB");
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Activity time</li>
+}
+
+@{
+  var headerActions = new HtmlString($"<a class=\"govuk-button\" href=\"{Url.Action("Create", "ModernActivityTime")}\">Add new</a>");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Title = "Activity time",
+  Lede = await Html.PartialAsync("_GovukBodyParagraph", "Record time spent on Central Ops activities. Open an entry to edit or delete it."),
+  Actions = headerActions
+})
+
+@if (TempData["Message"] is string msg && !string.IsNullOrWhiteSpace(msg))
+{
+  <div class="govuk-notification-banner govuk-notification-banner--success govuk-!-margin-bottom-4" role="region" aria-labelledby="activity-time-banner-title">
+    <div class="govuk-notification-banner__header">
+      <h2 class="govuk-notification-banner__title" id="activity-time-banner-title">Success</h2>
+    </div>
+    <div class="govuk-notification-banner__content">
+      <p class="govuk-notification-banner__heading">@msg</p>
+    </div>
+  </div>
+}
+
+@if (Model.Entries.Count == 0)
+{
+  <p class="govuk-body">No activity time entries yet. <a class="govuk-link" href="@Url.Action("Create", "ModernActivityTime")">Add new</a>.</p>
+}
+else
+{
+  <div class="dfe-f-table-wrapper">
+    <table class="govuk-table">
+      <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Activity time entries</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header">Date</th>
+          <th scope="col" class="govuk-table__header">Time</th>
+          <th scope="col" class="govuk-table__header">Activity type</th>
+          <th scope="col" class="govuk-table__header">Narrative</th>
+          <th scope="col" class="govuk-table__header">Themes</th>
+          <th scope="col" class="govuk-table__header">Work item</th>
+          <th scope="col" class="govuk-table__header">Business area</th>
+          <th scope="col" class="govuk-table__header">Recorded by</th>
+          <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var e in Model.Entries)
+        {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">@e.ActivityDate.ToString("d MMM yyyy", enGb)</td>
+            <td class="govuk-table__cell">@e.DurationDisplay</td>
+            <td class="govuk-table__cell">@e.ActivityTypeName</td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(e.Narrative) ? "—" : e.Narrative)</td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(e.ThemesDisplay) ? "—" : e.ThemesDisplay)</td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(e.WorkItemTitle) ? "—" : e.WorkItemTitle)</td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(e.BusinessAreaName) ? "—" : e.BusinessAreaName)</td>
+            <td class="govuk-table__cell">@e.CreatedByDisplay</td>
+            <td class="govuk-table__cell">
+              <a class="govuk-link" href="@Url.Action("Edit", "ModernActivityTime", new { id = e.Id })">Edit</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

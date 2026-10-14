@@ -17,7 +17,12 @@ public class MonthlyReportViewModel
 
     public string? Narrative { get; set; }
     public string? PeopleNarrative { get; set; }
+    /// <summary>Total DDT permanent FTE (Admin + Programme + Capital).</summary>
     public decimal? PermFte { get; set; }
+    public decimal? AdminFte { get; set; }
+    public decimal? ProgrammeFte { get; set; }
+    public decimal? CapitalFte { get; set; }
+    public decimal? OtherPermFte { get; set; }
     public decimal? MspFte { get; set; }
 
     public int? RagStatusId { get; set; }
@@ -65,6 +70,10 @@ public class MonthlyReportPreviousSubmission
     public string? Narrative { get; set; }
     public string? PeopleNarrative { get; set; }
     public decimal? PermFte { get; set; }
+    public decimal? AdminFte { get; set; }
+    public decimal? ProgrammeFte { get; set; }
+    public decimal? CapitalFte { get; set; }
+    public decimal? OtherPermFte { get; set; }
     public decimal? MspFte { get; set; }
     public string? RagName { get; set; }
     public string? RagCssClass { get; set; }

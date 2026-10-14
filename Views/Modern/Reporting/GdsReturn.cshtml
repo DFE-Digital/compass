@@ -1,0 +1,104 @@
+@model Compass.ViewModels.Modern.GdsReturnReportViewModel
+@using Compass.ViewModels.Modern
+@{
+    ViewData["Title"] = "GDS Return - excel output";
+    var selected = new HashSet<int>(Model.SelectedCommissionIds);
+    bool HasError(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("CustomReports", "ModernReporting")">Custom reports</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">GDS Return - excel output</li>
+}
+
+@{
+  var lede = await Html.PartialAsync("_ReportingMutedBodyLede",
+    "Export Context Data and Service Data sheets in the GDS Performance Commission format. Choose the commissions to include, then download the workbook to copy into the official template.");
+}
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel
+{
+  Caption = "Custom reports",
+  Title = "GDS Return - excel output",
+  Lede = lede,
+  BackLinkHref = Url.Action("CustomReports", "ModernReporting"),
+  BackLinkText = "Back to custom reports"
+})
+
+@if (TempData["ErrorMessage"] != null)
+{
+  <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert">
+    <div class="govuk-error-summary__body">
+      <ul class="govuk-list govuk-error-summary__list">
+        <li><a href="#commissions">@TempData["ErrorMessage"]</a></li>
+      </ul>
+    </div>
+  </div>
+}
+
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <form method="post" action="@Url.Action("GdsReturnExport", "ModernReporting")" data-page-loading>
+      @Html.AntiForgeryToken()
+
+      <div class="govuk-form-group@(HasError("commissionIds") ? " govuk-form-group--error" : "")" id="commissions">
+        <fieldset class="govuk-fieldset">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+            Commissions to export
+          </legend>
+          <div class="govuk-hint">
+            Service Data Input gets one row per product return in each selected commission. Context Data Input has one row per service.
+          </div>
+
+          @if (Model.Commissions.Count == 0)
+          {
+            <p class="govuk-body">No commissions are available yet.</p>
+          }
+          else
+          {
+            <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+              @foreach (var c in Model.Commissions)
+              {
+                var inputId = $"commission-{c.Id}";
+                <div class="govuk-checkboxes__item">
+                  <input class="govuk-checkboxes__input" id="@inputId" name="commissionIds" type="checkbox" value="@c.Id"
+                         @(selected.Contains(c.Id) ? "checked" : null) />
+                  <label class="govuk-label govuk-checkboxes__label" for="@inputId">
+                    @c.Name
+                    @if (!c.IsActive)
+                    {
+                      <span class="govuk-hint govuk-!-display-inline">(inactive)</span>
+                    }
+                  </label>
+                  <div class="govuk-hint govuk-checkboxes__hint">
+                    GDS quarter @c.GdsQuarterLabel · @c.StartDate.ToString("d MMM yyyy") to @c.EndDate.ToString("d MMM yyyy") · @c.SubmissionCount.ToString("N0") returns
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </fieldset>
+      </div>
+
+      @if (Model.Commissions.Count > 0)
+      {
+        <button type="submit" class="govuk-button">Download Excel</button>
+      }
+    </form>
+  </div>
+
+  <div class="govuk-grid-column-one-third">
+    <h2 class="govuk-heading-s">Workbook sheets</h2>
+    <ul class="govuk-list govuk-list--bullet">
+      <li>Context Data Definitions</li>
+      <li>Context Data Input</li>
+      <li>Service Data Definitions</li>
+      <li>Service Data Input</li>
+    </ul>
+    <h2 class="govuk-heading-s">What is populated</h2>
+    <p class="govuk-body-s">From the service register: name, description (service purpose), service owner, transactional flag, status, facing, users, channels, and gov.uk URL where available.</p>
+    <p class="govuk-body-s">From commission returns: transaction and USAT metrics, accessibility, cost per transaction, FTE, and comments when those metrics are captured.</p>
+    <p class="govuk-body-s">Columns without a Compass source are left blank for you to complete before pasting into rAPId.</p>
+  </div>
+</div>

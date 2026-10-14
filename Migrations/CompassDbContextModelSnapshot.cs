@@ -875,6 +875,156 @@ namespace Compass.Migrations
                     b.ToTable("ActionTypes");
                 });
 
+            modelBuilder.Entity("Compass.Models.ActivityTimeEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ActivityDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("ActivityTimeTypeLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("BusinessAreaLookupId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedByName")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Narrative")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityDate");
+
+                    b.HasIndex("ActivityTimeTypeLookupId");
+
+                    b.HasIndex("BusinessAreaLookupId");
+
+                    b.HasIndex("CreatedByEmail");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("ActivityTimeEntries");
+                });
+
+            modelBuilder.Entity("Compass.Models.ActivityTimeEntryTheme", b =>
+                {
+                    b.Property<int>("ActivityTimeEntryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ActivityTimeThemeLookupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("ActivityTimeEntryId", "ActivityTimeThemeLookupId");
+
+                    b.HasIndex("ActivityTimeThemeLookupId");
+
+                    b.ToTable("ActivityTimeEntryThemes");
+                });
+
+            modelBuilder.Entity("Compass.Models.ActivityTimeThemeLookup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ActivityTimeThemeLookups");
+                });
+
+            modelBuilder.Entity("Compass.Models.ActivityTimeTypeLookup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ActivityTimeTypeLookups");
+                });
+
             modelBuilder.Entity("Compass.Models.ActivityTypeLookup", b =>
                 {
                     b.Property<int>("Id")
@@ -8748,8 +8898,8 @@ namespace Compass.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<DateTime>("DueDate")
                         .HasColumnType("datetime2");
@@ -11137,10 +11287,22 @@ namespace Compass.Migrations
                     b.Property<int>("Month")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("MonthlyAdminFte")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MonthlyCapitalFte")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal?>("MonthlyMspFte")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal?>("MonthlyOtherPermFte")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal?>("MonthlyPermFte")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MonthlyProgrammeFte")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Narrative")
@@ -16287,6 +16449,50 @@ namespace Compass.Migrations
                     b.Navigation("Action");
                 });
 
+            modelBuilder.Entity("Compass.Models.ActivityTimeEntry", b =>
+                {
+                    b.HasOne("Compass.Models.ActivityTimeTypeLookup", "ActivityTimeTypeLookup")
+                        .WithMany()
+                        .HasForeignKey("ActivityTimeTypeLookupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.BusinessAreaLookup", "BusinessAreaLookup")
+                        .WithMany()
+                        .HasForeignKey("BusinessAreaLookupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Compass.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ActivityTimeTypeLookup");
+
+                    b.Navigation("BusinessAreaLookup");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Compass.Models.ActivityTimeEntryTheme", b =>
+                {
+                    b.HasOne("Compass.Models.ActivityTimeEntry", "ActivityTimeEntry")
+                        .WithMany("Themes")
+                        .HasForeignKey("ActivityTimeEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Compass.Models.ActivityTimeThemeLookup", "ActivityTimeThemeLookup")
+                        .WithMany("EntryLinks")
+                        .HasForeignKey("ActivityTimeThemeLookupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ActivityTimeEntry");
+
+                    b.Navigation("ActivityTimeThemeLookup");
+                });
+
             modelBuilder.Entity("Compass.Models.ApiRequestLog", b =>
                 {
                     b.HasOne("Compass.Models.ApiToken", "ApiToken")
@@ -20420,6 +20626,16 @@ namespace Compass.Migrations
                     b.Navigation("SubActions");
 
                     b.Navigation("Tags");
+                });
+
+            modelBuilder.Entity("Compass.Models.ActivityTimeEntry", b =>
+                {
+                    b.Navigation("Themes");
+                });
+
+            modelBuilder.Entity("Compass.Models.ActivityTimeThemeLookup", b =>
+                {
+                    b.Navigation("EntryLinks");
                 });
 
             modelBuilder.Entity("Compass.Models.ApiToken", b =>

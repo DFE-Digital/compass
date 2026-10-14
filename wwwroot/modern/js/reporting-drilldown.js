@@ -96,10 +96,24 @@
 
     function formatFteMsc(p) {
       var parts = [];
-      var fte = formatNum(p.permFte);
+      var admin = formatNum(p.adminFte);
+      var programme = formatNum(p.programmeFte);
+      var capital = formatNum(p.capitalFte);
+      var hasSplit = admin != null || programme != null || capital != null;
+      if (hasSplit) {
+        parts.push('DDT Admin ' + (admin != null ? admin : '0'));
+        parts.push('Prog ' + (programme != null ? programme : '0'));
+        parts.push('Cap ' + (capital != null ? capital : '0'));
+        var total = (Number(p.adminFte) || 0) + (Number(p.programmeFte) || 0) + (Number(p.capitalFte) || 0);
+        parts.push('DDT total ' + formatNum(total));
+      } else {
+        var fte = formatNum(p.permFte);
+        if (fte != null) parts.push('DDT ' + fte);
+      }
+      var other = formatNum(p.otherPermFte);
+      if (other != null) parts.push('Other ' + other);
       var msc = formatNum(p.mspFte);
-      if (fte != null) parts.push('FTE ' + fte);
-      if (msc != null) parts.push('MSC ' + msc);
+      if (msc != null) parts.push('Contractor ' + msc);
       return parts.length ? parts.join(' · ') : '—';
     }
 

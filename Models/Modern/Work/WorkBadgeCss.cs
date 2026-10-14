@@ -236,6 +236,7 @@ public static class WorkBadgeCss
         var s = status.Trim().ToLowerInvariant();
         if (s == "active") return "dfe-f-badge dfe-f-badge--green";
         if (s == "paused") return "dfe-f-badge dfe-f-badge--orange";
+        if (s == "horizon") return "dfe-f-badge dfe-f-badge--purple";
         if (s == "completed" || s == "complete") return "dfe-f-badge dfe-f-badge--green";
         if (s == "cancelled" || s == "canceled") return "dfe-f-badge dfe-f-badge--red";
         return "dfe-f-badge dfe-f-badge--grey";

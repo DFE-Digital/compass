@@ -629,6 +629,7 @@ builder.Services.AddSingleton<Compass.Services.WorkRegisterPerfFileLog>();
 builder.Services.AddScoped<Compass.Services.Modern.IModernWorkService, Compass.Services.Modern.ModernWorkService>();
 builder.Services.AddScoped<Compass.Services.Modern.IWorkServiceRegisterLinkService, Compass.Services.Modern.WorkServiceRegisterLinkService>();
 builder.Services.AddScoped<Compass.Services.Modern.IWorkScopedExcelExportService, Compass.Services.Modern.WorkScopedExcelExportService>();
+builder.Services.AddScoped<Compass.Services.Modern.IGdsReturnExportService, Compass.Services.Modern.GdsReturnExportService>();
 builder.Services.AddScoped<ModernMonthlyReportService>();
 builder.Services.AddScoped<ModernRaidReviewProgressService>();
 builder.Services.AddScoped<ModernRisksByTierReportService>();

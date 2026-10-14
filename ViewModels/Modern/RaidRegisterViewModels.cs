@@ -55,6 +55,19 @@ public class RaidRegisterUserRow
     public RaidRegisterRole Role { get; set; } = RaidRegisterRole.Manager;
 }
 
+/// <summary>
+/// Someone named on a risk/issue in the register who may not have full register membership.
+/// </summary>
+public class RaidRegisterItemContactRow
+{
+    public int? UserId { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string? DisplayName { get; set; }
+    /// <summary>e.g. "Owner on 2 risks · SRO on 1 issue"</summary>
+    public string InvolvementSummary { get; set; } = string.Empty;
+    public bool HasFullRegisterAccess { get; set; }
+}
+
 /// <summary>Dashboard card for one register on the top-level register list.</summary>
 public class RaidRegisterCardViewModel
 {
@@ -85,6 +98,8 @@ public class RaidRegisterDashboardViewModel
 {
     public List<RaidRegisterCardViewModel> YourRegisters { get; set; } = new();
     public List<RaidRegisterCardViewModel> AllRegisters { get; set; } = new();
+    /// <summary>Admin / Central Ops can browse every register in the organisation.</summary>
+    public bool CanBrowseAllRegisters { get; set; }
 }
 
 /// <summary>A single register's detail/sub-dashboard.</summary>
@@ -115,6 +130,11 @@ public class RaidRegisterDetailViewModel
     public List<string> WorkItemNames { get; set; } = new();
     public List<string> ServiceNames { get; set; } = new();
     public List<RaidRegisterUserRow> Users { get; set; } = new();
+    /// <summary>Owners / SROs named on risks or issues who are not (or are) full register members.</summary>
+    public List<RaidRegisterItemContactRow> ItemContacts { get; set; } = new();
+    public bool CanManageMembers { get; set; }
+    /// <summary>Distinct people on the Members tab (full members + item-level contacts).</summary>
+    public int MembersTabCount { get; set; }
 
     // Lookups for spreadsheet editing
     public List<SelectOption> RiskStatuses { get; set; } = new();

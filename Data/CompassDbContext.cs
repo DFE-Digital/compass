@@ -229,6 +229,10 @@ public partial class CompassDbContext : DbContext
     public DbSet<DeliveryPriority> DeliveryPriorities { get; set; }
     public DbSet<KpiCategory> KpiCategories { get; set; }
     public DbSet<ActivityTypeLookup> ActivityTypeLookups { get; set; }
+    public DbSet<ActivityTimeTypeLookup> ActivityTimeTypeLookups { get; set; }
+    public DbSet<ActivityTimeThemeLookup> ActivityTimeThemeLookups { get; set; }
+    public DbSet<ActivityTimeEntry> ActivityTimeEntries { get; set; }
+    public DbSet<ActivityTimeEntryTheme> ActivityTimeEntryThemes { get; set; }
     public DbSet<WorkItemTagLookup> WorkItemTagLookups { get; set; }
     public DbSet<ProjectWorkItemTag> ProjectWorkItemTags { get; set; }
     public DbSet<DirectorateLookup> DirectorateLookups { get; set; }
@@ -1590,6 +1594,11 @@ public partial class CompassDbContext : DbContext
         modelBuilder.Entity<Milestone>()
             .HasIndex(m => m.RagStatusLookupId);
 
+        // Override global string MaxLength(450) so long milestone descriptions are not truncated.
+        modelBuilder.Entity<Milestone>()
+            .Property(m => m.Description)
+            .HasMaxLength(4000);
+
         modelBuilder.Entity<WorkUpdateMilestoneEntry>()
             .HasOne(e => e.Milestone)
             .WithMany()
@@ -2698,6 +2707,59 @@ public partial class CompassDbContext : DbContext
 
         modelBuilder.Entity<ActivityTypeLookup>()
             .HasIndex(at => at.IsActive);
+
+        modelBuilder.Entity<ActivityTimeTypeLookup>()
+            .HasIndex(at => at.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<ActivityTimeTypeLookup>()
+            .HasIndex(at => at.IsActive);
+
+        modelBuilder.Entity<ActivityTimeThemeLookup>()
+            .HasIndex(at => at.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<ActivityTimeThemeLookup>()
+            .HasIndex(at => at.IsActive);
+
+        modelBuilder.Entity<ActivityTimeEntry>()
+            .HasOne(e => e.ActivityTimeTypeLookup)
+            .WithMany()
+            .HasForeignKey(e => e.ActivityTimeTypeLookupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ActivityTimeEntry>()
+            .HasOne(e => e.Project)
+            .WithMany()
+            .HasForeignKey(e => e.ProjectId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ActivityTimeEntry>()
+            .HasOne(e => e.BusinessAreaLookup)
+            .WithMany()
+            .HasForeignKey(e => e.BusinessAreaLookupId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ActivityTimeEntry>()
+            .HasIndex(e => e.ActivityDate);
+
+        modelBuilder.Entity<ActivityTimeEntry>()
+            .HasIndex(e => e.CreatedByEmail);
+
+        modelBuilder.Entity<ActivityTimeEntryTheme>()
+            .HasKey(x => new { x.ActivityTimeEntryId, x.ActivityTimeThemeLookupId });
+
+        modelBuilder.Entity<ActivityTimeEntryTheme>()
+            .HasOne(x => x.ActivityTimeEntry)
+            .WithMany(e => e.Themes)
+            .HasForeignKey(x => x.ActivityTimeEntryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ActivityTimeEntryTheme>()
+            .HasOne(x => x.ActivityTimeThemeLookup)
+            .WithMany(t => t.EntryLinks)
+            .HasForeignKey(x => x.ActivityTimeThemeLookupId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<WorkItemTagLookup>()
             .HasIndex(t => t.Name)

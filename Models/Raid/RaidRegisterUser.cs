@@ -5,7 +5,7 @@ namespace Compass.Models;
 
 /// <summary>
 /// Explicit user access to a RAID register with a defined role.
-/// Combined with hybrid org-structure inheritance for visibility.
+/// Only these members (plus Admin / Central Ops) can see the register and all of its items.
 /// </summary>
 public class RaidRegisterUser
 {
