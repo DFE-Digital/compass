@@ -13,7 +13,7 @@ public class WorkItemsController : ControllerBase
 {
     private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Active", "Paused", "Completed", "Cancelled"
+        "Active", "Paused", "Completed", "Cancelled", "Horizon"
     };
 
     private readonly CompassDbContext _context;
@@ -310,7 +310,7 @@ public class WorkItemsController : ControllerBase
                 error = new
                 {
                     code = "VALIDATION_ERROR",
-                    message = "Status must be Active, Paused, Completed or Cancelled"
+                    message = "Status must be Active, Paused, Completed, Cancelled or Horizon"
                 }
             });
         }
@@ -427,7 +427,7 @@ public class WorkItemsController : ControllerBase
                     error = new
                     {
                         code = "VALIDATION_ERROR",
-                        message = "Status must be Active, Paused, Completed or Cancelled"
+                        message = "Status must be Active, Paused, Completed, Cancelled or Horizon"
                     }
                 });
             }

@@ -241,6 +241,7 @@ public partial class ModernRaidController
 
         var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
         var emailLower = GetCurrentUserEmailNormalized();
+        var isRaidAdmin = await IsRaidRegisterAdminAsync(cancellationToken);
 
         IQueryable<Risk> qBase = _db.Risks.AsNoTracking().Where(r => !r.IsDeleted);
         qBase = qBase
@@ -255,6 +256,9 @@ public partial class ModernRaidController
             .Include(r => r.PrimaryProduct)
             .Include(r => r.RiskBusinessAreas).ThenInclude(x => x.BusinessAreaLookup)
             .Include(r => r.RiskDivisions);
+
+        // Register-scoped risks: only members / item contacts / Admin see them.
+        qBase = qBase.WhereRiskVisibleToViewer(_db, currentUserId, emailLower, isRaidAdmin);
 
         var activeTab = (tab ?? "").Trim().ToLowerInvariant() switch
         {
@@ -591,6 +595,7 @@ public partial class ModernRaidController
 
         var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
         var emailLower = GetCurrentUserEmailNormalized();
+        var isRaidAdmin = await IsRaidRegisterAdminAsync(cancellationToken);
         var (effectiveBa, raidBaExplicitNone, raidBaFromSaved) =
             await ResolveRaidRegisterBusinessAreaAsync(businessAreaId, cancellationToken);
         var savedRaidBaHint = currentUserId is > 0
@@ -607,6 +612,8 @@ public partial class ModernRaidController
             .Include(i => i.Project).ThenInclude(p => p!.BusinessAreaLookup)
             .Include(i => i.PrimaryProduct)
             .Include(i => i.IssueBusinessAreas).ThenInclude(x => x.BusinessAreaLookup);
+
+        qBase = qBase.WhereIssueVisibleToViewer(_db, currentUserId, emailLower, isRaidAdmin);
 
         if (effectiveBa is > 0)
         {

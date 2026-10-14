@@ -1,0 +1,187 @@
+@model Compass.ViewModels.Modern.ActivityTimeFormViewModel
+@using Compass.ViewModels.Modern
+@{
+  var isEdit = Model.Id.HasValue;
+  ViewData["Title"] = isEdit ? "Edit activity time" : "Add activity time";
+  var formAction = isEdit
+    ? Url.Action("Edit", "ModernActivityTime", new { id = Model.Id })
+    : Url.Action("Create", "ModernActivityTime");
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernActivityTime")">Activity time</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@(isEdit ? "Edit" : "Add new")</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Title = isEdit ? "Edit activity time" : "Add activity time",
+  Lede = await Html.PartialAsync("_GovukBodyParagraph", "Record the date, time spent, activity type and themes.")
+})
+
+@if (!ViewData.ModelState.IsValid)
+{
+  <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert">
+    <h2 class="govuk-error-summary__title">There is a problem</h2>
+    <div class="govuk-error-summary__body">
+      <ul class="govuk-list govuk-error-summary__list">
+        @foreach (var err in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+        {
+          <li>@err.ErrorMessage</li>
+        }
+      </ul>
+    </div>
+  </div>
+}
+
+<form method="post" action="@formAction" novalidate>
+  @Html.AntiForgeryToken()
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="ActivityDate">Date</label>
+    <div class="govuk-hint" id="ActivityDate-hint">Defaults to today</div>
+    <input class="govuk-input govuk-input--width-10" id="ActivityDate" name="ActivityDate" type="date"
+           value="@Model.ActivityDate" aria-describedby="ActivityDate-hint" required />
+  </div>
+
+  <fieldset class="govuk-fieldset">
+    <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Time spent</legend>
+    <div class="govuk-hint">Hours and minutes</div>
+    <div class="govuk-form-group" style="display:inline-block;margin-right:1rem;">
+      <label class="govuk-label" for="Hours">Hours</label>
+      <input class="govuk-input govuk-input--width-3" id="Hours" name="Hours" type="number" min="0" max="24" value="@Model.Hours" />
+    </div>
+    <div class="govuk-form-group" style="display:inline-block;">
+      <label class="govuk-label" for="Minutes">Minutes</label>
+      <input class="govuk-input govuk-input--width-3" id="Minutes" name="Minutes" type="number" min="0" max="59" value="@Model.Minutes" />
+    </div>
+  </fieldset>
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="ActivityTimeTypeLookupId">Work activity type</label>
+    <select class="govuk-select" id="ActivityTimeTypeLookupId" name="ActivityTimeTypeLookupId" required>
+      <option value="">Select an activity type</option>
+      @foreach (var opt in Model.ActivityTypes)
+      {
+        if (opt.Selected)
+        {
+          <option value="@opt.Value" selected="selected">@opt.Text</option>
+        }
+        else
+        {
+          <option value="@opt.Value">@opt.Text</option>
+        }
+      }
+    </select>
+  </div>
+
+  <div class="govuk-form-group">
+    <fieldset class="govuk-fieldset">
+      <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Theme</legend>
+      <div class="govuk-hint">Select all that apply</div>
+      <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+        @foreach (var opt in Model.Themes)
+        {
+          var cid = $"theme-{opt.Value}";
+          <div class="govuk-checkboxes__item">
+            <input class="govuk-checkboxes__input" id="@cid" name="SelectedThemeIds" type="checkbox" value="@opt.Value" @(opt.Selected ? "checked" : null) />
+            <label class="govuk-label govuk-checkboxes__label" for="@cid">@opt.Text</label>
+          </div>
+        }
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="govuk-form-group">
+    <fieldset class="govuk-fieldset">
+      <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Does your time spent on this activity relate to a specific work item?</legend>
+      <div class="govuk-radios" data-module="govuk-radios">
+        <div class="govuk-radios__item">
+          <input class="govuk-radios__input" id="relates-yes" name="RelatesToWorkItem" type="radio" value="true" data-aria-controls="conditional-work-item" @(Model.RelatesToWorkItem ? "checked" : null) />
+          <label class="govuk-label govuk-radios__label" for="relates-yes">Yes</label>
+        </div>
+        <div class="govuk-radios__conditional" id="conditional-work-item">
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="ProjectId">Work item</label>
+            <select class="govuk-select" id="ProjectId" name="ProjectId">
+              <option value="">Select a work item</option>
+              @foreach (var opt in Model.WorkItems)
+              {
+                if (opt.Selected)
+                {
+                  <option value="@opt.Value" selected="selected">@opt.Text</option>
+                }
+                else
+                {
+                  <option value="@opt.Value">@opt.Text</option>
+                }
+              }
+            </select>
+          </div>
+        </div>
+        <div class="govuk-radios__item">
+          <input class="govuk-radios__input" id="relates-no" name="RelatesToWorkItem" type="radio" value="false" @(!Model.RelatesToWorkItem ? "checked" : null) />
+          <label class="govuk-label govuk-radios__label" for="relates-no">No</label>
+        </div>
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="govuk-form-group">
+    <fieldset class="govuk-fieldset">
+      <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Has it supported a specific business area?</legend>
+      <div class="govuk-radios" data-module="govuk-radios">
+        <div class="govuk-radios__item">
+          <input class="govuk-radios__input" id="ba-yes" name="SupportsBusinessArea" type="radio" value="true" data-aria-controls="conditional-ba" @(Model.SupportsBusinessArea ? "checked" : null) />
+          <label class="govuk-label govuk-radios__label" for="ba-yes">Yes</label>
+        </div>
+        <div class="govuk-radios__conditional" id="conditional-ba">
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="BusinessAreaLookupId">Business area</label>
+            <select class="govuk-select" id="BusinessAreaLookupId" name="BusinessAreaLookupId">
+              <option value="">Select a business area</option>
+              @foreach (var opt in Model.BusinessAreas)
+              {
+                if (opt.Selected)
+                {
+                  <option value="@opt.Value" selected="selected">@opt.Text</option>
+                }
+                else
+                {
+                  <option value="@opt.Value">@opt.Text</option>
+                }
+              }
+            </select>
+          </div>
+        </div>
+        <div class="govuk-radios__item">
+          <input class="govuk-radios__input" id="ba-no" name="SupportsBusinessArea" type="radio" value="false" @(!Model.SupportsBusinessArea ? "checked" : null) />
+          <label class="govuk-label govuk-radios__label" for="ba-no">No</label>
+        </div>
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="govuk-form-group">
+    <label class="govuk-label" for="Narrative">What was this activity about?</label>
+    <div class="govuk-hint" id="Narrative-hint">A short note so others can see what the time was spent on</div>
+    <textarea class="govuk-textarea" id="Narrative" name="Narrative" rows="3" maxlength="1000" aria-describedby="Narrative-hint">@Model.Narrative</textarea>
+  </div>
+
+  <button type="submit" class="govuk-button">Save</button>
+  <a class="govuk-link govuk-!-margin-left-3" href="@Url.Action("Index", "ModernActivityTime")">Cancel</a>
+</form>
+
+@if (isEdit)
+{
+  <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+  <h2 class="govuk-heading-m">Delete this entry</h2>
+  <p class="govuk-body">Permanently remove this activity time record. This cannot be undone.</p>
+  <form method="post"
+        action="@Url.Action("Delete", "ModernActivityTime", new { id = Model.Id })"
+        data-confirm-title="Delete activity time entry"
+        data-confirm-message="Delete this activity time entry? This cannot be undone.">
+    @Html.AntiForgeryToken()
+    <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button">Delete entry</button>
+  </form>
+}

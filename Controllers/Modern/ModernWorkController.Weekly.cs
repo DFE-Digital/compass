@@ -345,26 +345,58 @@ public partial class ModernWorkController
         string? ragJustification,
         string? pathToGreen)
     {
-        ValidateMonthlyReportForm(
-            modelState,
-            isSubmit,
-            narrative,
-            peopleNarrative,
-            permFte,
-            mspFte,
-            ragStatusId,
-            resolvedRag,
-            ragJustification,
-            pathToGreen);
+        static bool FieldHasBinderError(ModelStateDictionary ms, string key) =>
+            ms.TryGetValue(key, out var entry) && entry!.Errors.Count > 0;
 
-        if (modelState.TryGetValue(nameof(narrative), out var narrativeEntry) &&
-            narrativeEntry?.Errors.Count > 0 &&
-            narrativeEntry.Errors[0].ErrorMessage.Contains("monthly", StringComparison.OrdinalIgnoreCase))
+        void MaxLen(string key, string? value, string label)
         {
-            modelState.Remove(nameof(narrative));
-            if (isSubmit && string.IsNullOrWhiteSpace(narrative))
-                modelState.AddModelError(nameof(narrative), "Enter a weekly update narrative.");
+            if (!string.IsNullOrEmpty(value) && value.Length > MonthlyReportMaxTextLength)
+                modelState.AddModelError(key, $"{label} must be {MonthlyReportMaxTextLength:N0} characters or fewer.");
         }
+
+        MaxLen(nameof(narrative), narrative, "Weekly update narrative");
+        MaxLen(nameof(peopleNarrative), peopleNarrative, "Narrative on people this week");
+        MaxLen(nameof(ragJustification), ragJustification, "Justification for RAG");
+        if (resolvedRag != null && !MonthlyReportIsGreenRagName(resolvedRag.Name))
+            MaxLen(nameof(pathToGreen), pathToGreen, "Path to green");
+
+        if (!FieldHasBinderError(modelState, nameof(permFte)) && permFte is { } p &&
+            (p < 0m || p > MonthlyReportMaxHeadcount))
+        {
+            modelState.AddModelError(nameof(permFte),
+                $"Permanent FTE must be between 0 and {MonthlyReportMaxHeadcount:N0}.");
+        }
+
+        if (!FieldHasBinderError(modelState, nameof(mspFte)) && mspFte is { } m &&
+            (m < 0m || m > MonthlyReportMaxHeadcount))
+        {
+            modelState.AddModelError(nameof(mspFte),
+                $"MSC number must be between 0 and {MonthlyReportMaxHeadcount:N0}.");
+        }
+
+        if (!isSubmit)
+            return;
+
+        if (string.IsNullOrWhiteSpace(narrative))
+            modelState.AddModelError(nameof(narrative), "Enter a weekly update narrative.");
+
+        if (!FieldHasBinderError(modelState, nameof(permFte)) && !permFte.HasValue)
+            modelState.AddModelError(nameof(permFte), "Enter permanent FTE.");
+
+        if (!FieldHasBinderError(modelState, nameof(mspFte)) && !mspFte.HasValue)
+            modelState.AddModelError(nameof(mspFte), "Enter MSC number.");
+
+        if (!ragStatusId.HasValue)
+            modelState.AddModelError("rag-status-group", "Select a RAG outcome.");
+        else if (resolvedRag == null)
+            modelState.AddModelError("rag-status-group", "Select a valid RAG outcome.");
+
+        if (string.IsNullOrWhiteSpace(ragJustification))
+            modelState.AddModelError(nameof(ragJustification), "Enter a justification for the RAG rating.");
+
+        var needsPathToGreen = resolvedRag != null && !MonthlyReportIsGreenRagName(resolvedRag.Name);
+        if (needsPathToGreen && string.IsNullOrWhiteSpace(pathToGreen))
+            modelState.AddModelError(nameof(pathToGreen), "Enter the path to green — describe how delivery confidence will return to green.");
     }
 
     private async Task<WeeklyReportViewModel?> LoadWeeklyReportViewModelAsync(

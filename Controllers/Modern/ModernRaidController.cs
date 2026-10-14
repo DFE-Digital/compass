@@ -689,6 +689,16 @@ public partial class ModernRaidController : Controller
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    /// <summary>Super admin, Central Operations Admin, or Admin group — can see all RAID registers and items.</summary>
+    private async Task<bool> IsRaidRegisterAdminAsync(CancellationToken cancellationToken)
+    {
+        _ = cancellationToken;
+        var email = User.Identity?.Name
+            ?? User.FindFirst(ClaimTypes.Email)?.Value
+            ?? User.FindFirst("preferred_username")?.Value;
+        return await RaidRegisterAccess.IsRaidRegisterAdminAsync(_permissions, email);
+    }
+
     [HttpGet("issues/{id:int}/escalation-request")]
     public async Task<IActionResult> IssueEscalationRequest(int id, CancellationToken cancellationToken = default)
     {

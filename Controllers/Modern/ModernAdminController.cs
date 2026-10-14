@@ -38,7 +38,7 @@ public partial class ModernAdminController : Controller
         "scoring-fw", "perf-cycles", "assess-cycles",
         "groups", "api-tokens", "api-token-requests", "cms-access-products", "business-area-admins", "business-area-leadership", "directorate-leadership",
         "migration", "environment-sync", "feature-settings", "universal-barriers",
-        "activity-types", "work-tagging", "resource-bands", "mission-pillars", "priority-outcomes",
+        "activity-types", "activity-time-types", "activity-time-themes", "work-tagging", "resource-bands", "mission-pillars", "priority-outcomes",
         "fips-channels", "fips-types", "fips-business-areas", "fips-user-groups", "fips-contact-roles", "fips-categorisation",
         "std-categories", "std-subcategories", "std-functional",
         "risk-statuses", "risk-priorities", "risk-likelihoods", "risk-impact-levels", "risk-proximities",
@@ -156,6 +156,20 @@ public partial class ModernAdminController : Controller
 
             case "activity-types":
                 vm.ActivityTypes = await _context.ActivityTypeLookups.AsNoTracking()
+                    .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+                    .Select(x => new AdminLookupRow { Id = x.Id, Name = x.Name, Description = x.Description, SortOrder = x.SortOrder, IsActive = x.IsActive })
+                    .ToListAsync();
+                break;
+
+            case "activity-time-types":
+                vm.ActivityTimeTypes = await _context.ActivityTimeTypeLookups.AsNoTracking()
+                    .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+                    .Select(x => new AdminLookupRow { Id = x.Id, Name = x.Name, Description = x.Description, SortOrder = x.SortOrder, IsActive = x.IsActive })
+                    .ToListAsync();
+                break;
+
+            case "activity-time-themes":
+                vm.ActivityTimeThemes = await _context.ActivityTimeThemeLookups.AsNoTracking()
                     .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
                     .Select(x => new AdminLookupRow { Id = x.Id, Name = x.Name, Description = x.Description, SortOrder = x.SortOrder, IsActive = x.IsActive })
                     .ToListAsync();

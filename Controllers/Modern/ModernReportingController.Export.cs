@@ -241,6 +241,9 @@ public partial class ModernReportingController
         Rag = string.IsNullOrWhiteSpace(row.Rag) ? "Not Set" : row.Rag,
         Priority = string.IsNullOrWhiteSpace(row.Priority) ? "Not Set" : row.Priority!,
         PermFte = row.PermFte,
+        AdminFte = row.AdminFte,
+        ProgrammeFte = row.ProgrammeFte,
+        CapitalFte = row.CapitalFte,
         MspFte = row.MspFte,
         SubmittedUpdate = true
     };

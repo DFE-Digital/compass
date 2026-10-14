@@ -15,12 +15,14 @@ public partial class ModernRaidController
 
         var register = await _db.RaidRegisters
             .AsNoTracking()
+            .Include(r => r.Users)
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
 
         if (register == null)
             return NotFound();
 
-        if (!CanViewRegister(userId))
+        var isAdmin = await IsRaidRegisterAdminAsync(cancellationToken);
+        if (!userId.HasValue || (!isAdmin && !RaidRegisterAccess.IsExplicitMember(register, userId.Value)))
             return Forbid();
 
         await RaidRegisterScopedEntitySync.SyncAsync(_db, id, userId, cancellationToken);

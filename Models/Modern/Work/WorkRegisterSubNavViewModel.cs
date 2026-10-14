@@ -72,7 +72,7 @@ public sealed class WorkRegisterSubNavViewModel
             RegisterActivePausedCountOrg = vm.RegisterActivePausedCountOrg,
             CompletedCount = vm.CompletedCount,
             CancelledCount = vm.CancelledCount,
-            AllItemsCount = vm.ActiveCount + vm.PausedCount + vm.CompletedCount + vm.CancelledCount,
+            AllItemsCount = vm.ActiveCount + vm.PausedCount + vm.CompletedCount + vm.CancelledCount + vm.HorizonCount,
             FilterSearch = vm.FilterSearch,
             FilterBusinessAreaId = vm.FilterBusinessAreaId,
             FilterDirectorateId = vm.FilterDirectorateId,

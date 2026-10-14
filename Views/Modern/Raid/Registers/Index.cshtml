@@ -1,7 +1,8 @@
 @model Compass.ViewModels.Modern.RaidRegisterDashboardViewModel
 @{
   ViewData["Title"] = "RAID registers";
-  var hasAny = Model.YourRegisters.Any() || Model.AllRegisters.Any();
+  var showAll = Model.CanBrowseAllRegisters;
+  var hasAny = Model.YourRegisters.Any() || (showAll && Model.AllRegisters.Any());
 }
 
 @section Breadcrumbs {
@@ -13,7 +14,9 @@
   @await Html.PartialAsync("~/Views/Modern/Shared/_ModernPageHeader.cshtml", new Compass.ViewModels.Modern.ModernPageHeaderViewModel
   {
     Title = "RAID registers",
-    Lede = new Microsoft.AspNetCore.Html.HtmlString("<p class=\"govuk-body-s govuk-!-margin-bottom-0\">Manage registers you belong to and browse all registers in the organisation.</p>"),
+    Lede = new Microsoft.AspNetCore.Html.HtmlString(showAll
+      ? "<p class=\"govuk-body-s govuk-!-margin-bottom-0\">Manage registers you belong to and browse all registers in the organisation.</p>"
+      : "<p class=\"govuk-body-s govuk-!-margin-bottom-0\">Registers you are a member of. Only members (and Admin / Central Ops) can see a register and its items.</p>"),
     Actions = new Microsoft.AspNetCore.Html.HtmlString($"<a href=\"{Url.Action("RegisterCreate", "ModernRaid")}\" class=\"govuk-button\" data-module=\"govuk-button\">Create register</a>")
   })
 
@@ -32,14 +35,14 @@
   @if (!hasAny)
   {
     <div class="govuk-!-margin-top-6">
-      <p class="govuk-body">There are no RAID registers yet.</p>
+      <p class="govuk-body">@(showAll ? "There are no RAID registers yet." : "You do not belong to any RAID registers yet.")</p>
       <p class="govuk-body">
         <a href="@Url.Action("RegisterCreate", "ModernRaid")" class="govuk-link">Create your first RAID register</a>
         to start managing risks, issues, assumptions, dependencies and near misses.
       </p>
     </div>
   }
-  else
+  else if (showAll)
   {
     <nav class="dfe-f-sub-navigation govuk-!-margin-top-4 govuk-!-margin-bottom-0" aria-label="Register lists" id="raid-registers-tabs">
       <ul class="dfe-f-sub-navigation__list">
@@ -70,7 +73,7 @@
 
     <div id="panel-all-registers" class="raid-registers-tab-panel">
       <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0" style="color:#505a5f;">
-        Every register in the organisation (A–Z). Registers you are not listed on are read-only.
+        Every register in the organisation (A–Z). Visible to Admin and Central Ops only.
       </p>
       @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_RegisterListTable.cshtml", Model.AllRegisters, new ViewDataDictionary(ViewData)
       {
@@ -79,6 +82,18 @@
         { "EmptyMessage", "No registers have been created yet." }
       })
     </div>
+  }
+  else
+  {
+    <p class="govuk-body-s govuk-!-margin-top-4 govuk-!-margin-bottom-0" style="color:#505a5f;">
+      Registers you created or where you are listed as owner, manager or viewer (A–Z).
+    </p>
+    @await Html.PartialAsync("~/Views/Modern/Raid/Registers/_RegisterListTable.cshtml", Model.YourRegisters, new ViewDataDictionary(ViewData)
+    {
+      { "TableId", "tbl-your-registers" },
+      { "TableCaption", "Your RAID registers" },
+      { "EmptyMessage", "You do not own or belong to any registers yet. Create a register to get started." }
+    })
   }
 </div>
 
@@ -94,6 +109,8 @@
 }
 
 @section Scripts {
+  @if (showAll)
+  {
   <script nonce="@Context.Items["Nonce"]">
   (function () {
     var panels = document.querySelectorAll('.raid-registers-tab-panel');
@@ -133,4 +150,5 @@
     });
   })();
   </script>
+  }
 }

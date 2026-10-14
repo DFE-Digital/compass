@@ -1,0 +1,226 @@
+@model Compass.ViewModels.Modern.ActivityTimeReportViewModel
+@using System.Globalization
+@using System.Text.Json
+@using Compass.ViewModels.Modern
+@{
+  ViewData["Title"] = "Activity time report";
+  var enGb = CultureInfo.GetCultureInfo("en-GB");
+  var r = Model ?? new ActivityTimeReportViewModel();
+  string JsonLabels(IEnumerable<ActivityTimeReportSliceViewModel> rows) =>
+    JsonSerializer.Serialize(rows.Select(x => x.Label));
+  string JsonHours(IEnumerable<ActivityTimeReportSliceViewModel> rows) =>
+    JsonSerializer.Serialize(rows.Select(x => x.Hours));
+  var dayLabels = JsonSerializer.Serialize(r.ByDay.Select(d => d.Date.ToString("d MMM", enGb)));
+  var dayHours = JsonSerializer.Serialize(r.ByDay.Select(d => d.Hours));
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernReporting")">Reporting</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Activity time</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+  Title = "Activity time report",
+  Lede = await Html.PartialAsync("_ReportingMutedBodyLede", "Time recorded by Central Ops and Admin users — filter by date, activity type, theme or business area.")
+})
+
+<form method="get" action="@Url.Action("ActivityTime", "ModernReporting")" class="govuk-!-margin-bottom-6">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-one-quarter">
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="fromDate">From</label>
+        <input class="govuk-input" id="fromDate" name="fromDate" type="date" value="@(r.FromDate?.ToString("yyyy-MM-dd"))" />
+      </div>
+    </div>
+    <div class="govuk-grid-column-one-quarter">
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="toDate">To</label>
+        <input class="govuk-input" id="toDate" name="toDate" type="date" value="@(r.ToDate?.ToString("yyyy-MM-dd"))" />
+      </div>
+    </div>
+    <div class="govuk-grid-column-one-quarter">
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="typeId">Activity type</label>
+        <select class="govuk-select" id="typeId" name="typeId">
+          <option value="">All</option>
+          @foreach (var opt in r.ActivityTypes)
+          {
+            if (opt.Selected) { <option value="@opt.Value" selected="selected">@opt.Text</option> }
+            else { <option value="@opt.Value">@opt.Text</option> }
+          }
+        </select>
+      </div>
+    </div>
+    <div class="govuk-grid-column-one-quarter">
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="themeId">Theme</label>
+        <select class="govuk-select" id="themeId" name="themeId">
+          <option value="">All</option>
+          @foreach (var opt in r.Themes)
+          {
+            if (opt.Selected) { <option value="@opt.Value" selected="selected">@opt.Text</option> }
+            else { <option value="@opt.Value">@opt.Text</option> }
+          }
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-one-quarter">
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="businessAreaId">Business area</label>
+        <select class="govuk-select" id="businessAreaId" name="businessAreaId">
+          <option value="">All</option>
+          @foreach (var opt in r.BusinessAreas)
+          {
+            if (opt.Selected) { <option value="@opt.Value" selected="selected">@opt.Text</option> }
+            else { <option value="@opt.Value">@opt.Text</option> }
+          }
+        </select>
+      </div>
+    </div>
+    <div class="govuk-grid-column-one-quarter" style="padding-top:1.75rem;">
+      <button type="submit" class="govuk-button">Apply filters</button>
+    </div>
+  </div>
+</form>
+
+<div class="govuk-summary-list govuk-!-margin-bottom-6" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:1rem;">
+  <div>
+    <dt class="govuk-summary-list__key">Total hours</dt>
+    <dd class="govuk-summary-list__value"><strong>@r.TotalHours.ToString("0.##")</strong></dd>
+  </div>
+  <div>
+    <dt class="govuk-summary-list__key">Entries</dt>
+    <dd class="govuk-summary-list__value"><strong>@r.EntryCount</strong></dd>
+  </div>
+</div>
+
+<div class="govuk-grid-row govuk-!-margin-bottom-6">
+  <div class="govuk-grid-column-one-half">
+    <h2 class="govuk-heading-s">By activity type</h2>
+    <canvas id="chart-by-type" aria-label="Hours by activity type" height="220"></canvas>
+  </div>
+  <div class="govuk-grid-column-one-half">
+    <h2 class="govuk-heading-s">By theme</h2>
+    <canvas id="chart-by-theme" aria-label="Hours by theme" height="220"></canvas>
+  </div>
+</div>
+<div class="govuk-grid-row govuk-!-margin-bottom-6">
+  <div class="govuk-grid-column-one-half">
+    <h2 class="govuk-heading-s">By business area</h2>
+    <canvas id="chart-by-ba" aria-label="Hours by business area" height="220"></canvas>
+  </div>
+  <div class="govuk-grid-column-one-half">
+    <h2 class="govuk-heading-s">Hours over time</h2>
+    <canvas id="chart-by-day" aria-label="Hours by day" height="220"></canvas>
+  </div>
+</div>
+
+<h2 class="govuk-heading-m">By person</h2>
+@if (r.ByPerson.Count == 0)
+{
+  <p class="govuk-body">No entries in this period.</p>
+}
+else
+{
+  <table class="govuk-table govuk-!-margin-bottom-6">
+    <thead class="govuk-table__head">
+      <tr class="govuk-table__row">
+        <th scope="col" class="govuk-table__header">Person</th>
+        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Hours</th>
+        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Entries</th>
+      </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+      @foreach (var row in r.ByPerson)
+      {
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell">@row.Label</td>
+          <td class="govuk-table__cell govuk-table__cell--numeric">@row.Hours.ToString("0.##")</td>
+          <td class="govuk-table__cell govuk-table__cell--numeric">@row.EntryCount</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}
+
+<h2 class="govuk-heading-m">Entries</h2>
+@if (r.Entries.Count == 0)
+{
+  <p class="govuk-body">No entries match the selected filters.</p>
+}
+else
+{
+  <div class="dfe-f-table-wrapper">
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header">Date</th>
+          <th scope="col" class="govuk-table__header">Time</th>
+          <th scope="col" class="govuk-table__header">Activity type</th>
+          <th scope="col" class="govuk-table__header">Narrative</th>
+          <th scope="col" class="govuk-table__header">Themes</th>
+          <th scope="col" class="govuk-table__header">Work item</th>
+          <th scope="col" class="govuk-table__header">Business area</th>
+          <th scope="col" class="govuk-table__header">Recorded by</th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var e in r.Entries)
+        {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">@e.ActivityDate.ToString("d MMM yyyy", enGb)</td>
+            <td class="govuk-table__cell">@e.DurationDisplay</td>
+            <td class="govuk-table__cell">@e.ActivityTypeName</td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(e.Narrative) ? "—" : e.Narrative)</td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(e.ThemesDisplay) ? "—" : e.ThemesDisplay)</td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(e.WorkItemTitle) ? "—" : e.WorkItemTitle)</td>
+            <td class="govuk-table__cell">@(string.IsNullOrWhiteSpace(e.BusinessAreaName) ? "—" : e.BusinessAreaName)</td>
+            <td class="govuk-table__cell">@e.CreatedByDisplay</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@section Scripts {
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      if (typeof Chart === 'undefined') return;
+      var palette = ['#1d70b8', '#00703c', '#f47738', '#912b88', '#d4351c', '#5694ca', '#85994b', '#ffdd00'];
+      function doughnut(id, labels, values) {
+        var el = document.getElementById(id);
+        if (!el || !labels.length) return;
+        new Chart(el.getContext('2d'), {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{ data: values, backgroundColor: labels.map(function (_, i) { return palette[i % palette.length]; }) }]
+          },
+          options: { plugins: { legend: { position: 'bottom' } } }
+        });
+      }
+      doughnut('chart-by-type', @Html.Raw(JsonLabels(r.ByActivityType)), @Html.Raw(JsonHours(r.ByActivityType)));
+      doughnut('chart-by-theme', @Html.Raw(JsonLabels(r.ByTheme)), @Html.Raw(JsonHours(r.ByTheme)));
+      doughnut('chart-by-ba', @Html.Raw(JsonLabels(r.ByBusinessArea)), @Html.Raw(JsonHours(r.ByBusinessArea)));
+      var dayEl = document.getElementById('chart-by-day');
+      if (dayEl) {
+        new Chart(dayEl.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: @Html.Raw(dayLabels),
+            datasets: [{ label: 'Hours', data: @Html.Raw(dayHours), backgroundColor: '#1d70b8' }]
+          },
+          options: {
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'Hours' } } },
+            plugins: { legend: { display: false } }
+          }
+        });
+      }
+    })();
+  </script>
+}

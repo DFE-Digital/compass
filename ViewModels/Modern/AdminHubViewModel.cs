@@ -28,6 +28,8 @@ public class AdminHubViewModel
     public List<AdminRagRow> RagDefinitions { get; set; } = new();
 
     public List<AdminLookupRow> ActivityTypes { get; set; } = new();
+    public List<AdminLookupRow> ActivityTimeTypes { get; set; } = new();
+    public List<AdminLookupRow> ActivityTimeThemes { get; set; } = new();
     public List<AdminLookupRow> WorkItemTags { get; set; } = new();
     public List<AdminResourceBandRow> ResourceBands { get; set; } = new();
     public List<AdminLookupRow> MissionPillars { get; set; } = new();

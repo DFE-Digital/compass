@@ -97,7 +97,7 @@ public class Project
     public decimal? TotalMspFte { get; set; }
 
     [MaxLength(20)]
-    public string? Status { get; set; } = "Active"; // Active, Paused, Completed, Cancelled
+    public string? Status { get; set; } = "Active"; // Active, Horizon, Paused, Completed, Cancelled
 
     public string? StatusChangeReason { get; set; }
 

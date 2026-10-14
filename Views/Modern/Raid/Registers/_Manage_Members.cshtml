@@ -1,0 +1,201 @@
+@model Compass.ViewModels.Modern.RaidRegisterDetailViewModel
+@using Compass.Models
+@{
+  var canManage = Model.CanManageMembers;
+  var itemOnly = Model.ItemContacts.Where(c => !c.HasFullRegisterAccess).ToList();
+  var namedWithAccess = Model.ItemContacts.Where(c => c.HasFullRegisterAccess).ToList();
+}
+
+<div class="govuk-!-margin-bottom-6">
+  <h2 class="govuk-heading-m">Register members</h2>
+  <p class="govuk-body">
+    People listed here can open this register and see <strong>all</strong> risks and issues in it.
+    Only Admin and Central Ops can see registers they are not added to.
+  </p>
+  <p class="govuk-body-s" style="color:#505a5f;">
+    Naming someone as owner or SRO on an individual risk or issue does not give them access to the rest of the register.
+    Add them below if they need full access.
+  </p>
+
+  @if (canManage)
+  {
+    <form method="post" action="@Url.Action("RegisterMemberAdd", "ModernRaid", new { id = Model.Id })" class="govuk-!-margin-bottom-6" id="rm-add-form">
+      @Html.AntiForgeryToken()
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="rm-picker-input">Add someone with full register access</label>
+        <div class="govuk-hint">They will be able to see every risk and issue in this register.</div>
+        <div class="user-picker" data-user-picker data-search-url="/api/users/search" data-select-url="/api/users/select" id="rm-picker-root">
+          <div style="position:relative;">
+            <input type="text" class="govuk-input govuk-!-width-one-half js-user-picker-input" id="rm-picker-input" autocomplete="off" placeholder="e.g. Alex Smith or alex.smith@@education.gov.uk" />
+            <span class="user-picker__spinner js-user-picker-spinner" aria-hidden="true">Searching&hellip;</span>
+            <div class="user-picker__results js-user-picker-results" role="listbox" aria-live="polite"></div>
+          </div>
+          <p class="govuk-body-s js-user-picker-message" style="margin-top:0.25rem;display:none;"></p>
+          <input type="hidden" class="js-user-picker-value" name="userId" id="rm-selected-id" value="" />
+          <input type="hidden" class="js-user-picker-objectid" id="rm-selected-objectid" value="" />
+          <input type="hidden" class="js-user-picker-name" id="rm-selected-name" value="" />
+          <input type="hidden" class="js-user-picker-email" id="rm-selected-email" value="" />
+          <div class="js-user-picker-summary" style="display:none;" data-default-text=""></div>
+        </div>
+      </div>
+      <div class="govuk-grid-row govuk-!-margin-bottom-2" id="rm-add-controls" style="display:none;">
+        <div class="govuk-grid-column-one-half">
+          <p class="govuk-body-s govuk-!-margin-bottom-1" id="rm-selected-label"></p>
+        </div>
+        <div class="govuk-grid-column-one-quarter">
+          <label class="govuk-label govuk-visually-hidden" for="rm-role-select">Role</label>
+          <select class="govuk-select govuk-!-width-full" id="rm-role-select" name="role">
+            <option value="@((int)RaidRegisterRole.Manager)">Manager — can edit items</option>
+            <option value="@((int)RaidRegisterRole.Viewer)" selected>Viewer — can view all items</option>
+          </select>
+        </div>
+        <div class="govuk-grid-column-one-quarter">
+          <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button">Add member</button>
+        </div>
+      </div>
+    </form>
+  }
+
+  @if (Model.Users.Count == 0)
+  {
+    <p class="govuk-body">No members have been added yet.</p>
+  }
+  else
+  {
+    <table class="govuk-table govuk-table--small-text-until-tablet">
+      <caption class="govuk-table__caption govuk-table__caption--s">People with full register access (@Model.Users.Count)</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header">Name</th>
+          <th scope="col" class="govuk-table__header">Role</th>
+          <th scope="col" class="govuk-table__header">Also named on items</th>
+          @if (canManage)
+          {
+            <th scope="col" class="govuk-table__header" style="width:100px; text-align:right;">Action</th>
+          }
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var user in Model.Users)
+        {
+          var alsoNamed = namedWithAccess.FirstOrDefault(c => c.UserId == user.UserId);
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              @(user.DisplayName ?? user.Email)
+              @if (!string.IsNullOrWhiteSpace(user.Email) && !string.IsNullOrWhiteSpace(user.DisplayName))
+              {
+                <span class="govuk-body-s" style="color:#505a5f;"> (@user.Email)</span>
+              }
+            </td>
+            <td class="govuk-table__cell"><span class="dfe-f-badge dfe-f-badge--small">@user.Role</span></td>
+            <td class="govuk-table__cell">@(alsoNamed?.InvolvementSummary ?? "—")</td>
+            @if (canManage)
+            {
+              <td class="govuk-table__cell" style="text-align:right;">
+                @if (user.Role != RaidRegisterRole.Owner)
+                {
+                  <form method="post" action="@Url.Action("RegisterMemberRemove", "ModernRaid", new { id = Model.Id })" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="userId" value="@user.UserId" />
+                    <button type="submit" class="govuk-link govuk-body-s" style="background:none;border:none;padding:0;cursor:pointer;color:#d4351c;">Remove</button>
+                  </form>
+                }
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>
+
+<div class="govuk-!-margin-bottom-4">
+  <h2 class="govuk-heading-m">Named on risks or issues only</h2>
+  <p class="govuk-body">
+    These people are owners or SROs on individual items. They can only see those items — not the rest of the register —
+    unless they are also added as members above.
+  </p>
+
+  @if (itemOnly.Count == 0)
+  {
+    <p class="govuk-body">No one is named only on individual risks or issues.</p>
+  }
+  else
+  {
+    <table class="govuk-table govuk-table--small-text-until-tablet">
+      <caption class="govuk-table__caption govuk-table__caption--s">Item-level access only (@itemOnly.Count)</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header">Name</th>
+          <th scope="col" class="govuk-table__header">Involvement</th>
+          @if (canManage)
+          {
+            <th scope="col" class="govuk-table__header" style="width:180px; text-align:right;">Full access</th>
+          }
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var contact in itemOnly)
+        {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              @(contact.DisplayName ?? contact.Email)
+              @if (!string.IsNullOrWhiteSpace(contact.Email) && !string.IsNullOrWhiteSpace(contact.DisplayName))
+              {
+                <span class="govuk-body-s" style="color:#505a5f;"> (@contact.Email)</span>
+              }
+            </td>
+            <td class="govuk-table__cell">@contact.InvolvementSummary</td>
+            @if (canManage)
+            {
+              <td class="govuk-table__cell" style="text-align:right;">
+                @if (contact.UserId is > 0)
+                {
+                  <form method="post" action="@Url.Action("RegisterMemberAdd", "ModernRaid", new { id = Model.Id })" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="userId" value="@contact.UserId" />
+                    <input type="hidden" name="role" value="@((int)RaidRegisterRole.Viewer)" />
+                    <button type="submit" class="govuk-link govuk-body-s" style="background:none;border:none;padding:0;cursor:pointer;">Grant full access</button>
+                  </form>
+                }
+                else
+                {
+                  <span class="govuk-body-s" style="color:#505a5f;">Search above to add</span>
+                }
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>
+
+@if (canManage)
+{
+  <script nonce="@(Context.Items["Nonce"]?.ToString() ?? "")">
+  (function () {
+    var idInput = document.getElementById('rm-selected-id');
+    var nameInput = document.getElementById('rm-selected-name');
+    var emailInput = document.getElementById('rm-selected-email');
+    var addControls = document.getElementById('rm-add-controls');
+    var selectedLabel = document.getElementById('rm-selected-label');
+    if (!idInput || !addControls) return;
+
+    function sync() {
+      var uid = idInput.value;
+      var name = nameInput ? nameInput.value : '';
+      if (uid && name) {
+        selectedLabel.textContent = name + (emailInput && emailInput.value ? ' (' + emailInput.value + ')' : '');
+        addControls.style.display = '';
+      } else {
+        addControls.style.display = 'none';
+      }
+    }
+
+    var observer = new MutationObserver(sync);
+    observer.observe(idInput, { attributes: true, attributeFilter: ['value'] });
+    setInterval(sync, 300);
+  })();
+  </script>
+}
