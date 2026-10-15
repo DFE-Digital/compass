@@ -54,11 +54,27 @@ public class ProjectMonthlyUpdate
 
     public DateTime? SubmittedAt { get; set; }
 
-    /// <summary>Permanent FTE for this reporting month (from monthly return; headcount scale, not named individuals).</summary>
+    /// <summary>Total DDT permanent FTE for this reporting month (Admin + Programme + Capital).</summary>
     [Column(TypeName = "decimal(18,2)")]
     public decimal? MonthlyPermFte { get; set; }
 
-    /// <summary>MSP (contractor) FTE for this reporting month.</summary>
+    /// <summary>DDT permanent FTE funded from Admin budget for this reporting month.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MonthlyAdminFte { get; set; }
+
+    /// <summary>DDT permanent FTE funded from Programme budget for this reporting month.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MonthlyProgrammeFte { get; set; }
+
+    /// <summary>DDT permanent FTE funded from Capital budget for this reporting month.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MonthlyCapitalFte { get; set; }
+
+    /// <summary>Other (non-DDT) DfE permanent FTE for this reporting month.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MonthlyOtherPermFte { get; set; }
+
+    /// <summary>Contractor / external resource FTE for this reporting month.</summary>
     [Column(TypeName = "decimal(18,2)")]
     public decimal? MonthlyMspFte { get; set; }
 

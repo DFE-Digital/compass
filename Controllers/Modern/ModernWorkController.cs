@@ -34,7 +34,16 @@ public partial class ModernWorkController : Controller
 
     private static readonly HashSet<string> WorkRegisterStatusFilterValues = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Active", "Paused", "Completed", "Cancelled"
+        "Active", "Paused", "Completed", "Cancelled", "Horizon"
+    };
+
+    private static readonly List<LookupOption> WorkLifecycleStatusOptions = new()
+    {
+        new() { Name = "Active", Value = "Active" },
+        new() { Name = "Horizon", Value = "Horizon" },
+        new() { Name = "Paused", Value = "Paused" },
+        new() { Name = "Completed", Value = "Completed" },
+        new() { Name = "Cancelled", Value = "Cancelled" }
     };
 
     private static bool BusinessAreaWorkItemMatchesRag(WorkItem w, int ragId)
@@ -47,7 +56,7 @@ public partial class ModernWorkController : Controller
     private static string NormalizeWorkRegisterTab(string? tab)
     {
         var tabKey = (tab ?? "active").Trim().ToLowerInvariant();
-        return tabKey is "completed" or "cancelled" or "all" ? tabKey : "active";
+        return tabKey is "completed" or "cancelled" or "all" or "horizon" ? tabKey : "active";
     }
 
     private static bool WorkItemMatchesRegisterTab(WorkItem w, string tabKey)
@@ -57,10 +66,12 @@ public partial class ModernWorkController : Controller
         {
             "completed" => string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase),
             "cancelled" => string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase),
+            "horizon" => string.Equals(status, "Horizon", StringComparison.OrdinalIgnoreCase),
             "all" => string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(status, "Paused", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase),
+                || string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status, "Horizon", StringComparison.OrdinalIgnoreCase),
             _ => string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(status, "Paused", StringComparison.OrdinalIgnoreCase)
         };
@@ -299,6 +310,81 @@ public partial class ModernWorkController : Controller
         return View("~/Views/Modern/Work/AllWork.cshtml", vm);
     }
 
+    /// <summary>Horizon pipeline — work items with lifecycle status Horizon.</summary>
+    [HttpGet("horizon")]
+    [HttpGet("/ModernWork/Horizon")]
+    public async Task<IActionResult> Horizon(
+        [FromQuery(Name = "page")] int page = 1,
+        string? search = null,
+        int? businessAreaId = null,
+        int? directorateId = null,
+        int? phaseId = null,
+        int? ragId = null,
+        int? priorityId = null,
+        string? monthlyUpdate = null,
+        int? primaryContactUserId = null,
+        int? tagId = null,
+        [FromQuery] int[]? tagIds = null,
+        string? sort = null,
+        bool sd = false,
+        CancellationToken cancellationToken = default)
+    {
+        ViewBag.MainNavSection = "work";
+        ViewBag.SubNavItem = "work-horizon";
+        ViewBag.HorizonMode = true;
+
+        var scope = await ResolveViewScopeUserAsync(cancellationToken);
+        if (scope == null)
+            return Unauthorized();
+
+        var (currentUser, userEmail) = scope.Value;
+        const string activeTab = "horizon";
+        var safePage = page < 1 ? 1 : page;
+        var mergedTags = MergeWorkTagQuery(tagId, tagIds);
+
+        var vm = await _modernWork.BuildWorkRegisterAsync(
+            isMyWork: false,
+            search,
+            portfolioId: null,
+            directorateId,
+            phaseId,
+            ragId,
+            priorityId,
+            monthlyUpdate,
+            currentUser,
+            userEmail,
+            Url,
+            registerTab: activeTab,
+            registerPage: safePage,
+            registerPageSize: 20,
+            businessAreaId: businessAreaId,
+            primaryContactUserId: primaryContactUserId,
+            tagIds: mergedTags,
+            registerSort: sort,
+            registerSortDesc: sd,
+            cancellationToken);
+
+        vm.ActiveFilterChips = SearchAndFilterActiveChipsBuilder.ForWorkRegister(
+            vm, Url, nameof(Horizon), "ModernWork", activeTab);
+
+        var horizonUrl = Url.Action(nameof(Horizon), "ModernWork") ?? "/modern/work/horizon";
+        ViewBag.SearchAndFilter = new Compass.Models.SearchAndFilterViewModel
+        {
+            IdPrefix = "work-horizon",
+            SearchPlaceholder = "Search horizon work titles…",
+            SearchValue = search,
+            FormActionUrl = Url.Action(nameof(Horizon), "ModernWork", new { page = 1 }) ?? horizonUrl,
+            FormMethod = "get",
+            ClearUrl = Url.Action(nameof(Horizon), "ModernWork") ?? horizonUrl,
+            ActiveChips = vm.ActiveFilterChips,
+            Fields = new List<Compass.Models.SearchAndFilterFieldViewModel>()
+        };
+        ViewBag.ActiveTab = activeTab;
+        ViewBag.AllWorkActiveTab = activeTab;
+
+        return View("~/Views/Modern/Work/AllWork.cshtml", vm);
+    }
+
     [HttpGet("export-register")]
     public async Task<IActionResult> ExportRegister(string? scope, string? tab, string? search, int? portfolioId, int? businessAreaId, int? directorateId, int? phaseId, int? ragId, int? priorityId, string? monthlyUpdate,
         int? primaryContactUserId = null,
@@ -317,7 +403,7 @@ public partial class ModernWorkController : Controller
         var (currentUser, userEmail) = scopeUser.Value;
 
         var normalizedTab = (tab ?? "active").Trim().ToLowerInvariant();
-        var exportTab = normalizedTab is "completed" or "cancelled" or "all" ? normalizedTab : "active";
+        var exportTab = normalizedTab is "completed" or "cancelled" or "all" or "horizon" ? normalizedTab : "active";
 
         var mergedTags = MergeWorkTagQuery(tagId, tagIds);
 
@@ -662,13 +748,7 @@ public partial class ModernWorkController : Controller
             .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
         ViewBag.Directorates = directorates;
 
-        ViewBag.WorkStatusOptions = new List<LookupOption>
-        {
-            new() { Name = "Active", Value = "Active" },
-            new() { Name = "Paused", Value = "Paused" },
-            new() { Name = "Completed", Value = "Completed" },
-            new() { Name = "Cancelled", Value = "Cancelled" }
-        };
+        ViewBag.WorkStatusOptions = WorkLifecycleStatusOptions;
 
         ViewBag.WorkPriorityOptions = await _context.DeliveryPriorities.AsNoTracking().OrderBy(p => p.SortOrder)
             .Select(p => new LookupOption { Id = p.Id, Name = p.Name ?? "", Value = p.Name ?? "" }).ToListAsync(cancellationToken);
@@ -786,6 +866,10 @@ public partial class ModernWorkController : Controller
             SubmittedByUserId = mu.CreatedByUserId,
             SubmittedBy = mu.CreatedByName ?? (mu.SubmittedAt.HasValue ? mu.CreatedByEmail : null),
             PermFte = mu.MonthlyPermFte,
+            AdminFte = mu.MonthlyAdminFte,
+            ProgrammeFte = mu.MonthlyProgrammeFte,
+            CapitalFte = mu.MonthlyCapitalFte,
+            OtherPermFte = mu.MonthlyOtherPermFte,
             MspFte = mu.MonthlyMspFte,
             PeopleNarrative = mu.PeopleNarrative
         };
@@ -930,13 +1014,16 @@ public partial class ModernWorkController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> MonthlyReportPost(
         int id, int year, int month,
-        string? narrative, string? peopleNarrative, decimal? permFte, decimal? mspFte,
+        string? narrative, string? peopleNarrative,
+        decimal? adminFte, decimal? programmeFte, decimal? capitalFte, decimal? otherPermFte, decimal? mspFte,
         int? ragStatusId, string? ragJustification, string? pathToGreen,
         string? command,
         CancellationToken cancellationToken = default)
     {
         if (month < 1 || month > 12)
             return BadRequest("Invalid month.");
+
+        var permFte = SumMonthlyPermFte(adminFte, programmeFte, capitalFte);
 
         var milestoneStatus = MilestoneReportHelper.ParsePostedIntKeyStringDictionary(Request.Form, "milestoneStatus");
         var milestoneRagStatusId = MilestoneReportHelper.ParsePostedIntKeyNullableIntDictionary(Request.Form, "milestoneRagStatusId");
@@ -999,7 +1086,10 @@ public partial class ModernWorkController : Controller
             isSubmit,
             narrative,
             peopleNarrative,
-            permFte,
+            adminFte,
+            programmeFte,
+            capitalFte,
+            otherPermFte,
             mspFte,
             ragStatusId,
             resolvedRag,
@@ -1013,6 +1103,10 @@ public partial class ModernWorkController : Controller
             var posted = new MonthlyReportPostedForm(
                 narrative,
                 peopleNarrative,
+                adminFte,
+                programmeFte,
+                capitalFte,
+                otherPermFte,
                 permFte,
                 mspFte,
                 ragStatusId,
@@ -1052,6 +1146,10 @@ public partial class ModernWorkController : Controller
 
         update.Narrative = narrative ?? string.Empty;
         update.PeopleNarrative = peopleNarrative;
+        update.MonthlyAdminFte = adminFte;
+        update.MonthlyProgrammeFte = programmeFte;
+        update.MonthlyCapitalFte = capitalFte;
+        update.MonthlyOtherPermFte = otherPermFte;
         update.MonthlyPermFte = permFte;
         update.MonthlyMspFte = mspFte;
         update.UpdatedAt = DateTime.UtcNow;
@@ -1119,6 +1217,10 @@ public partial class ModernWorkController : Controller
             var postedOnError = new MonthlyReportPostedForm(
                 narrative,
                 peopleNarrative,
+                adminFte,
+                programmeFte,
+                capitalFte,
+                otherPermFte,
                 permFte,
                 mspFte,
                 ragStatusId,
@@ -1176,6 +1278,10 @@ public partial class ModernWorkController : Controller
     private sealed record MonthlyReportPostedForm(
         string? Narrative,
         string? PeopleNarrative,
+        decimal? AdminFte,
+        decimal? ProgrammeFte,
+        decimal? CapitalFte,
+        decimal? OtherPermFte,
         decimal? PermFte,
         decimal? MspFte,
         int? RagStatusId,
@@ -1192,16 +1298,26 @@ public partial class ModernWorkController : Controller
         !string.IsNullOrEmpty(name) &&
         string.Equals(name, "Green", StringComparison.OrdinalIgnoreCase);
 
+    private static decimal? SumMonthlyPermFte(decimal? adminFte, decimal? programmeFte, decimal? capitalFte)
+    {
+        if (!adminFte.HasValue && !programmeFte.HasValue && !capitalFte.HasValue)
+            return null;
+        return (adminFte ?? 0m) + (programmeFte ?? 0m) + (capitalFte ?? 0m);
+    }
+
     /// <summary>
     /// Server-side validation for monthly report. Path to green is required only when submitting with a non-green RAG (field not in scope when green).
-    /// Permanent FTE and MSC are required on submit only (draft save may omit them).
+    /// DDT Permanent FTE splits, Other Permanent FTE, and Contractor / External Resource FTE are required on submit only.
     /// </summary>
     private static void ValidateMonthlyReportForm(
         ModelStateDictionary modelState,
         bool isSubmit,
         string? narrative,
         string? peopleNarrative,
-        decimal? permFte,
+        decimal? adminFte,
+        decimal? programmeFte,
+        decimal? capitalFte,
+        decimal? otherPermFte,
         decimal? mspFte,
         int? ragStatusId,
         RagStatusLookup? resolvedRag,
@@ -1217,25 +1333,27 @@ public partial class ModernWorkController : Controller
                 modelState.AddModelError(key, $"{label} must be {MonthlyReportMaxTextLength:N0} characters or fewer.");
         }
 
+        void ValidateFte(string key, decimal? value, string label)
+        {
+            if (!FieldHasBinderError(modelState, key) && value is { } v &&
+                (v < 0m || v > MonthlyReportMaxHeadcount))
+            {
+                modelState.AddModelError(key,
+                    $"{label} must be between 0 and {MonthlyReportMaxHeadcount:N0}.");
+            }
+        }
+
         MaxLen(nameof(narrative), narrative, "Monthly update narrative");
         MaxLen(nameof(peopleNarrative), peopleNarrative, "Narrative on people this month");
         MaxLen(nameof(ragJustification), ragJustification, "Justification for RAG");
         if (resolvedRag != null && !MonthlyReportIsGreenRagName(resolvedRag.Name))
             MaxLen(nameof(pathToGreen), pathToGreen, "Path to green");
 
-        if (!FieldHasBinderError(modelState, nameof(permFte)) && permFte is { } p &&
-            (p < 0m || p > MonthlyReportMaxHeadcount))
-        {
-            modelState.AddModelError(nameof(permFte),
-                $"Permanent FTE must be between 0 and {MonthlyReportMaxHeadcount:N0}.");
-        }
-
-        if (!FieldHasBinderError(modelState, nameof(mspFte)) && mspFte is { } m &&
-            (m < 0m || m > MonthlyReportMaxHeadcount))
-        {
-            modelState.AddModelError(nameof(mspFte),
-                $"MSC number must be between 0 and {MonthlyReportMaxHeadcount:N0}.");
-        }
+        ValidateFte(nameof(adminFte), adminFte, "Admin FTE");
+        ValidateFte(nameof(programmeFte), programmeFte, "Programme FTE");
+        ValidateFte(nameof(capitalFte), capitalFte, "Capital FTE");
+        ValidateFte(nameof(otherPermFte), otherPermFte, "Other Permanent FTE");
+        ValidateFte(nameof(mspFte), mspFte, "Contractor / External Resource FTE");
 
         if (!isSubmit)
             return;
@@ -1243,11 +1361,20 @@ public partial class ModernWorkController : Controller
         if (string.IsNullOrWhiteSpace(narrative))
             modelState.AddModelError(nameof(narrative), "Enter a monthly update narrative.");
 
-        if (!FieldHasBinderError(modelState, nameof(permFte)) && !permFte.HasValue)
-            modelState.AddModelError(nameof(permFte), "Enter permanent FTE.");
+        if (!FieldHasBinderError(modelState, nameof(adminFte)) && !adminFte.HasValue)
+            modelState.AddModelError(nameof(adminFte), "Enter Admin FTE.");
+
+        if (!FieldHasBinderError(modelState, nameof(programmeFte)) && !programmeFte.HasValue)
+            modelState.AddModelError(nameof(programmeFte), "Enter Programme FTE.");
+
+        if (!FieldHasBinderError(modelState, nameof(capitalFte)) && !capitalFte.HasValue)
+            modelState.AddModelError(nameof(capitalFte), "Enter Capital FTE.");
+
+        if (!FieldHasBinderError(modelState, nameof(otherPermFte)) && !otherPermFte.HasValue)
+            modelState.AddModelError(nameof(otherPermFte), "Enter Other Permanent FTE.");
 
         if (!FieldHasBinderError(modelState, nameof(mspFte)) && !mspFte.HasValue)
-            modelState.AddModelError(nameof(mspFte), "Enter MSC number.");
+            modelState.AddModelError(nameof(mspFte), "Enter Contractor / External Resource FTE.");
 
         if (!ragStatusId.HasValue)
         {
@@ -1375,6 +1502,10 @@ public partial class ModernWorkController : Controller
             SubmittedByName = submittedByName,
             Narrative = ComposeMonthlyUpdateNarrativeForDisplay(update),
             PeopleNarrative = update?.PeopleNarrative,
+            AdminFte = update?.MonthlyAdminFte,
+            ProgrammeFte = update?.MonthlyProgrammeFte,
+            CapitalFte = update?.MonthlyCapitalFte,
+            OtherPermFte = update?.MonthlyOtherPermFte,
             PermFte = update?.MonthlyPermFte,
             MspFte = update?.MonthlyMspFte,
             RagStatusId = currentRagId,
@@ -1396,6 +1527,10 @@ public partial class ModernWorkController : Controller
         {
             vm.Narrative = posted.Narrative;
             vm.PeopleNarrative = posted.PeopleNarrative;
+            vm.AdminFte = posted.AdminFte;
+            vm.ProgrammeFte = posted.ProgrammeFte;
+            vm.CapitalFte = posted.CapitalFte;
+            vm.OtherPermFte = posted.OtherPermFte;
             vm.PermFte = posted.PermFte;
             vm.MspFte = posted.MspFte;
             vm.RagStatusId = posted.RagStatusId;
@@ -1514,6 +1649,10 @@ public partial class ModernWorkController : Controller
             SubmittedByName = prevSubmittedByName,
             Narrative = ComposeMonthlyUpdateNarrativeForDisplay(prevUpdate),
             PeopleNarrative = prevUpdate.PeopleNarrative,
+            AdminFte = prevUpdate.MonthlyAdminFte,
+            ProgrammeFte = prevUpdate.MonthlyProgrammeFte,
+            CapitalFte = prevUpdate.MonthlyCapitalFte,
+            OtherPermFte = prevUpdate.MonthlyOtherPermFte,
             PermFte = prevUpdate.MonthlyPermFte,
             MspFte = prevUpdate.MonthlyMspFte,
             RagName = prevRagName,
@@ -2269,6 +2408,7 @@ public partial class ModernWorkController : Controller
     }
 
     [HttpPost("{id:int}/milestone/add")]
+    [HttpPost("/ModernWork/AddMilestone/{id:int}")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddMilestonePost(
         int id,
@@ -2282,6 +2422,12 @@ public partial class ModernWorkController : Controller
         name = name?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(name))
             ModelState.AddModelError("name", "Enter a milestone name.");
+        else if (name.Length > 200)
+            ModelState.AddModelError("name", "Milestone title must be 200 characters or fewer.");
+
+        description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        if (description is { Length: > 4000 })
+            ModelState.AddModelError("description", "Description must be 4,000 characters or fewer.");
 
         status = status?.Trim().ToLowerInvariant() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(status) || !ValidMilestoneStatuses.Contains(status))
@@ -2305,7 +2451,7 @@ public partial class ModernWorkController : Controller
             {
                 ProjectId = id,
                 Name = name,
-                Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+                Description = description,
                 DueDate = dueDate.Date,
                 Status = status,
                 RagStatusLookupId = ragStatusLookupId
@@ -2316,7 +2462,7 @@ public partial class ModernWorkController : Controller
         {
             ProjectId = id,
             Name = name,
-            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+            Description = description,
             DueDate = dueDate.Date,
             Status = status,
             RagStatusLookupId = resolvedRag?.Id,
@@ -2453,6 +2599,12 @@ public partial class ModernWorkController : Controller
         name = name?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(name))
             ModelState.AddModelError("name", "Enter a milestone name.");
+        else if (name.Length > 200)
+            ModelState.AddModelError("name", "Milestone title must be 200 characters or fewer.");
+
+        var trimmedDescription = string.IsNullOrWhiteSpace(Description) ? null : Description.Trim();
+        if (trimmedDescription is { Length: > 4000 })
+            ModelState.AddModelError("Description", "Description must be 4,000 characters or fewer.");
 
         status = status?.Trim().ToLowerInvariant() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(status) || !ValidMilestoneStatuses.Contains(status))
@@ -2470,7 +2622,7 @@ public partial class ModernWorkController : Controller
         if (!ModelState.IsValid)
         {
             milestone.Name = name;
-            milestone.Description = string.IsNullOrWhiteSpace(Description) ? null : Description.Trim();
+            milestone.Description = trimmedDescription;
             milestone.DueDate = dueDate.Date;
             milestone.Status = status;
             milestone.RagStatusLookupId = ragStatusLookupId;
@@ -2483,7 +2635,7 @@ public partial class ModernWorkController : Controller
 
         var previousRagId = milestone.RagStatusLookupId;
         milestone.Name = name;
-        milestone.Description = string.IsNullOrWhiteSpace(Description) ? null : Description.Trim();
+        milestone.Description = trimmedDescription;
         milestone.DueDate = dueDate.Date;
         milestone.Status = status;
         milestone.RagStatusLookupId = resolvedRag?.Id;
@@ -3943,13 +4095,9 @@ public partial class ModernWorkController : Controller
 
         ViewBag.WorkChromeSubPage = true;
         ViewBag.CurrentStatus = work.Status;
-        ViewBag.WorkStatusOptions = new List<SelectListItem>
-        {
-            new("Active", "Active"),
-            new("Paused", "Paused"),
-            new("Completed", "Completed"),
-            new("Cancelled", "Cancelled")
-        };
+        ViewBag.WorkStatusOptions = WorkLifecycleStatusOptions
+            .Select(o => new SelectListItem(o.Name, o.Value))
+            .ToList();
 
         return View("~/Views/Modern/Work/ChangeStatus.cshtml", work);
     }
@@ -3977,7 +4125,7 @@ public partial class ModernWorkController : Controller
             return RedirectToAction(nameof(AllWork));
         }
 
-        var allowed = new[] { "Active", "Paused", "Completed", "Cancelled" };
+        var allowed = new[] { "Active", "Paused", "Completed", "Cancelled", "Horizon" };
         if (!allowed.Contains(status, StringComparer.OrdinalIgnoreCase))
             return BadRequest();
 
@@ -4370,13 +4518,7 @@ public partial class ModernWorkController : Controller
         ViewBag.Portfolios = orgGroups.Select(g => new Portfolio { Id = g.Id, Name = g.Name, IsActive = true }).ToList();
         ViewBag.Directorates = await _context.Divisions.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Name)
             .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
-        ViewBag.WorkStatusOptions = new List<LookupOption>
-        {
-            new() { Name = "Active", Value = "Active" },
-            new() { Name = "Paused", Value = "Paused" },
-            new() { Name = "Completed", Value = "Completed" },
-            new() { Name = "Cancelled", Value = "Cancelled" }
-        };
+        ViewBag.WorkStatusOptions = WorkLifecycleStatusOptions;
         ViewBag.StatusFilter = status;
         ViewBag.Search = search;
         ViewBag.FilterPortfolioId = portfolioId;
@@ -4442,13 +4584,7 @@ public partial class ModernWorkController : Controller
             .Select(d => new Directorate { Id = d.Id, Name = d.Name, IsActive = true }).ToListAsync(cancellationToken);
         ViewBag.PriorityOptions = await _context.DeliveryPriorities.AsNoTracking().OrderBy(p => p.SortOrder)
             .Select(p => new LookupOption { Id = p.Id, Name = p.Name ?? "", Value = p.Name ?? "" }).ToListAsync(cancellationToken);
-        ViewBag.WorkStatusOptions = new List<LookupOption>
-        {
-            new() { Name = "Active", Value = "Active" },
-            new() { Name = "Paused", Value = "Paused" },
-            new() { Name = "Completed", Value = "Completed" },
-            new() { Name = "Cancelled", Value = "Cancelled" }
-        };
+        ViewBag.WorkStatusOptions = WorkLifecycleStatusOptions;
         var phaseNames = await _context.PhaseLookups.AsNoTracking()
             .Where(p => p.IsActive)
             .ToDictionaryAsync(p => p.Id, p => p.Name ?? "", cancellationToken);

@@ -4,13 +4,14 @@
 @using System.Linq
 @{
     var opsManage = ViewBag.OpsManageWork as bool? == true;
-    var listAction = opsManage ? "ManageWork" : "AllWork";
+    var horizonMode = ViewBag.HorizonMode as bool? == true;
+    var listAction = horizonMode ? "Horizon" : opsManage ? "ManageWork" : "AllWork";
     var listController = opsManage ? "ModernOperations" : "ModernWork";
-    ViewData["Title"] = opsManage ? "Manage work" : "All work";
+    ViewData["Title"] = horizonMode ? "Horizon" : opsManage ? "Manage work" : "All work";
     var activeTab = ViewBag.ActiveTab as string ?? "active";
     var searchAndFilter = ViewBag.SearchAndFilter as SearchAndFilterViewModel;
     var businessAreaCount = Model.BusinessAreas?.Count ?? 0;
-    var allFilteredCount = Model.ActiveCount + Model.PausedCount + Model.CompletedCount + Model.CancelledCount;
+    var allFilteredCount = Model.ActiveCount + Model.PausedCount + Model.CompletedCount + Model.CancelledCount + Model.HorizonCount;
 
     string? MonthlyQ() => string.IsNullOrWhiteSpace(Model.FilterMonthlyUpdate) ? null : Model.FilterMonthlyUpdate;
     int[]? TagIdsQ() => (Model.FilterTagIds != null && Model.FilterTagIds.Count > 0) ? Model.FilterTagIds.ToArray() : null;
@@ -68,23 +69,39 @@
         sd = Model.RegisterSortDescending
     };
 
-    object AllWorkPageQuery(int page) => new {
-        tab = activeTab,
-        page,
-        mine = Model.IsMyWork ? true : (bool?)null,
-        search = Model.FilterSearch,
-        businessAreaId = Model.FilterBusinessAreaId,
-        directorateId = Model.FilterDirectorateId,
-        phaseId = Model.FilterPhaseId,
-        ragId = Model.FilterRagId,
-        priorityId = Model.FilterPriorityId,
-        monthlyUpdate = MonthlyQ(),
-        primaryContactUserId = Model.FilterPrimaryContactUserId,
-        tagId = Model.FilterTagId,
-        tagIds = TagIdsQ(),
-        sort = Model.RegisterSortField,
-        sd = Model.RegisterSortDescending
-    };
+    object AllWorkPageQuery(int page) => horizonMode
+      ? (object)new {
+          page,
+          search = Model.FilterSearch,
+          businessAreaId = Model.FilterBusinessAreaId,
+          directorateId = Model.FilterDirectorateId,
+          phaseId = Model.FilterPhaseId,
+          ragId = Model.FilterRagId,
+          priorityId = Model.FilterPriorityId,
+          monthlyUpdate = MonthlyQ(),
+          primaryContactUserId = Model.FilterPrimaryContactUserId,
+          tagId = Model.FilterTagId,
+          tagIds = TagIdsQ(),
+          sort = Model.RegisterSortField,
+          sd = Model.RegisterSortDescending
+      }
+      : new {
+          tab = activeTab,
+          page,
+          mine = Model.IsMyWork ? true : (bool?)null,
+          search = Model.FilterSearch,
+          businessAreaId = Model.FilterBusinessAreaId,
+          directorateId = Model.FilterDirectorateId,
+          phaseId = Model.FilterPhaseId,
+          ragId = Model.FilterRagId,
+          priorityId = Model.FilterPriorityId,
+          monthlyUpdate = MonthlyQ(),
+          primaryContactUserId = Model.FilterPrimaryContactUserId,
+          tagId = Model.FilterTagId,
+          tagIds = TagIdsQ(),
+          sort = Model.RegisterSortField,
+          sd = Model.RegisterSortDescending
+      };
 
     IEnumerable<WorkRegisterRow> RowsForTab(string tab)
     {
@@ -97,6 +114,7 @@
                 "active" => Model.ActivePaused,
                 "completed" => Model.Completed,
                 "cancelled" => Model.Cancelled,
+                "horizon" => Enumerable.Empty<WorkRegisterRow>(),
                 "all" => Model.ActivePaused.Concat(Model.Completed).Concat(Model.Cancelled),
                 _ => Model.ActivePaused
             };
@@ -104,6 +122,7 @@
         return Enumerable.Empty<WorkRegisterRow>();
     }
 
+    var pageTitle = horizonMode ? "Horizon" : opsManage ? "Manage work" : "All work";
 }
 @section Breadcrumbs {
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
@@ -115,7 +134,7 @@
  else
  {
  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Dashboard", "ModernWork")">Work</a></li>
- <li class="govuk-breadcrumbs__list-item" aria-current="page">All work</li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@pageTitle</li>
  }
 }
 
@@ -124,16 +143,19 @@
   var allWorkHeaderLede = await Html.PartialAsync("_AllWorkHeaderLede", Model);
 }
 
-<div class="modern-work-page modern-work-page--all-work">
+<div class="modern-work-page modern-work-page--all-work@(horizonMode ? " modern-work-page--horizon" : "")">
 @await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
   Caption = Model.IsMyWork ? "Your work" : (opsManage ? "Operations" : "Work"),
-  Title = opsManage ? "Manage work" : "All work",
+  Title = pageTitle,
   Lede = allWorkHeaderLede,
   Actions = allWorkHeaderActions
 })
 
 <form method="get" action="@Url.Action(listAction, listController)" id="allwork-register-form" class="dfe-c-mb-3">
-  <input type="hidden" name="tab" value="@activeTab" />
+  @if (!horizonMode)
+  {
+    <input type="hidden" name="tab" value="@activeTab" />
+  }
   <input type="hidden" name="page" value="1" />
   @if (Model.IsMyWork)
   {
@@ -329,17 +351,89 @@
     </div>
  <div class="filter-panel__actions">
  <button type="submit" class="govuk-button">Apply filters</button>
- <a href="@Url.Action(listAction, listController, new { tab = activeTab, mine = Model.IsMyWork ? true : (bool?)null })" class="govuk-link govuk-link--no-visited-state">Clear filters</a>
+ <a href="@(horizonMode
+     ? Url.Action(listAction, listController)
+     : Url.Action(listAction, listController, new { tab = activeTab, mine = Model.IsMyWork ? true : (bool?)null }))" class="govuk-link govuk-link--no-visited-state">Clear filters</a>
     </div>
   </div>
   </div>
 </form>
 
-@if (ViewBag.WorkRegisterSubNav is WorkRegisterSubNavViewModel workRegisterSubNav)
+@if (!horizonMode && ViewBag.WorkRegisterSubNav is WorkRegisterSubNavViewModel workRegisterSubNav)
 {
   @await Html.PartialAsync("_WorkRegisterSubNav", workRegisterSubNav)
 }
 
+@if (horizonMode)
+{
+<div id="d-horizon" class="tab-pane on" role="tabpanel">
+ <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+  <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed modern-work-table" id="work-table-horizon">
+ <caption class="govuk-table__caption govuk-table__caption--m compass2-visually-hidden">Horizon work items</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Work item</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Business area</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Priority</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">RAG</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Primary contact</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">Status</button>
+        </th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">
+          <button type="button" class="dfe-f-table-sort-button">@Model.RegisterMonthlyColumnHeader</button>
+        </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var r in RowsForTab("horizon"))
+        {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a href="@Url.Action("Detail", "ModernWork", new { id = r.Id })" class="govuk-link govuk-link--no-visited-state">@r.Title</a>
+ <div class="govuk-body-s dfe-t-u-text-muted modern-work-table__meta">
+                WI-@r.Id.ToString("D8")@if (!string.IsNullOrEmpty(r.PhaseName) && r.PhaseName != "—") { <span aria-hidden="true"> · </span><span>@r.PhaseName</span> }
+              </div>
+            </td>
+            <td class="govuk-table__cell">@(r.BusinessAreaName ?? "—")</td>
+            <td class="govuk-table__cell">
+                @if (!string.IsNullOrEmpty(r.PriorityName))
+                {
+                    <span class="@WorkBadgeCss.PriorityDfeFrontendBadgeClass(r.PriorityName)">@r.PriorityName.ToUpperInvariant()</span>
+                }
+                else
+                {
+                    <span class="dfe-c-text-muted">—</span>
+                }
+              </td>
+            <td class="govuk-table__cell"><span class="@WorkBadgeCss.RagDfeFrontendBadgeClass(r.RagCssClass, r.RagName)">@((r.RagName ?? "—").ToUpperInvariant())</span></td>
+            <td class="govuk-table__cell">@(r.PrimaryContactName ?? "—")</td>
+ <td class="govuk-table__cell"><span class="@WorkBadgeCss.StatusDfeFrontendBadgeClass(r.Status)">@r.Status</span></td>
+            <td class="govuk-table__cell">@await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterMonthlyUpdateCell.cshtml", r)</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (!RowsForTab("horizon").Any())
+  {
+ <p class="dfe-c-body muted">No horizon work items. Set status to Horizon when creating or editing a work item to add it to the pipeline.</p>
+  }
+</div>
+}
+else
+{
 <div id="d-active" class="tab-pane @(activeTab =="active" ? "on" : "")" role="tabpanel">
  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
   <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
@@ -604,6 +698,8 @@
   }
 </div>
 
+} @* end !horizonMode *@
+
 @await Html.PartialAsync("~/Views/Modern/Work/_WorkRegisterPaginationFooter.cshtml", new WorkRegisterPaginationFooterViewModel {
   IsPaginated = Model.RegisterIsPaginated,
   DisplayRowStart = Model.RegisterDisplayRowStart,
@@ -612,7 +708,7 @@
   CurrentPage = Model.RegisterPage,
   TotalPages = Model.RegisterPageCount,
   PageUrl = p => Url.Action(listAction, listController, AllWorkPageQuery(p)) ?? "#",
-  NavigationAriaLabel = "All work results"
+  NavigationAriaLabel = horizonMode ? "Horizon work results" : "All work results"
 })
 
 </div>

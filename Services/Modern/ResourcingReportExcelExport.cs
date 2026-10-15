@@ -34,9 +34,12 @@ public static class ResourcingReportExcelExport
             ("Business area filter", businessAreaFilter),
             ("Directorate filter", directorateFilter),
             ("Submitted work items", report.SubmittedWorkItemCount.ToString(CultureInfo.InvariantCulture)),
+            ("Admin FTE", report.TotalAdminFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("Programme FTE", report.TotalProgrammeFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("Capital FTE", report.TotalCapitalFte.ToString("0.##", CultureInfo.InvariantCulture)),
             ("FTE total", report.TotalPermFte.ToString("0.##", CultureInfo.InvariantCulture)),
-            ("MSC total", report.TotalMspFte.ToString("0.##", CultureInfo.InvariantCulture)),
-            ("Combined total (FTE + MSC)", report.TotalResourcingFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("Managed service total", report.TotalMspFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("Combined total (FTE + managed service)", report.TotalResourcingFte.ToString("0.##", CultureInfo.InvariantCulture)),
         };
 
         worksheet.Cell(1, 1).Value = "Field";
@@ -80,21 +83,34 @@ public static class ResourcingReportExcelExport
         string nameHeader,
         IReadOnlyList<ResourcingAggregateRow> rows)
     {
-        WriteHeaderRow(worksheet, nameHeader, "Work items", "FTE", "MSC", "Combined", "Band");
+        WriteHeaderRow(
+            worksheet,
+            nameHeader,
+            "Work items",
+            "Admin",
+            "Programme",
+            "Capital",
+            "FTE total",
+            "Managed service",
+            "Combined",
+            "Band");
 
         var rowNumber = 2;
         foreach (var row in rows)
         {
             worksheet.Cell(rowNumber, 1).Value = row.Name;
             worksheet.Cell(rowNumber, 2).Value = row.WorkItemCount;
-            worksheet.Cell(rowNumber, 3).Value = row.PermFteTotal;
-            worksheet.Cell(rowNumber, 4).Value = row.MspFteTotal;
-            worksheet.Cell(rowNumber, 5).Value = row.ResourcingFteTotal;
-            worksheet.Cell(rowNumber, 6).Value = row.BandName;
+            worksheet.Cell(rowNumber, 3).Value = row.AdminFteTotal;
+            worksheet.Cell(rowNumber, 4).Value = row.ProgrammeFteTotal;
+            worksheet.Cell(rowNumber, 5).Value = row.CapitalFteTotal;
+            worksheet.Cell(rowNumber, 6).Value = row.PermFteTotal;
+            worksheet.Cell(rowNumber, 7).Value = row.MspFteTotal;
+            worksheet.Cell(rowNumber, 8).Value = row.ResourcingFteTotal;
+            worksheet.Cell(rowNumber, 9).Value = row.BandName;
             rowNumber++;
         }
 
-        FinishTable(worksheet, 6);
+        FinishTable(worksheet, 9);
     }
 
     private static void WriteWorkItemsSheet(IXLWorksheet worksheet, IReadOnlyList<ResourcingWorkItemRow> rows)
@@ -106,8 +122,11 @@ public static class ResourcingReportExcelExport
             "Business area",
             "Directorates",
             "Priority",
-            "FTE",
-            "MSC",
+            "Admin",
+            "Programme",
+            "Capital",
+            "FTE total",
+            "Managed service",
             "Combined",
             "Band");
 
@@ -119,14 +138,17 @@ public static class ResourcingReportExcelExport
             worksheet.Cell(rowNumber, 3).Value = row.BusinessArea;
             worksheet.Cell(rowNumber, 4).Value = row.Directorates;
             worksheet.Cell(rowNumber, 5).Value = string.IsNullOrWhiteSpace(row.Priority) ? "Not set" : row.Priority;
-            worksheet.Cell(rowNumber, 6).Value = row.PermFte;
-            worksheet.Cell(rowNumber, 7).Value = row.MspFte;
-            worksheet.Cell(rowNumber, 8).Value = row.ResourcingFte;
-            worksheet.Cell(rowNumber, 9).Value = row.BandName;
+            worksheet.Cell(rowNumber, 6).Value = row.AdminFte;
+            worksheet.Cell(rowNumber, 7).Value = row.ProgrammeFte;
+            worksheet.Cell(rowNumber, 8).Value = row.CapitalFte;
+            worksheet.Cell(rowNumber, 9).Value = row.PermFte;
+            worksheet.Cell(rowNumber, 10).Value = row.MspFte;
+            worksheet.Cell(rowNumber, 11).Value = row.ResourcingFte;
+            worksheet.Cell(rowNumber, 12).Value = row.BandName;
             rowNumber++;
         }
 
-        FinishTable(worksheet, 9);
+        FinishTable(worksheet, 12);
     }
 
     private static void WriteTrendSheet(IXLWorksheet worksheet, IReadOnlyList<ResourcingTrendMonthPoint> points)
@@ -135,8 +157,11 @@ public static class ResourcingReportExcelExport
             worksheet,
             "Month",
             "Submitted work items",
-            "FTE",
-            "MSC",
+            "Admin",
+            "Programme",
+            "Capital",
+            "FTE total",
+            "Managed service",
             "Combined",
             "Change",
             "% change");
@@ -152,16 +177,19 @@ public static class ResourcingReportExcelExport
 
             worksheet.Cell(rowNumber, 1).Value = point.Label;
             worksheet.Cell(rowNumber, 2).Value = point.SubmittedWorkItemCount;
-            worksheet.Cell(rowNumber, 3).Value = point.PermFteTotal;
-            worksheet.Cell(rowNumber, 4).Value = point.MspFteTotal;
-            worksheet.Cell(rowNumber, 5).Value = point.ResourcingFteTotal;
-            worksheet.Cell(rowNumber, 6).Value = delta.HasValue ? delta.Value : "";
-            worksheet.Cell(rowNumber, 7).Value = deltaPct.HasValue ? deltaPct.Value : "";
+            worksheet.Cell(rowNumber, 3).Value = point.AdminFteTotal;
+            worksheet.Cell(rowNumber, 4).Value = point.ProgrammeFteTotal;
+            worksheet.Cell(rowNumber, 5).Value = point.CapitalFteTotal;
+            worksheet.Cell(rowNumber, 6).Value = point.PermFteTotal;
+            worksheet.Cell(rowNumber, 7).Value = point.MspFteTotal;
+            worksheet.Cell(rowNumber, 8).Value = point.ResourcingFteTotal;
+            worksheet.Cell(rowNumber, 9).Value = delta.HasValue ? delta.Value : "";
+            worksheet.Cell(rowNumber, 10).Value = deltaPct.HasValue ? deltaPct.Value : "";
             previous = point;
             rowNumber++;
         }
 
-        FinishTable(worksheet, 7);
+        FinishTable(worksheet, 10);
     }
 
     private static void WriteHeaderRow(IXLWorksheet worksheet, params string[] headers)

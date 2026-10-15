@@ -395,10 +395,11 @@ public partial class ModernWorkService : IModernWorkService
                 g.Count(p => p.Status == "Cancelled"),
                 redRagStatusId != 0
                     ? g.Count(p => (p.Status == "Active" || p.Status == "Paused") && p.RagStatusLookupId == redRagStatusId)
-                    : 0))
+                    : 0,
+                g.Count(p => p.Status == "Horizon")))
             .FirstOrDefaultAsync(cancellationToken);
 
-        return agg ?? new WorkRegisterStatusCounts(0, 0, 0, 0, 0);
+        return agg ?? new WorkRegisterStatusCounts(0, 0, 0, 0, 0, 0);
     }
 
     private async Task<List<WorkPrimaryContactOption>> GetPrimaryContactFilterOptionsAsync(CancellationToken cancellationToken)
@@ -431,8 +432,10 @@ public partial class ModernWorkService : IModernWorkService
         {
             "completed" => baseQ.Where(p => p.Status == "Completed"),
             "cancelled" => baseQ.Where(p => p.Status == "Cancelled"),
+            "horizon" => baseQ.Where(p => p.Status == "Horizon"),
             "all" => baseQ.Where(p =>
-                p.Status == "Active" || p.Status == "Paused" || p.Status == "Completed" || p.Status == "Cancelled"),
+                p.Status == "Active" || p.Status == "Paused" || p.Status == "Completed"
+                || p.Status == "Cancelled" || p.Status == "Horizon"),
             _ => baseQ.Where(p => p.Status == "Active" || p.Status == "Paused"),
         };
 
@@ -445,10 +448,10 @@ public partial class ModernWorkService : IModernWorkService
 
     private static WorkRegisterGraphDepth GraphDepthForTab(string tabKey, bool forExport) =>
         forExport
-            ? tabKey is "active" or "all"
+            ? tabKey is "active" or "all" or "horizon"
                 ? WorkRegisterGraphDepth.ActivePage
                 : WorkRegisterGraphDepth.HistoricalExport
-            : tabKey is "active" or "all"
+            : tabKey is "active" or "all" or "horizon"
                 ? WorkRegisterGraphDepth.ActivePage
                 : WorkRegisterGraphDepth.HistoricalPage;
 
@@ -739,6 +742,10 @@ public partial class ModernWorkService : IModernWorkService
                 SubmittedByUserId = mu.CreatedByUserId,
                 SubmittedBy = mu.CreatedByName ?? mu.CreatedByUser?.Name,
                 PermFte = mu.MonthlyPermFte,
+                AdminFte = mu.MonthlyAdminFte,
+                ProgrammeFte = mu.MonthlyProgrammeFte,
+                CapitalFte = mu.MonthlyCapitalFte,
+                OtherPermFte = mu.MonthlyOtherPermFte,
                 MspFte = mu.MonthlyMspFte
             };
             w.MonthlyUpdates.Add(monthly);
@@ -1292,7 +1299,7 @@ public partial class ModernWorkService : IModernWorkService
             businessAreaId, primaryContactUserId, tagIds, cancellationToken);
 
         var tabKey = (exportTab ?? "active").Trim().ToLowerInvariant();
-        if (tabKey is not ("active" or "completed" or "cancelled" or "all"))
+        if (tabKey is not ("active" or "completed" or "cancelled" or "all" or "horizon"))
             tabKey = "active";
 
         List<int> ids;
@@ -1523,7 +1530,7 @@ public partial class ModernWorkService : IModernWorkService
         var redRag = filterLookups.RedRagStatusId;
 
         var tabKey = (registerTab ?? "active").Trim().ToLowerInvariant();
-        if (tabKey is not ("active" or "completed" or "cancelled" or "all"))
+        if (tabKey is not ("active" or "completed" or "cancelled" or "all" or "horizon"))
             tabKey = "active";
 
         if (registerPage.HasValue && string.IsNullOrWhiteSpace(monthlyUpdate))
@@ -1536,6 +1543,7 @@ public partial class ModernWorkService : IModernWorkService
             var pausedCount = statusCounts.Paused;
             var completedCount = statusCounts.Completed;
             var cancelledCount = statusCounts.Cancelled;
+            var horizonCount = statusCounts.Horizon;
             var ragRedCount = statusCounts.RagRed;
             var activePausedCountBeforeMonthlyFilter = statusCounts.ActivePaused;
 
@@ -1598,13 +1606,18 @@ public partial class ModernWorkService : IModernWorkService
 
             var paginatedVm = new WorkRegisterViewModel
             {
-                PageTitle = isMyWork ? "My work" : "Work register",
-                PageDescription = isMyWork ? "Work assigned to you" : "Active, paused and recently completed work items",
+                PageTitle = tabKey == "horizon"
+                    ? "Horizon"
+                    : isMyWork ? "My work" : "Work register",
+                PageDescription = tabKey == "horizon"
+                    ? "Pipeline work items with Horizon status — not yet active delivery"
+                    : isMyWork ? "Work assigned to you" : "Active, paused and recently completed work items",
                 IsMyWork = isMyWork,
                 ActiveCount = activeCount,
                 PausedCount = pausedCount,
                 CompletedCount = completedCount,
                 CancelledCount = cancelledCount,
+                HorizonCount = horizonCount,
                 RagRedCount = ragRedCount,
                 AwaitingMonthlyCount = 0,
                 AwaitingMonthlyOverdue = false,
@@ -1698,6 +1711,7 @@ public partial class ModernWorkService : IModernWorkService
         var activePaused = new List<WorkRegisterRow>();
         var completed = new List<WorkRegisterRow>();
         var cancelled = new List<WorkRegisterRow>();
+        var horizon = new List<WorkRegisterRow>();
 
         foreach (var p in allProjects)
         {
@@ -1711,11 +1725,14 @@ public partial class ModernWorkService : IModernWorkService
                 completed.Add(row);
             else if (p.Status == "Cancelled")
                 cancelled.Add(row);
+            else if (p.Status == "Horizon")
+                horizon.Add(row);
         }
 
         activePaused = OrderRegisterRows(activePaused, registerSort, registerSortDesc);
         completed = OrderRegisterRows(completed, registerSort, registerSortDesc);
         cancelled = OrderRegisterRows(cancelled, registerSort, registerSortDesc);
+        horizon = OrderRegisterRows(horizon, registerSort, registerSortDesc);
 
         var activePausedCountBeforeMonthly = activePaused.Count;
         if (!string.IsNullOrWhiteSpace(monthlyUpdate))
@@ -1734,7 +1751,8 @@ public partial class ModernWorkService : IModernWorkService
             {
                 "completed" => completed,
                 "cancelled" => cancelled,
-                "all" => OrderRegisterRows(activePaused.Concat(completed).Concat(cancelled), registerSort, registerSortDesc),
+                "horizon" => horizon,
+                "all" => OrderRegisterRows(activePaused.Concat(completed).Concat(cancelled).Concat(horizon), registerSort, registerSortDesc),
                 _ => activePaused
             };
 
@@ -1748,13 +1766,18 @@ public partial class ModernWorkService : IModernWorkService
 
             var inMemoryPaginatedVm = new WorkRegisterViewModel
             {
-                PageTitle = isMyWork ? "My work" : "Work register",
-                PageDescription = isMyWork ? "Work assigned to you" : "Active, paused and recently completed work items",
+                PageTitle = tabKey == "horizon"
+                    ? "Horizon"
+                    : isMyWork ? "My work" : "Work register",
+                PageDescription = tabKey == "horizon"
+                    ? "Pipeline work items with Horizon status — not yet active delivery"
+                    : isMyWork ? "Work assigned to you" : "Active, paused and recently completed work items",
                 IsMyWork = isMyWork,
                 ActiveCount = activePaused.Count(r => r.Status == "Active"),
                 PausedCount = activePaused.Count(r => r.Status == "Paused"),
                 CompletedCount = completed.Count,
                 CancelledCount = cancelled.Count,
+                HorizonCount = horizon.Count,
                 RagRedCount = ragRedCountSlow,
                 AwaitingMonthlyCount = 0,
                 AwaitingMonthlyOverdue = false,
@@ -1809,6 +1832,7 @@ public partial class ModernWorkService : IModernWorkService
             PausedCount = activePaused.Count(r => r.Status == "Paused"),
             CompletedCount = completed.Count,
             CancelledCount = cancelled.Count,
+            HorizonCount = horizon.Count,
             RagRedCount = ragRedCountSlow,
             AwaitingMonthlyCount = 0,
             AwaitingMonthlyOverdue = false,

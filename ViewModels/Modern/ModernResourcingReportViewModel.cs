@@ -2,7 +2,7 @@ using Compass.Models;
 
 namespace Compass.ViewModels.Modern;
 
-/// <summary>Monthly resourcing report totals (FTE + MSC) with configurable bands.</summary>
+/// <summary>Monthly resourcing report totals (permanent FTE by funding type + managed service) with configurable bands.</summary>
 public sealed class ModernResourcingReportViewModel
 {
     public int ReportYear { get; set; }
@@ -32,6 +32,9 @@ public sealed class ModernResourcingReportViewModel
     public int? NextNavYear { get; set; }
     public int? NextNavMonth { get; set; }
 
+    public decimal TotalAdminFte { get; set; }
+    public decimal TotalProgrammeFte { get; set; }
+    public decimal TotalCapitalFte { get; set; }
     public decimal TotalPermFte { get; set; }
     public decimal TotalMspFte { get; set; }
     public decimal TotalResourcingFte { get; set; }
@@ -62,6 +65,9 @@ public sealed class ResourcingAggregateRow
     public string Name { get; set; } = "";
     public int? GroupId { get; set; }
     public int WorkItemCount { get; set; }
+    public decimal AdminFteTotal { get; set; }
+    public decimal ProgrammeFteTotal { get; set; }
+    public decimal CapitalFteTotal { get; set; }
     public decimal PermFteTotal { get; set; }
     public decimal MspFteTotal { get; set; }
     public decimal ResourcingFteTotal { get; set; }
@@ -78,6 +84,9 @@ public sealed class ResourcingWorkItemRow
     public string Directorates { get; set; } = "Not set";
     public string Rag { get; set; } = "Not Set";
     public string? Priority { get; set; }
+    public decimal AdminFte { get; set; }
+    public decimal ProgrammeFte { get; set; }
+    public decimal CapitalFte { get; set; }
     public decimal PermFte { get; set; }
     public decimal MspFte { get; set; }
     public decimal ResourcingFte { get; set; }
@@ -90,6 +99,9 @@ public sealed class ResourcingTrendMonthPoint
     public int Year { get; set; }
     public int Month { get; set; }
     public string Label { get; set; } = "";
+    public decimal AdminFteTotal { get; set; }
+    public decimal ProgrammeFteTotal { get; set; }
+    public decimal CapitalFteTotal { get; set; }
     public decimal PermFteTotal { get; set; }
     public decimal MspFteTotal { get; set; }
     public decimal ResourcingFteTotal { get; set; }

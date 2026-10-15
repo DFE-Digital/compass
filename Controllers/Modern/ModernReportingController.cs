@@ -245,6 +245,163 @@ public partial class ModernReportingController : Controller
         }
     }
 
+    /// <summary>Activity time report — hours by type, theme, business area and person (Central Ops / Admin).</summary>
+    [HttpGet("activity-time")]
+    public async Task<IActionResult> ActivityTime(
+        string? fromDate,
+        string? toDate,
+        int? typeId,
+        int? themeId,
+        int? businessAreaId,
+        CancellationToken cancellationToken = default)
+    {
+        SetNav("reporting-activity-time");
+
+        var email = CurrentUserEmail?.Trim() ?? "";
+        if (string.IsNullOrEmpty(email) || !await _permissionService.IsOperationConsoleUserAsync(email))
+            return RedirectToAction(nameof(Dashboard));
+
+        static DateTime ParseIsoOrDefault(string? raw, DateTime fallback)
+        {
+            if (DateOnly.TryParseExact((raw ?? "").Trim(), "yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var d))
+                return d.ToDateTime(TimeOnly.MinValue);
+            return fallback.Date;
+        }
+
+        var today = Helpers.UkDateTime.Now().Date;
+        var from = ParseIsoOrDefault(fromDate, today.AddDays(-30));
+        var to = ParseIsoOrDefault(toDate, today);
+        if (to < from) (from, to) = (to, from);
+
+        var query = _context.ActivityTimeEntries.AsNoTracking()
+            .Include(e => e.ActivityTimeTypeLookup)
+            .Include(e => e.BusinessAreaLookup)
+            .Include(e => e.Project)
+            .Include(e => e.Themes).ThenInclude(t => t.ActivityTimeThemeLookup)
+            .Where(e => e.ActivityDate >= from && e.ActivityDate <= to);
+
+        if (typeId is > 0)
+            query = query.Where(e => e.ActivityTimeTypeLookupId == typeId);
+        if (businessAreaId is > 0)
+            query = query.Where(e => e.BusinessAreaLookupId == businessAreaId);
+        if (themeId is > 0)
+            query = query.Where(e => e.Themes.Any(t => t.ActivityTimeThemeLookupId == themeId));
+
+        var entries = await query
+            .OrderByDescending(e => e.ActivityDate)
+            .ThenByDescending(e => e.Id)
+            .ToListAsync(cancellationToken);
+
+        static decimal HoursFromMinutes(int minutes) => Math.Round(minutes / 60m, 2);
+
+        var vm = new ActivityTimeReportViewModel
+        {
+            FromDate = from,
+            ToDate = to,
+            FilterTypeId = typeId,
+            FilterThemeId = themeId,
+            FilterBusinessAreaId = businessAreaId,
+            EntryCount = entries.Count,
+            TotalHours = HoursFromMinutes(entries.Sum(e => e.DurationMinutes)),
+            ByActivityType = entries
+                .GroupBy(e => e.ActivityTimeTypeLookup?.Name ?? "Unknown")
+                .Select(g => new ActivityTimeReportSliceViewModel
+                {
+                    Label = g.Key,
+                    Hours = HoursFromMinutes(g.Sum(x => x.DurationMinutes)),
+                    EntryCount = g.Count()
+                })
+                .OrderByDescending(x => x.Hours)
+                .ToList(),
+            ByTheme = entries
+                .SelectMany(e => e.Themes.Select(t => new { Theme = t.ActivityTimeThemeLookup?.Name ?? "Unknown", e.DurationMinutes }))
+                .GroupBy(x => x.Theme)
+                .Select(g => new ActivityTimeReportSliceViewModel
+                {
+                    Label = g.Key,
+                    Hours = HoursFromMinutes(g.Sum(x => x.DurationMinutes)),
+                    EntryCount = g.Count()
+                })
+                .OrderByDescending(x => x.Hours)
+                .ToList(),
+            ByBusinessArea = entries
+                .GroupBy(e => e.BusinessAreaLookup?.Name ?? "Not linked")
+                .Select(g => new ActivityTimeReportSliceViewModel
+                {
+                    Label = g.Key,
+                    Hours = HoursFromMinutes(g.Sum(x => x.DurationMinutes)),
+                    EntryCount = g.Count()
+                })
+                .OrderByDescending(x => x.Hours)
+                .ToList(),
+            ByPerson = entries
+                .GroupBy(e => !string.IsNullOrWhiteSpace(e.CreatedByName) ? e.CreatedByName! : e.CreatedByEmail)
+                .Select(g => new ActivityTimeReportSliceViewModel
+                {
+                    Label = string.IsNullOrWhiteSpace(g.Key) ? "Unknown" : g.Key,
+                    Hours = HoursFromMinutes(g.Sum(x => x.DurationMinutes)),
+                    EntryCount = g.Count()
+                })
+                .OrderByDescending(x => x.Hours)
+                .ToList(),
+            ByDay = entries
+                .GroupBy(e => e.ActivityDate.Date)
+                .Select(g => new ActivityTimeReportDayViewModel
+                {
+                    Date = g.Key,
+                    Hours = HoursFromMinutes(g.Sum(x => x.DurationMinutes))
+                })
+                .OrderBy(x => x.Date)
+                .ToList(),
+            Entries = entries.Select(e => new ActivityTimeEntryRowViewModel
+            {
+                Id = e.Id,
+                ActivityDate = e.ActivityDate,
+                DurationMinutes = e.DurationMinutes,
+                ActivityTypeName = e.ActivityTimeTypeLookup?.Name ?? "",
+                Narrative = e.Narrative,
+                ThemesDisplay = string.Join(", ", e.Themes
+                    .Select(t => t.ActivityTimeThemeLookup?.Name)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .OrderBy(n => n)),
+                WorkItemTitle = e.Project?.Title,
+                BusinessAreaName = e.BusinessAreaLookup?.Name,
+                CreatedByDisplay = !string.IsNullOrWhiteSpace(e.CreatedByName) ? e.CreatedByName! : e.CreatedByEmail
+            }).ToList(),
+            ActivityTypes = await _context.ActivityTimeTypeLookups.AsNoTracking()
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+                .Select(x => new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+                {
+                    Value = x.Id.ToString(),
+                    Text = x.Name,
+                    Selected = x.Id == typeId
+                }).ToListAsync(cancellationToken),
+            Themes = await _context.ActivityTimeThemeLookups.AsNoTracking()
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+                .Select(x => new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+                {
+                    Value = x.Id.ToString(),
+                    Text = x.Name,
+                    Selected = x.Id == themeId
+                }).ToListAsync(cancellationToken),
+            BusinessAreas = await _context.BusinessAreaLookups.AsNoTracking()
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+                .Select(x => new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+                {
+                    Value = x.Id.ToString(),
+                    Text = x.Name,
+                    Selected = x.Id == businessAreaId
+                }).ToListAsync(cancellationToken)
+        };
+
+        return View("~/Views/Modern/Reporting/ActivityTime.cshtml", vm);
+    }
+
     /// <summary>Resourcing report — FTE/MSP totals and configurable resourcing bands.</summary>
     [HttpGet("resourcing")]
     public async Task<IActionResult> Resourcing(

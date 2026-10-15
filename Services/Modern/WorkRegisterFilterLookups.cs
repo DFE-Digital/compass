@@ -16,7 +16,7 @@ public sealed class WorkRegisterFilterLookups
     public int RedRagStatusId { get; init; }
 }
 
-public sealed record WorkRegisterStatusCounts(int Active, int Paused, int Completed, int Cancelled, int RagRed)
+public sealed record WorkRegisterStatusCounts(int Active, int Paused, int Completed, int Cancelled, int RagRed, int Horizon = 0)
 {
     public int ActivePaused => Active + Paused;
 
@@ -24,7 +24,8 @@ public sealed record WorkRegisterStatusCounts(int Active, int Paused, int Comple
     {
         "completed" => Completed,
         "cancelled" => Cancelled,
-        "all" => Active + Paused + Completed + Cancelled,
+        "horizon" => Horizon,
+        "all" => Active + Paused + Completed + Cancelled + Horizon,
         _ => Active + Paused,
     };
 }

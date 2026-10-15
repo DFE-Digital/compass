@@ -52,7 +52,7 @@
     }
 
     function activateManageTab(tabName) {
-      ['risks', 'issues', 'assumptions', 'nearmisses', 'dependencies'].forEach(function (name) {
+      ['risks', 'issues', 'assumptions', 'nearmisses', 'dependencies', 'members'].forEach(function (name) {
         var isCurrent = name === tabName;
         var li = document.getElementById('manage-tab-' + name);
         var panel = document.getElementById('ss-panel-' + name);

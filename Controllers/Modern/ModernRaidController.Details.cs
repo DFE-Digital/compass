@@ -177,6 +177,19 @@ public partial class ModernRaidController
             .OrderBy(r => r.Name)
             .ToListAsync(cancellationToken);
 
+        var viewerUserId = await ResolveCurrentUserIdAsync(cancellationToken);
+        var isAdmin = await IsRaidRegisterAdminAsync(cancellationToken);
+        if (!isAdmin && viewerUserId.HasValue)
+        {
+            registers = registers
+                .Where(r => RaidRegisterAccess.IsExplicitMember(r, viewerUserId.Value))
+                .ToList();
+        }
+        else if (!isAdmin)
+        {
+            registers = new List<RaidRegister>();
+        }
+
         return registers.Select(r => new WorkRaidRegisterTrackingVm
         {
             RegisterId = r.Id,
@@ -767,6 +780,12 @@ public partial class ModernRaidController
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
         if (risk == null)
             return NotFound();
+
+        var viewerUserId = await ResolveCurrentUserIdAsync(cancellationToken);
+        var viewerEmail = GetCurrentUserEmailNormalized();
+        var isRaidAdmin = await IsRaidRegisterAdminAsync(cancellationToken);
+        if (!await RaidRegisterAccess.CanViewRiskAsync(_db, risk, viewerUserId, viewerEmail, isRaidAdmin, cancellationToken))
+            return Forbid();
 
         await RaidRiskMitigations.AttachOrphansInMemoryAsync(_db, risk, cancellationToken);
 
@@ -1470,6 +1489,13 @@ public partial class ModernRaidController
             .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted, cancellationToken);
         if (issue == null)
             return NotFound();
+
+        var viewerUserId = await ResolveCurrentUserIdAsync(cancellationToken);
+        var viewerEmail = GetCurrentUserEmailNormalized();
+        var isRaidAdmin = await IsRaidRegisterAdminAsync(cancellationToken);
+        if (!await RaidRegisterAccess.CanViewIssueAsync(_db, issue, viewerUserId, viewerEmail, isRaidAdmin, cancellationToken))
+            return Forbid();
+
         ViewBag.OriginRisk = issue.SourceRiskId.HasValue
             ? await _db.Risks.AsNoTracking()
                 .Include(r => r.RiskStatus)

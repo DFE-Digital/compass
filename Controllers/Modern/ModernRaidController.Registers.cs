@@ -26,11 +26,18 @@ public partial class ModernRaidController
         SetRaidChrome("raid-registers");
 
         var userId = await ResolveCurrentUserIdAsync(cancellationToken);
+        var isAdmin = await IsRaidRegisterAdminAsync(cancellationToken);
 
         var yourRegisterEntities = await GetYourRegistersAsync(userId, cancellationToken);
-        var allRegisterEntities = await GetAllRegistersAsync(cancellationToken);
+        // Only Admin / Central Ops see every register; others only see registers they belong to.
+        var allRegisterEntities = isAdmin
+            ? await GetAllRegistersAsync(cancellationToken)
+            : yourRegisterEntities;
 
-        var registerIds = allRegisterEntities.Select(r => r.Id).ToList();
+        var registerIds = allRegisterEntities.Select(r => r.Id)
+            .Concat(yourRegisterEntities.Select(r => r.Id))
+            .Distinct()
+            .ToList();
 
         var riskCounts = await _db.RaidRegisterRisks
             .Where(rr => registerIds.Contains(rr.RaidRegisterId) && !rr.Risk.IsDeleted && rr.Risk.ClosedDate == null)
@@ -66,6 +73,7 @@ public partial class ModernRaidController
             .Select(r => BuildRegisterCardViewModel(
                 r,
                 userId,
+                isAdmin,
                 riskCounts,
                 issueCounts,
                 assumptionCounts,
@@ -77,6 +85,7 @@ public partial class ModernRaidController
             .Select(r => BuildRegisterCardViewModel(
                 r,
                 userId,
+                isAdmin,
                 riskCounts,
                 issueCounts,
                 assumptionCounts,
@@ -87,7 +96,8 @@ public partial class ModernRaidController
         var vm = new RaidRegisterDashboardViewModel
         {
             YourRegisters = yourRegisters,
-            AllRegisters = allRegisters
+            AllRegisters = allRegisters,
+            CanBrowseAllRegisters = isAdmin
         };
 
         return View("~/Views/Modern/Raid/Registers/Index.cshtml", vm);
@@ -116,12 +126,15 @@ public partial class ModernRaidController
 
         if (register == null) return NotFound();
 
-        if (!CanViewRegister(userId))
+        var isAdmin = await IsRaidRegisterAdminAsync(cancellationToken);
+        if (!userId.HasValue || (!isAdmin && !RaidRegisterAccess.IsExplicitMember(register, userId.Value)))
             return Forbid();
 
         await RaidRegisterScopedEntitySync.SyncAsync(_db, id, userId, cancellationToken);
 
-        var currentUserRole = ResolveUserRegisterRole(register, userId);
+        var currentUserRole = isAdmin
+            ? RaidRegisterRole.Owner
+            : (RaidRegisterAccess.TryGetMemberRole(register, userId!.Value) ?? RaidRegisterRole.Viewer);
 
         var entityRows = await LoadRaidRegisterEntityRowsAsync(id, cancellationToken);
         var risks = entityRows.Risks;
@@ -172,7 +185,10 @@ public partial class ModernRaidController
                 Email = u.User?.Email ?? "",
                 DisplayName = u.User?.Name,
                 Role = u.Role
-            }).ToList(),
+            }).OrderBy(u => u.Role).ThenBy(u => u.DisplayName ?? u.Email).ToList(),
+            CanManageMembers = isAdmin || currentUserRole is RaidRegisterRole.Owner or RaidRegisterRole.Manager,
+            ItemContacts = await LoadItemContactRowsAsync(id, register, cancellationToken),
+            MembersTabCount = 0,
 
             RiskStatuses = await _db.RiskStatuses.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.SortOrder).Select(x => new SelectOption(x.Id, x.Label)).ToListAsync(cancellationToken),
             RiskPriorities = await _db.RiskPriorities.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.SortOrder).Select(x => new SelectOption(x.Id, x.Label)).ToListAsync(cancellationToken),
@@ -205,8 +221,128 @@ public partial class ModernRaidController
             kv => kv.Value.ToList(),
             StringComparer.OrdinalIgnoreCase);
 
+        // Ensure creator appears in Users if they are not already listed.
+        if (register.CreatedByUserId is int creatorId
+            && vm.Users.All(u => u.UserId != creatorId)
+            && register.CreatedByUser != null)
+        {
+            vm.Users.Insert(0, new RaidRegisterUserRow
+            {
+                UserId = creatorId,
+                Email = register.CreatedByUser.Email ?? "",
+                DisplayName = register.CreatedByUser.Name,
+                Role = RaidRegisterRole.Owner
+            });
+        }
+
+        var fullAccessIds = vm.Users.Select(u => u.UserId).ToHashSet();
+        foreach (var contact in vm.ItemContacts)
+            contact.HasFullRegisterAccess = contact.UserId.HasValue && fullAccessIds.Contains(contact.UserId.Value);
+
+        vm.MembersTabCount = vm.Users.Count
+            + vm.ItemContacts.Count(c => !c.HasFullRegisterAccess);
+
         return View("~/Views/Modern/Raid/Registers/Detail.cshtml", vm);
     }
+
+    // ── Register members (manage tab) ────────────────────────────
+
+    [HttpPost("registers/{id:int}/members/add")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RegisterMemberAdd(
+        int id,
+        int userId,
+        RaidRegisterRole role = RaidRegisterRole.Viewer,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
+        var register = await _db.RaidRegisters
+            .Include(r => r.Users)
+            .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
+        if (register == null) return NotFound();
+        if (!await IsRegisterOwnerOrManagerAsync(register, currentUserId, cancellationToken))
+            return Forbid();
+
+        if (userId <= 0)
+        {
+            TempData["ErrorMessage"] = "Select a user to add.";
+            return Redirect($"{RegisterDetailManageMembersPath(id)}");
+        }
+
+        if (role is not (RaidRegisterRole.Manager or RaidRegisterRole.Viewer))
+            role = RaidRegisterRole.Viewer;
+
+        var userExists = await _db.Users.AsNoTracking().AnyAsync(u => u.Id == userId, cancellationToken);
+        if (!userExists)
+        {
+            TempData["ErrorMessage"] = "That user was not found.";
+            return Redirect($"{RegisterDetailManageMembersPath(id)}");
+        }
+
+        var existing = register.Users.FirstOrDefault(u => u.UserId == userId);
+        if (existing != null)
+        {
+            if (existing.Role == RaidRegisterRole.Owner)
+            {
+                TempData["ErrorMessage"] = "That person is already the register owner.";
+                return Redirect($"{RegisterDetailManageMembersPath(id)}");
+            }
+            existing.Role = role;
+        }
+        else
+        {
+            register.Users.Add(new RaidRegisterUser
+            {
+                RaidRegisterId = id,
+                UserId = userId,
+                Role = role,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        register.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Member added. They can see all risks and issues in this register.";
+        return Redirect($"{RegisterDetailManageMembersPath(id)}");
+    }
+
+    [HttpPost("registers/{id:int}/members/remove")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RegisterMemberRemove(
+        int id,
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
+        var register = await _db.RaidRegisters
+            .Include(r => r.Users)
+            .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
+        if (register == null) return NotFound();
+        if (!await IsRegisterOwnerOrManagerAsync(register, currentUserId, cancellationToken))
+            return Forbid();
+
+        var row = register.Users.FirstOrDefault(u => u.UserId == userId);
+        if (row == null)
+        {
+            TempData["ErrorMessage"] = "That person is not a register member.";
+            return Redirect($"{RegisterDetailManageMembersPath(id)}");
+        }
+
+        if (row.Role == RaidRegisterRole.Owner)
+        {
+            TempData["ErrorMessage"] = "You cannot remove the register owner. Change the owner in settings first.";
+            return Redirect($"{RegisterDetailManageMembersPath(id)}");
+        }
+
+        register.Users.Remove(row);
+        register.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Member removed. They can no longer see this register unless named on individual items.";
+        return Redirect($"{RegisterDetailManageMembersPath(id)}");
+    }
+
+    private static string RegisterDetailManageMembersPath(int registerId) =>
+        $"/modern/raid/registers/{registerId}#ss-members";
 
     // ── Onboarding Wizard ────────────────────────────────────────
 
@@ -396,7 +532,7 @@ public partial class ModernRaidController
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
 
         if (register == null) return NotFound();
-        if (!IsRegisterOwnerOrManager(register, userId))
+        if (!await IsRegisterOwnerOrManagerAsync(register, userId, cancellationToken))
             return Forbid();
 
         var (ownerUserId, ownerName, ownerEmail) = ResolveRegisterOwner(register);
@@ -464,7 +600,7 @@ public partial class ModernRaidController
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, cancellationToken);
 
         if (register == null) return NotFound();
-        if (!IsRegisterOwnerOrManager(register, userId))
+        if (!await IsRegisterOwnerOrManagerAsync(register, userId, cancellationToken))
             return Forbid();
 
         var isRegisterOwner = IsRegisterOwner(register, userId);
@@ -601,6 +737,7 @@ public partial class ModernRaidController
     private RaidRegisterCardViewModel BuildRegisterCardViewModel(
         RaidRegister r,
         int? userId,
+        bool isAdmin,
         IReadOnlyDictionary<int, int> riskCounts,
         IReadOnlyDictionary<int, int> issueCounts,
         IReadOnlyDictionary<int, int> assumptionCounts,
@@ -633,11 +770,105 @@ public partial class ModernRaidController
             ServiceNames = r.Services
                 .Select(s => s.FipsService?.DisplayName ?? "Unknown")
                 .OrderBy(n => n).ToList(),
-            CanManage = role == RaidRegisterRole.Owner || role == RaidRegisterRole.Manager
+            CanManage = isAdmin || role == RaidRegisterRole.Owner || role == RaidRegisterRole.Manager
         };
     }
 
-    private static bool CanViewRegister(int? userId) => userId.HasValue;
+    private async Task<List<RaidRegisterItemContactRow>> LoadItemContactRowsAsync(
+        int registerId,
+        RaidRegister register,
+        CancellationToken cancellationToken)
+    {
+        var riskPeople = await _db.RaidRegisterRisks.AsNoTracking()
+            .Where(rr => rr.RaidRegisterId == registerId && !rr.Risk.IsDeleted)
+            .Select(rr => new
+            {
+                OwnerUserId = rr.Risk.OwnerUserId,
+                OwnerName = rr.Risk.OwnerUser != null ? rr.Risk.OwnerUser.Name : null,
+                OwnerEmail = rr.Risk.OwnerUser != null ? rr.Risk.OwnerUser.Email : rr.Risk.OwnerEmail,
+                SroUserId = rr.Risk.SroUserId,
+                SroName = rr.Risk.SroUser != null ? rr.Risk.SroUser.Name : null,
+                SroEmail = rr.Risk.SroUser != null ? rr.Risk.SroUser.Email : null
+            })
+            .ToListAsync(cancellationToken);
+
+        var issuePeople = await _db.RaidRegisterIssues.AsNoTracking()
+            .Where(ri => ri.RaidRegisterId == registerId && !ri.Issue.IsDeleted)
+            .Select(ri => new
+            {
+                OwnerUserId = ri.Issue.OwnerUserId,
+                OwnerName = ri.Issue.OwnerUser != null ? ri.Issue.OwnerUser.Name : null,
+                OwnerEmail = ri.Issue.OwnerUser != null ? ri.Issue.OwnerUser.Email : null,
+                SroUserId = ri.Issue.SroUserId,
+                SroName = ri.Issue.SroUser != null ? ri.Issue.SroUser.Name : null,
+                SroEmail = ri.Issue.SroUser != null ? ri.Issue.SroUser.Email : null
+            })
+            .ToListAsync(cancellationToken);
+
+        var byKey = new Dictionary<string, (int? UserId, string Email, string? DisplayName, int RiskOwner, int RiskSro, int IssueOwner, int IssueSro)>(
+            StringComparer.OrdinalIgnoreCase);
+
+        void AccCount(int? userId, string? email, string? displayName, string kind)
+        {
+            var emailNorm = (email ?? "").Trim();
+            if (!userId.HasValue && string.IsNullOrWhiteSpace(emailNorm))
+                return;
+            var key = userId.HasValue ? $"u:{userId.Value}" : $"e:{emailNorm.ToLowerInvariant()}";
+            if (!byKey.TryGetValue(key, out var cur))
+                cur = (userId, emailNorm, displayName, 0, 0, 0, 0);
+            var display = string.IsNullOrWhiteSpace(cur.DisplayName) ? displayName : cur.DisplayName;
+            byKey[key] = kind switch
+            {
+                "ro" => (cur.UserId ?? userId, string.IsNullOrWhiteSpace(cur.Email) ? emailNorm : cur.Email, display, cur.RiskOwner + 1, cur.RiskSro, cur.IssueOwner, cur.IssueSro),
+                "rs" => (cur.UserId ?? userId, string.IsNullOrWhiteSpace(cur.Email) ? emailNorm : cur.Email, display, cur.RiskOwner, cur.RiskSro + 1, cur.IssueOwner, cur.IssueSro),
+                "io" => (cur.UserId ?? userId, string.IsNullOrWhiteSpace(cur.Email) ? emailNorm : cur.Email, display, cur.RiskOwner, cur.RiskSro, cur.IssueOwner + 1, cur.IssueSro),
+                _ => (cur.UserId ?? userId, string.IsNullOrWhiteSpace(cur.Email) ? emailNorm : cur.Email, display, cur.RiskOwner, cur.RiskSro, cur.IssueOwner, cur.IssueSro + 1),
+            };
+        }
+
+        foreach (var r in riskPeople)
+        {
+            AccCount(r.OwnerUserId, r.OwnerEmail, r.OwnerName ?? r.OwnerEmail, "ro");
+            AccCount(r.SroUserId, r.SroEmail, r.SroName ?? r.SroEmail, "rs");
+        }
+        foreach (var i in issuePeople)
+        {
+            AccCount(i.OwnerUserId, i.OwnerEmail, i.OwnerName ?? i.OwnerEmail, "io");
+            AccCount(i.SroUserId, i.SroEmail, i.SroName ?? i.SroEmail, "is");
+        }
+
+        var fullAccessIds = register.Users.Select(u => u.UserId).ToHashSet();
+        if (register.CreatedByUserId is int cid)
+            fullAccessIds.Add(cid);
+
+        static string Phrase(int n, string singular, string plural) =>
+            n == 1 ? singular : string.Format(plural, n);
+
+        return byKey.Values
+            .Select(v =>
+            {
+                var parts = new List<string>();
+                if (v.RiskOwner > 0)
+                    parts.Add(Phrase(v.RiskOwner, "Owner on 1 risk", "Owner on {0} risks"));
+                if (v.RiskSro > 0)
+                    parts.Add(Phrase(v.RiskSro, "SRO on 1 risk", "SRO on {0} risks"));
+                if (v.IssueOwner > 0)
+                    parts.Add(Phrase(v.IssueOwner, "Owner on 1 issue", "Owner on {0} issues"));
+                if (v.IssueSro > 0)
+                    parts.Add(Phrase(v.IssueSro, "SRO on 1 issue", "SRO on {0} issues"));
+                return new RaidRegisterItemContactRow
+                {
+                    UserId = v.UserId,
+                    Email = v.Email,
+                    DisplayName = v.DisplayName,
+                    InvolvementSummary = string.Join(" · ", parts),
+                    HasFullRegisterAccess = v.UserId.HasValue && fullAccessIds.Contains(v.UserId.Value)
+                };
+            })
+            .OrderBy(c => c.HasFullRegisterAccess ? 1 : 0)
+            .ThenBy(c => c.DisplayName ?? c.Email)
+            .ToList();
+    }
 
     private async Task<bool> CanEditLockedInherentRatingsAsync(CancellationToken ct)
     {
@@ -889,6 +1120,16 @@ public partial class ModernRaidController
         return register.Users.Any(u =>
             u.UserId == userId.Value &&
             (u.Role == RaidRegisterRole.Owner || u.Role == RaidRegisterRole.Manager));
+    }
+
+    private async Task<bool> IsRegisterOwnerOrManagerAsync(
+        RaidRegister register,
+        int? userId,
+        CancellationToken cancellationToken)
+    {
+        if (await IsRaidRegisterAdminAsync(cancellationToken))
+            return true;
+        return IsRegisterOwnerOrManager(register, userId);
     }
 
     private static string RegisterSettingsPath(int registerId) =>
@@ -1322,7 +1563,7 @@ public partial class ModernRaidController
         if (register == null)
             return NotFound(new { error = "Register not found" });
 
-        if (!IsRegisterOwnerOrManager(register, userId))
+        if (!await IsRegisterOwnerOrManagerAsync(register, userId, ct))
             return Forbid();
 
         var type = (req.Type ?? "").Trim().ToLowerInvariant();
@@ -1400,7 +1641,7 @@ public partial class ModernRaidController
         if (register == null)
             return NotFound(new { error = "Register not found" });
 
-        if (!IsRegisterOwnerOrManager(register, userId))
+        if (!await IsRegisterOwnerOrManagerAsync(register, userId, ct))
             return Forbid();
 
         var term = (q ?? "").Trim();
@@ -1543,6 +1784,10 @@ public partial class ModernRaidController
         if (risk == null)
             return NotFound(new { error = "Risk not found" });
 
+        var isAdmin = await IsRaidRegisterAdminAsync(ct);
+        if (!await RaidRegisterAccess.CanManageRiskAsync(_db, risk, userId, isAdmin, ct))
+            return Forbid();
+
         ModelState.Clear();
         var bind = await TryBindRaidAssociationAsync(
             req.AssociationKind,
@@ -1583,6 +1828,10 @@ public partial class ModernRaidController
             .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted, ct);
         if (issue == null)
             return NotFound(new { error = "Issue not found" });
+
+        var isAdmin = await IsRaidRegisterAdminAsync(ct);
+        if (!await RaidRegisterAccess.CanManageIssueAsync(_db, issue, userId, isAdmin, ct))
+            return Forbid();
 
         ModelState.Clear();
         var bind = await TryBindRaidAssociationAsync(
@@ -1750,6 +1999,10 @@ public partial class ModernRaidController
             .FirstOrDefaultAsync(r => r.Id == id && !r.IsDeleted, ct);
         if (risk == null) return NotFound(new { error = "Risk not found" });
 
+        var isAdmin = await IsRaidRegisterAdminAsync(ct);
+        if (!await RaidRegisterAccess.CanManageRiskAsync(_db, risk, userId, isAdmin, ct))
+            return Forbid();
+
         var field = req.Field?.ToLower();
         int? intVal = int.TryParse(req.Value, out var iv) ? iv : null;
 
@@ -1889,6 +2142,10 @@ public partial class ModernRaidController
         var issue = await _db.Issues.FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted, ct);
         if (issue == null) return NotFound(new { error = "Issue not found" });
 
+        var isAdmin = await IsRaidRegisterAdminAsync(ct);
+        if (!await RaidRegisterAccess.CanManageIssueAsync(_db, issue, userId, isAdmin, ct))
+            return Forbid();
+
         var field = req.Field?.ToLower();
         int? intVal = int.TryParse(req.Value, out var iv) ? iv : null;
 
@@ -2019,7 +2276,7 @@ public partial class ModernRaidController
             .Include(r => r.Users)
             .FirstOrDefaultAsync(r => r.Id == registerId && !r.IsDeleted, ct);
         if (register == null) return NotFound(new { error = "Register not found" });
-        if (!IsRegisterOwnerOrManager(register, userId))
+        if (!await IsRegisterOwnerOrManagerAsync(register, userId, ct))
             return Forbid();
 
         var title = req.Title?.Trim();
@@ -2130,6 +2387,10 @@ public partial class ModernRaidController
         var risk = await _db.Risks.FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
         if (risk == null) return NotFound(new { error = "Risk not found" });
 
+        var isAdmin = await IsRaidRegisterAdminAsync(ct);
+        if (!await RaidRegisterAccess.CanManageRiskAsync(_db, risk, userId, isAdmin, ct))
+            return Forbid();
+
         var title = RaidFieldLimits.NormalizeNarrative(req.Title) ?? "";
         if (string.IsNullOrWhiteSpace(title))
             return BadRequest(new { error = "Enter the mitigation action." });
@@ -2196,6 +2457,13 @@ public partial class ModernRaidController
         var userId = await ResolveCurrentUserIdAsync(ct);
         if (!userId.HasValue)
             return Unauthorized(new { error = "Not signed in" });
+
+        var riskForAuth = await _db.Risks.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (riskForAuth == null) return NotFound(new { error = "Risk not found" });
+        var isAdminMit = await IsRaidRegisterAdminAsync(ct);
+        if (!await RaidRegisterAccess.CanManageRiskAsync(_db, riskForAuth, userId, isAdminMit, ct))
+            return Forbid();
 
         var mitigationAction = await RaidRiskMitigations.FindForRiskAsync(
             _db, riskId, actionId, tracking: true, ct);
@@ -2313,6 +2581,10 @@ public partial class ModernRaidController
         var risk = await _db.Risks.FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
         if (risk == null) return NotFound(new { error = "Risk not found" });
 
+        var isAdmin = await IsRaidRegisterAdminAsync(ct);
+        if (!await RaidRegisterAccess.CanManageRiskAsync(_db, risk, userId, isAdmin, ct))
+            return Forbid();
+
         if (!TryNormalizeKriInput(req, out var title, out var description, out var metric, out var threshold, out var error))
             return BadRequest(new { error });
 
@@ -2355,6 +2627,13 @@ public partial class ModernRaidController
         if (!userId.HasValue)
             return Unauthorized(new { error = "Not signed in" });
 
+        var riskForAuth = await _db.Risks.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (riskForAuth == null) return NotFound(new { error = "Risk not found" });
+        var isAdmin = await IsRaidRegisterAdminAsync(ct);
+        if (!await RaidRegisterAccess.CanManageRiskAsync(_db, riskForAuth, userId, isAdmin, ct))
+            return Forbid();
+
         var entity = await _db.RiskKeyRiskIndicators
             .FirstOrDefaultAsync(k => k.Id == kriId && k.RiskId == riskId, ct);
         if (entity == null)
@@ -2392,6 +2671,13 @@ public partial class ModernRaidController
         var userId = await ResolveCurrentUserIdAsync(ct);
         if (!userId.HasValue)
             return Unauthorized(new { error = "Not signed in" });
+
+        var riskForAuth = await _db.Risks.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == riskId && !r.IsDeleted, ct);
+        if (riskForAuth == null) return NotFound(new { error = "Risk not found" });
+        var isAdmin = await IsRaidRegisterAdminAsync(ct);
+        if (!await RaidRegisterAccess.CanManageRiskAsync(_db, riskForAuth, userId, isAdmin, ct))
+            return Forbid();
 
         var entity = await _db.RiskKeyRiskIndicators
             .FirstOrDefaultAsync(k => k.Id == kriId && k.RiskId == riskId, ct);
@@ -2489,7 +2775,7 @@ public partial class ModernRaidController
             .Include(r => r.Users)
             .FirstOrDefaultAsync(r => r.Id == registerId && !r.IsDeleted, ct);
         if (register == null) return NotFound(new { error = "Register not found" });
-        if (!IsRegisterOwnerOrManager(register, userId))
+        if (!await IsRegisterOwnerOrManagerAsync(register, userId, ct))
             return Forbid();
 
         var title = req.Title?.Trim();
@@ -2567,7 +2853,7 @@ public partial class ModernRaidController
             .Include(r => r.Users)
             .FirstOrDefaultAsync(r => r.Id == registerId && !r.IsDeleted, ct);
         if (register == null) return NotFound(new { error = "Register not found" });
-        if (!IsRegisterOwnerOrManager(register, userId))
+        if (!await IsRegisterOwnerOrManagerAsync(register, userId, ct))
             return Forbid();
 
         var impact = req.Title?.Trim();
@@ -2643,7 +2929,7 @@ public partial class ModernRaidController
             .Include(r => r.Users)
             .FirstOrDefaultAsync(r => r.Id == registerId && !r.IsDeleted, ct);
         if (register == null) return NotFound(new { error = "Register not found" });
-        if (!IsRegisterOwnerOrManager(register, userId))
+        if (!await IsRegisterOwnerOrManagerAsync(register, userId, ct))
             return Forbid();
 
         var description = req.Description?.Trim();

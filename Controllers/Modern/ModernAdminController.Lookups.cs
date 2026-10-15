@@ -12,7 +12,7 @@ public partial class ModernAdminController
     private static readonly HashSet<string> LookupEditorPanels = new(StringComparer.OrdinalIgnoreCase)
     {
         "business-areas", "phases", "directorates", "universal-barriers", "priorities", "rag-defns",
-        "activity-types", "work-tagging", "resource-bands", "mission-pillars", "priority-outcomes", "portfolios",
+        "activity-types", "activity-time-types", "activity-time-themes", "work-tagging", "resource-bands", "mission-pillars", "priority-outcomes", "portfolios",
         "risk-tiers", "risk-categories", "issue-categories", "departments",
         "std-categories", "std-subcategories",
         "risk-statuses", "risk-priorities", "risk-likelihoods", "risk-impact-levels", "risk-proximities", "risk-treatments", "risk-appetites",
@@ -64,6 +64,8 @@ public partial class ModernAdminController
         "priorities" => "priority level",
         "rag-defns" => "RAG status",
         "activity-types" => "activity type",
+        "activity-time-types" => "activity time type",
+        "activity-time-themes" => "activity time theme",
         "work-tagging" => "work tag",
         "resource-bands" => "resource band",
         "mission-pillars" => "mission pillar",
@@ -190,6 +192,28 @@ public partial class ModernAdminController
                 {
                     Panel = p, EditorKind = AdminLookupEditorKind.ActivityType, Id = at.Id, Name = at.Name, Description = at.Description,
                     SortOrder = at.SortOrder, IsActive = at.IsActive
+                };
+
+            case "activity-time-types":
+                if (id is null)
+                    return new AdminLookupEditorViewModel { Panel = p, EditorKind = AdminLookupEditorKind.ActivityTimeType, SortOrder = 0, IsActive = true };
+                var att = await _context.ActivityTimeTypeLookups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+                if (att == null) return null;
+                return new AdminLookupEditorViewModel
+                {
+                    Panel = p, EditorKind = AdminLookupEditorKind.ActivityTimeType, Id = att.Id, Name = att.Name, Description = att.Description,
+                    SortOrder = att.SortOrder, IsActive = att.IsActive
+                };
+
+            case "activity-time-themes":
+                if (id is null)
+                    return new AdminLookupEditorViewModel { Panel = p, EditorKind = AdminLookupEditorKind.ActivityTimeTheme, SortOrder = 0, IsActive = true };
+                var ath = await _context.ActivityTimeThemeLookups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+                if (ath == null) return null;
+                return new AdminLookupEditorViewModel
+                {
+                    Panel = p, EditorKind = AdminLookupEditorKind.ActivityTimeTheme, Id = ath.Id, Name = ath.Name, Description = ath.Description,
+                    SortOrder = ath.SortOrder, IsActive = ath.IsActive
                 };
 
             case "work-tagging":
@@ -459,6 +483,112 @@ public partial class ModernAdminController
         await _context.SaveChangesAsync();
         TempData["AdminMessage"] = $"\"{entity.Name}\" is now {(entity.IsActive ? "active" : "inactive")}.";
         return RedirectToAction(nameof(LookupEdit), new { panel = "activity-types", id });
+    }
+
+    // ── Activity time types ──
+
+    [HttpPost("activity-time-type/create")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ActivityTimeTypeCreate(string name, string? description, int sortOrder)
+    {
+        name = (name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["AdminMessage"] = "Name is required.";
+            return RedirectToAction(nameof(LookupCreate), new { panel = "activity-time-types" });
+        }
+        var entity = new ActivityTimeTypeLookup { Name = name, Description = description?.Trim(), SortOrder = sortOrder };
+        _context.ActivityTimeTypeLookups.Add(entity);
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Activity time type \"{name}\" added.";
+        return RedirectToAction(nameof(LookupEdit), new { panel = "activity-time-types", id = entity.Id });
+    }
+
+    [HttpPost("activity-time-type/{id:int}/edit")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ActivityTimeTypeEdit(int id, string name, string? description, int sortOrder)
+    {
+        var entity = await _context.ActivityTimeTypeLookups.FindAsync(id);
+        if (entity == null) return NotFound();
+        name = (name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["AdminMessage"] = "Name is required.";
+            return RedirectToAction(nameof(LookupEdit), new { panel = "activity-time-types", id });
+        }
+        entity.Name = name;
+        entity.Description = description?.Trim();
+        entity.SortOrder = sortOrder;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Activity time type \"{name}\" updated.";
+        return RedirectToAction(nameof(Index), new { panel = "activity-time-types" });
+    }
+
+    [HttpPost("activity-time-type/{id:int}/toggle")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ActivityTimeTypeToggle(int id)
+    {
+        var entity = await _context.ActivityTimeTypeLookups.FindAsync(id);
+        if (entity == null) return NotFound();
+        entity.IsActive = !entity.IsActive;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"\"{entity.Name}\" is now {(entity.IsActive ? "active" : "inactive")}.";
+        return RedirectToAction(nameof(LookupEdit), new { panel = "activity-time-types", id });
+    }
+
+    // ── Activity time themes ──
+
+    [HttpPost("activity-time-theme/create")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ActivityTimeThemeCreate(string name, string? description, int sortOrder)
+    {
+        name = (name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["AdminMessage"] = "Name is required.";
+            return RedirectToAction(nameof(LookupCreate), new { panel = "activity-time-themes" });
+        }
+        var entity = new ActivityTimeThemeLookup { Name = name, Description = description?.Trim(), SortOrder = sortOrder };
+        _context.ActivityTimeThemeLookups.Add(entity);
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Activity time theme \"{name}\" added.";
+        return RedirectToAction(nameof(LookupEdit), new { panel = "activity-time-themes", id = entity.Id });
+    }
+
+    [HttpPost("activity-time-theme/{id:int}/edit")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ActivityTimeThemeEdit(int id, string name, string? description, int sortOrder)
+    {
+        var entity = await _context.ActivityTimeThemeLookups.FindAsync(id);
+        if (entity == null) return NotFound();
+        name = (name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["AdminMessage"] = "Name is required.";
+            return RedirectToAction(nameof(LookupEdit), new { panel = "activity-time-themes", id });
+        }
+        entity.Name = name;
+        entity.Description = description?.Trim();
+        entity.SortOrder = sortOrder;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Activity time theme \"{name}\" updated.";
+        return RedirectToAction(nameof(Index), new { panel = "activity-time-themes" });
+    }
+
+    [HttpPost("activity-time-theme/{id:int}/toggle")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ActivityTimeThemeToggle(int id)
+    {
+        var entity = await _context.ActivityTimeThemeLookups.FindAsync(id);
+        if (entity == null) return NotFound();
+        entity.IsActive = !entity.IsActive;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"\"{entity.Name}\" is now {(entity.IsActive ? "active" : "inactive")}.";
+        return RedirectToAction(nameof(LookupEdit), new { panel = "activity-time-themes", id });
     }
 
     // ── Resource bands ──

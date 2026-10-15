@@ -144,9 +144,8 @@ public partial class ModernMonthlyReportService
             if (periodUpdate == null)
                 continue;
 
-            var perm = periodUpdate.MonthlyPermFte ?? 0m;
-            var msp = periodUpdate.MonthlyMspFte ?? 0m;
-            var total = perm + msp;
+            var fte = ResolveMonthlyResourcingFte(periodUpdate);
+            var total = fte.Perm + fte.Msp;
             var band = ResolveResourceBand(total, bands);
 
             var directorateNames = project.Directorates
@@ -165,8 +164,11 @@ public partial class ModernMonthlyReportService
                 Directorates = directorateNames.Count == 0 ? "Not set" : string.Join(", ", directorateNames),
                 Rag = RagBucket(project),
                 Priority = project.DeliveryPriority?.Name,
-                PermFte = perm,
-                MspFte = msp,
+                AdminFte = fte.Admin,
+                ProgrammeFte = fte.Programme,
+                CapitalFte = fte.Capital,
+                PermFte = fte.Perm,
+                MspFte = fte.Msp,
                 ResourcingFte = total,
                 BandName = band.Name,
                 BandCssClass = band.CssClass
@@ -266,6 +268,9 @@ public partial class ModernMonthlyReportService
             PreviousNavMonth = hasPreviousMonthNav ? prevMonthDate.Month : null,
             NextNavYear = nextMonthAllowed ? nextMonthDate.Year : null,
             NextNavMonth = nextMonthAllowed ? nextMonthDate.Month : null,
+            TotalAdminFte = workItemRows.Sum(r => r.AdminFte),
+            TotalProgrammeFte = workItemRows.Sum(r => r.ProgrammeFte),
+            TotalCapitalFte = workItemRows.Sum(r => r.CapitalFte),
             TotalPermFte = workItemRows.Sum(r => r.PermFte),
             TotalMspFte = workItemRows.Sum(r => r.MspFte),
             TotalResourcingFte = workItemRows.Sum(r => r.ResourcingFte),
@@ -278,6 +283,19 @@ public partial class ModernMonthlyReportService
             DirectorateTrendSeries = directorateTrendSeries,
             BusinessAreaTrendSeries = businessAreaTrendSeries
         };
+    }
+
+    private static (decimal Admin, decimal Programme, decimal Capital, decimal Perm, decimal Msp) ResolveMonthlyResourcingFte(
+        ProjectMonthlyUpdate update)
+    {
+        var admin = update.MonthlyAdminFte;
+        var programme = update.MonthlyProgrammeFte;
+        var capital = update.MonthlyCapitalFte;
+        var hasSplit = admin.HasValue || programme.HasValue || capital.HasValue;
+        var perm = hasSplit
+            ? (admin ?? 0m) + (programme ?? 0m) + (capital ?? 0m)
+            : (update.MonthlyPermFte ?? 0m);
+        return (admin ?? 0m, programme ?? 0m, capital ?? 0m, perm, update.MonthlyMspFte ?? 0m);
     }
 
     public async Task<ModernServiceRegisterReportViewModel> BuildServiceRegisterReportAsync(
@@ -1030,6 +1048,9 @@ public partial class ModernMonthlyReportService
         List<ResourcingWorkItemRow> rows,
         List<ResourcingBandViewModel> bands)
     {
+        var adminTotal = rows.Sum(r => r.AdminFte);
+        var programmeTotal = rows.Sum(r => r.ProgrammeFte);
+        var capitalTotal = rows.Sum(r => r.CapitalFte);
         var permTotal = rows.Sum(r => r.PermFte);
         var mspTotal = rows.Sum(r => r.MspFte);
         var total = permTotal + mspTotal;
@@ -1040,6 +1061,9 @@ public partial class ModernMonthlyReportService
             Name = name,
             GroupId = groupId,
             WorkItemCount = rows.Select(r => r.WorkItemId).Distinct().Count(),
+            AdminFteTotal = adminTotal,
+            ProgrammeFteTotal = programmeTotal,
+            CapitalFteTotal = capitalTotal,
             PermFteTotal = permTotal,
             MspFteTotal = mspTotal,
             ResourcingFteTotal = total,
@@ -1058,6 +1082,9 @@ public partial class ModernMonthlyReportService
         {
             var y = monthCursor.Year;
             var m = monthCursor.Month;
+            decimal admin = 0m;
+            decimal programme = 0m;
+            decimal capital = 0m;
             decimal perm = 0m;
             decimal msp = 0m;
             var submittedCount = 0;
@@ -1073,8 +1100,12 @@ public partial class ModernMonthlyReportService
 
                 submittedCount++;
                 workItemIds.Add(p.Id);
-                perm += update.MonthlyPermFte ?? 0m;
-                msp += update.MonthlyMspFte ?? 0m;
+                var fte = ResolveMonthlyResourcingFte(update);
+                admin += fte.Admin;
+                programme += fte.Programme;
+                capital += fte.Capital;
+                perm += fte.Perm;
+                msp += fte.Msp;
             }
 
             points.Add(new ResourcingTrendMonthPoint
@@ -1082,6 +1113,9 @@ public partial class ModernMonthlyReportService
                 Year = y,
                 Month = m,
                 Label = monthCursor.ToString("MMM yyyy"),
+                AdminFteTotal = admin,
+                ProgrammeFteTotal = programme,
+                CapitalFteTotal = capital,
                 PermFteTotal = perm,
                 MspFteTotal = msp,
                 ResourcingFteTotal = perm + msp,
@@ -1407,6 +1441,10 @@ public partial class ModernMonthlyReportService
             Rag = RagBucket(p),
             Priority = PriorityBucket(p),
             PermFte = periodUpdate?.MonthlyPermFte ?? latestSubmitted?.MonthlyPermFte,
+            AdminFte = periodUpdate?.MonthlyAdminFte ?? latestSubmitted?.MonthlyAdminFte,
+            ProgrammeFte = periodUpdate?.MonthlyProgrammeFte ?? latestSubmitted?.MonthlyProgrammeFte,
+            CapitalFte = periodUpdate?.MonthlyCapitalFte ?? latestSubmitted?.MonthlyCapitalFte,
+            OtherPermFte = periodUpdate?.MonthlyOtherPermFte ?? latestSubmitted?.MonthlyOtherPermFte,
             MspFte = periodUpdate?.MonthlyMspFte ?? latestSubmitted?.MonthlyMspFte,
             MilestonesSummary = BuildMilestonesSummary(p, monthStart, monthEnd, upcomingWindowEnd, todayUtc),
             SubmittedUpdate = periodUpdate?.SubmittedAt.HasValue == true,
