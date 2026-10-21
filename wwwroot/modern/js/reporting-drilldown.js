@@ -111,9 +111,21 @@
         if (fte != null) parts.push('DDT ' + fte);
       }
       var other = formatNum(p.otherPermFte);
+      var mspAdmin = formatNum(p.mspAdminFte);
+      var mspProgramme = formatNum(p.mspProgrammeFte);
+      var mspCapital = formatNum(p.mspCapitalFte);
+      var hasMspSplit = mspAdmin != null || mspProgramme != null || mspCapital != null;
+      if (hasMspSplit) {
+        parts.push('Contractor Admin ' + (mspAdmin != null ? mspAdmin : '0'));
+        parts.push('Prog ' + (mspProgramme != null ? mspProgramme : '0'));
+        parts.push('Cap ' + (mspCapital != null ? mspCapital : '0'));
+        var mspTotal = (Number(p.mspAdminFte) || 0) + (Number(p.mspProgrammeFte) || 0) + (Number(p.mspCapitalFte) || 0);
+        parts.push('Contractor total ' + formatNum(mspTotal));
+      } else {
+        var msc = formatNum(p.mspFte);
+        if (msc != null) parts.push('Contractor ' + msc);
+      }
       if (other != null) parts.push('Other ' + other);
-      var msc = formatNum(p.mspFte);
-      if (msc != null) parts.push('Contractor ' + msc);
       return parts.length ? parts.join(' · ') : '—';
     }
 

@@ -11293,7 +11293,16 @@ namespace Compass.Migrations
                     b.Property<decimal?>("MonthlyCapitalFte")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal?>("MonthlyMspAdminFte")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MonthlyMspCapitalFte")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal?>("MonthlyMspFte")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MonthlyMspProgrammeFte")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("MonthlyOtherPermFte")
