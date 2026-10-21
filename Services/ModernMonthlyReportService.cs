@@ -145,7 +145,7 @@ public partial class ModernMonthlyReportService
                 continue;
 
             var fte = ResolveMonthlyResourcingFte(periodUpdate);
-            var total = fte.Perm + fte.Msp;
+            var total = fte.Combined;
             var band = ResolveResourceBand(total, bands);
 
             var directorateNames = project.Directorates
@@ -168,7 +168,11 @@ public partial class ModernMonthlyReportService
                 ProgrammeFte = fte.Programme,
                 CapitalFte = fte.Capital,
                 PermFte = fte.Perm,
+                MspAdminFte = fte.MspAdmin,
+                MspProgrammeFte = fte.MspProgramme,
+                MspCapitalFte = fte.MspCapital,
                 MspFte = fte.Msp,
+                OtherPermFte = fte.OtherPerm,
                 ResourcingFte = total,
                 BandName = band.Name,
                 BandCssClass = band.CssClass
@@ -272,7 +276,11 @@ public partial class ModernMonthlyReportService
             TotalProgrammeFte = workItemRows.Sum(r => r.ProgrammeFte),
             TotalCapitalFte = workItemRows.Sum(r => r.CapitalFte),
             TotalPermFte = workItemRows.Sum(r => r.PermFte),
+            TotalMspAdminFte = workItemRows.Sum(r => r.MspAdminFte),
+            TotalMspProgrammeFte = workItemRows.Sum(r => r.MspProgrammeFte),
+            TotalMspCapitalFte = workItemRows.Sum(r => r.MspCapitalFte),
             TotalMspFte = workItemRows.Sum(r => r.MspFte),
+            TotalOtherPermFte = workItemRows.Sum(r => r.OtherPermFte),
             TotalResourcingFte = workItemRows.Sum(r => r.ResourcingFte),
             SubmittedWorkItemCount = workItemRows.Count,
             Bands = bands,
@@ -285,17 +293,52 @@ public partial class ModernMonthlyReportService
         };
     }
 
-    private static (decimal Admin, decimal Programme, decimal Capital, decimal Perm, decimal Msp) ResolveMonthlyResourcingFte(
-        ProjectMonthlyUpdate update)
+    private readonly record struct MonthlyResourcingFte(
+        decimal Admin,
+        decimal Programme,
+        decimal Capital,
+        decimal Perm,
+        decimal MspAdmin,
+        decimal MspProgramme,
+        decimal MspCapital,
+        decimal Msp,
+        decimal OtherPerm)
     {
-        var admin = update.MonthlyAdminFte;
-        var programme = update.MonthlyProgrammeFte;
-        var capital = update.MonthlyCapitalFte;
-        var hasSplit = admin.HasValue || programme.HasValue || capital.HasValue;
-        var perm = hasSplit
-            ? (admin ?? 0m) + (programme ?? 0m) + (capital ?? 0m)
+        public decimal Combined => Perm + Msp + OtherPerm;
+    }
+
+    private static MonthlyResourcingFte ResolveMonthlyResourcingFte(ProjectMonthlyUpdate update)
+    {
+        var admin = update.MonthlyAdminFte ?? 0m;
+        var programme = update.MonthlyProgrammeFte ?? 0m;
+        var capital = update.MonthlyCapitalFte ?? 0m;
+        var hasPermSplit = update.MonthlyAdminFte.HasValue
+            || update.MonthlyProgrammeFte.HasValue
+            || update.MonthlyCapitalFte.HasValue;
+        var perm = hasPermSplit
+            ? admin + programme + capital
             : (update.MonthlyPermFte ?? 0m);
-        return (admin ?? 0m, programme ?? 0m, capital ?? 0m, perm, update.MonthlyMspFte ?? 0m);
+
+        var mspAdmin = update.MonthlyMspAdminFte ?? 0m;
+        var mspProgramme = update.MonthlyMspProgrammeFte ?? 0m;
+        var mspCapital = update.MonthlyMspCapitalFte ?? 0m;
+        var hasMspSplit = update.MonthlyMspAdminFte.HasValue
+            || update.MonthlyMspProgrammeFte.HasValue
+            || update.MonthlyMspCapitalFte.HasValue;
+        var msp = hasMspSplit
+            ? mspAdmin + mspProgramme + mspCapital
+            : (update.MonthlyMspFte ?? 0m);
+
+        return new MonthlyResourcingFte(
+            admin,
+            programme,
+            capital,
+            perm,
+            mspAdmin,
+            mspProgramme,
+            mspCapital,
+            msp,
+            update.MonthlyOtherPermFte ?? 0m);
     }
 
     public async Task<ModernServiceRegisterReportViewModel> BuildServiceRegisterReportAsync(
@@ -1052,8 +1095,12 @@ public partial class ModernMonthlyReportService
         var programmeTotal = rows.Sum(r => r.ProgrammeFte);
         var capitalTotal = rows.Sum(r => r.CapitalFte);
         var permTotal = rows.Sum(r => r.PermFte);
+        var mspAdminTotal = rows.Sum(r => r.MspAdminFte);
+        var mspProgrammeTotal = rows.Sum(r => r.MspProgrammeFte);
+        var mspCapitalTotal = rows.Sum(r => r.MspCapitalFte);
         var mspTotal = rows.Sum(r => r.MspFte);
-        var total = permTotal + mspTotal;
+        var otherTotal = rows.Sum(r => r.OtherPermFte);
+        var total = permTotal + mspTotal + otherTotal;
         var band = ResolveResourceBand(total, bands);
 
         return new ResourcingAggregateRow
@@ -1065,7 +1112,11 @@ public partial class ModernMonthlyReportService
             ProgrammeFteTotal = programmeTotal,
             CapitalFteTotal = capitalTotal,
             PermFteTotal = permTotal,
+            MspAdminFteTotal = mspAdminTotal,
+            MspProgrammeFteTotal = mspProgrammeTotal,
+            MspCapitalFteTotal = mspCapitalTotal,
             MspFteTotal = mspTotal,
+            OtherPermFteTotal = otherTotal,
             ResourcingFteTotal = total,
             BandName = band.Name,
             BandCssClass = band.CssClass,
@@ -1086,7 +1137,11 @@ public partial class ModernMonthlyReportService
             decimal programme = 0m;
             decimal capital = 0m;
             decimal perm = 0m;
+            decimal mspAdmin = 0m;
+            decimal mspProgramme = 0m;
+            decimal mspCapital = 0m;
             decimal msp = 0m;
+            decimal otherPerm = 0m;
             var submittedCount = 0;
             var workItemIds = new List<int>();
             foreach (var p in scopedProjects)
@@ -1105,7 +1160,11 @@ public partial class ModernMonthlyReportService
                 programme += fte.Programme;
                 capital += fte.Capital;
                 perm += fte.Perm;
+                mspAdmin += fte.MspAdmin;
+                mspProgramme += fte.MspProgramme;
+                mspCapital += fte.MspCapital;
                 msp += fte.Msp;
+                otherPerm += fte.OtherPerm;
             }
 
             points.Add(new ResourcingTrendMonthPoint
@@ -1117,8 +1176,12 @@ public partial class ModernMonthlyReportService
                 ProgrammeFteTotal = programme,
                 CapitalFteTotal = capital,
                 PermFteTotal = perm,
+                MspAdminFteTotal = mspAdmin,
+                MspProgrammeFteTotal = mspProgramme,
+                MspCapitalFteTotal = mspCapital,
                 MspFteTotal = msp,
-                ResourcingFteTotal = perm + msp,
+                OtherPermFteTotal = otherPerm,
+                ResourcingFteTotal = perm + msp + otherPerm,
                 SubmittedWorkItemCount = submittedCount,
                 WorkItemIds = workItemIds
             });
@@ -1445,6 +1508,9 @@ public partial class ModernMonthlyReportService
             ProgrammeFte = periodUpdate?.MonthlyProgrammeFte ?? latestSubmitted?.MonthlyProgrammeFte,
             CapitalFte = periodUpdate?.MonthlyCapitalFte ?? latestSubmitted?.MonthlyCapitalFte,
             OtherPermFte = periodUpdate?.MonthlyOtherPermFte ?? latestSubmitted?.MonthlyOtherPermFte,
+            MspAdminFte = periodUpdate?.MonthlyMspAdminFte ?? latestSubmitted?.MonthlyMspAdminFte,
+            MspProgrammeFte = periodUpdate?.MonthlyMspProgrammeFte ?? latestSubmitted?.MonthlyMspProgrammeFte,
+            MspCapitalFte = periodUpdate?.MonthlyMspCapitalFte ?? latestSubmitted?.MonthlyMspCapitalFte,
             MspFte = periodUpdate?.MonthlyMspFte ?? latestSubmitted?.MonthlyMspFte,
             MilestonesSummary = BuildMilestonesSummary(p, monthStart, monthEnd, upcomingWindowEnd, todayUtc),
             SubmittedUpdate = periodUpdate?.SubmittedAt.HasValue == true,

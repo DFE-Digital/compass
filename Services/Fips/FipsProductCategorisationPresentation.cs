@@ -114,4 +114,46 @@ public static class FipsProductCategorisationPresentation
             return;
         await PopulateEditSectionsAsync(db, vm, cancellationToken);
     }
+
+    /// <summary>
+    /// Every active categorisation group, including groups with nothing selected.
+    /// Used by the Schema data section on a service register entry.
+    /// </summary>
+    public static async Task<List<FipsCategorisationSummaryLine>> LoadSchemaLinesAsync(
+        CompassDbContext db,
+        CMDBProduct product,
+        CancellationToken cancellationToken)
+    {
+        var vm = new FipsProductDetailViewModel { Product = product };
+        ApplySummaryLines(vm);
+        await IncludeEmptySchemaGroupsAsync(db, vm, cancellationToken);
+        return vm.CategorisationSummaryLines;
+    }
+
+    /// <summary>
+    /// Active categorisation groups are the service register schema. Groups with no
+    /// selection are still shown so they can be filled in from the product page.
+    /// </summary>
+    private static async Task IncludeEmptySchemaGroupsAsync(
+        CompassDbContext db,
+        FipsProductDetailViewModel vm,
+        CancellationToken cancellationToken)
+    {
+        var groups = await db.FipsCategorisationGroups.AsNoTracking()
+            .Where(g => g.Active)
+            .OrderBy(g => g.DisplayOrder)
+            .ThenBy(g => g.Name)
+            .Select(g => new { g.Id, g.Name })
+            .ToListAsync(cancellationToken);
+
+        var byId = vm.CategorisationSummaryLines.ToDictionary(l => l.GroupId);
+        vm.CategorisationSummaryLines.Clear();
+        foreach (var group in groups)
+        {
+            vm.CategorisationSummaryLines.Add(
+                byId.TryGetValue(group.Id, out var existing)
+                    ? existing
+                    : new FipsCategorisationSummaryLine(group.Id, group.Name, "—"));
+        }
+    }
 }

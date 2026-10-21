@@ -328,6 +328,27 @@ public partial class ModernManageController
         return Redirect(Url.Action(nameof(ServiceLineDetail), "ModernManage", new { slug = sl.Slug })!);
     }
 
+    [HttpPost("service-lines/{slug}/delete")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ServiceLineDelete(string slug, CancellationToken ct)
+    {
+        var disabled = await RequireFipsDatabaseAsync();
+        if (disabled != null)
+            return disabled;
+        if (!await IsCentralOperationsAdminAsync(ct))
+            return Forbid();
+
+        var sl = await _context.ServiceLines.FirstOrDefaultAsync(s => s.Slug == slug, ct);
+        if (sl == null)
+            return NotFound();
+
+        var name = sl.Name;
+        _context.ServiceLines.Remove(sl);
+        await _context.SaveChangesAsync(ct);
+        TempData["Success"] = $"Deleted {name}. The linked directorates, business areas, products, and work items are unchanged.";
+        return RedirectToAction(nameof(ServiceLines));
+    }
+
     private void AddServiceLineJunctions(ServiceLine sl, ServiceLineFormInput input)
     {
         var divisionIds = input.DivisionIds?.Distinct() ?? Array.Empty<int>();

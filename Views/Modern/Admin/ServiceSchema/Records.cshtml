@@ -1,0 +1,112 @@
+@model List<Compass.ViewModels.Modern.CensusRecordRow>
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  var isService = string.Equals(ViewBag.SchemaNav as string, "services", StringComparison.Ordinal);
+  var title = isService ? "Services" : "Service lines";
+  ViewData["Title"] = title;
+  var statuses = ViewBag.Statuses as List<ServiceSchemaChoice> ?? new();
+  var serviceTypes = ViewBag.ServiceTypes as List<ServiceSchemaChoice> ?? new();
+  var serviceLines = ViewBag.ServiceLines as List<ServiceSchemaChoice> ?? new();
+  var action = isService ? "SaveService" : "SaveServiceLine";
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">@title</li>
+}
+<div class="admin-hub">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Service schema",
+   Title = title,
+   Lede = new HtmlString(isService
+     ? "<p class=\"govuk-body govuk-!-margin-bottom-0\">A service has a purpose and a boundary. It can use several register products. Named contacts link a service from the register entry.</p>"
+     : "<p class=\"govuk-body govuk-!-margin-bottom-0\">A service line groups services. Retiring a line does not delete the services or products linked to it.</p>")
+ })
+ @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Messages.cshtml")
+ <div class="govuk-grid-row">
+  <div class="govuk-grid-column-one-quarter">
+   @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Nav.cshtml")
+  </div>
+  <div class="govuk-grid-column-three-quarters">
+   <h2 class="govuk-heading-m">Add @(isService ? "a service" : "a service line")</h2>
+   <form method="post" action="@Url.Action(action, "ModernAdminServiceSchema")">
+    @Html.AntiForgeryToken()
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="reference">Reference</label>
+     <input class="govuk-input govuk-!-width-one-third" id="reference" name="reference" maxlength="40" />
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="name">Name</label>
+     <input class="govuk-input govuk-!-width-two-thirds" id="name" name="name" maxlength="200" />
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="description">@(isService ? "Purpose" : "Description")</label>
+     <textarea class="govuk-textarea" id="description" name="description" rows="3"></textarea>
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="boundaryIn">In boundary</label>
+     <textarea class="govuk-textarea" id="boundaryIn" name="boundaryIn" rows="2"></textarea>
+    </div>
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="boundaryOut">Out of boundary</label>
+     <textarea class="govuk-textarea" id="boundaryOut" name="boundaryOut" rows="2"></textarea>
+    </div>
+    @if (isService)
+    {
+     <div class="govuk-form-group">
+      <label class="govuk-label" for="serviceTypeCode">Service type</label>
+      <select class="govuk-select" id="serviceTypeCode" name="serviceTypeCode">
+       <option value="">Not set</option>
+       @foreach (var type in serviceTypes)
+       {
+        <option value="@type.Value">@type.Label</option>
+       }
+      </select>
+     </div>
+     <div class="govuk-form-group">
+      <label class="govuk-label" for="serviceLineId">Primary service line</label>
+      <select class="govuk-select" id="serviceLineId" name="serviceLineId">
+       <option value="">None yet</option>
+       @foreach (var line in serviceLines)
+       {
+        <option value="@line.Value">@line.Label</option>
+       }
+      </select>
+     </div>
+    }
+    <div class="govuk-form-group">
+     <label class="govuk-label" for="statusCode">Status</label>
+     <select class="govuk-select" id="statusCode" name="statusCode">
+      @foreach (var status in statuses)
+      {
+       <option value="@status.Value">@status.Label</option>
+      }
+     </select>
+    </div>
+    <button class="govuk-button" type="submit">Save</button>
+   </form>
+   <h2 class="govuk-heading-m">Current</h2>
+   @if (Model.Count == 0)
+   {
+    <p class="govuk-body">None yet.</p>
+   }
+   else
+   {
+    <table class="govuk-table">
+     <thead class="govuk-table__head"><tr class="govuk-table__row"><th class="govuk-table__header">Reference</th><th class="govuk-table__header">Name</th><th class="govuk-table__header">Status</th></tr></thead>
+     <tbody class="govuk-table__body">
+      @foreach (var row in Model)
+      {
+       <tr class="govuk-table__row">
+        <td class="govuk-table__cell">@row.Reference</td>
+        <td class="govuk-table__cell">@row.Name@if (!string.IsNullOrWhiteSpace(row.Summary)) { <div class="govuk-hint govuk-!-margin-bottom-0">@row.Summary</div> }</td>
+        <td class="govuk-table__cell">@row.StatusCode</td>
+       </tr>
+      }
+     </tbody>
+    </table>
+   }
+  </div>
+ </div>
+</div>

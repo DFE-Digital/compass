@@ -34,12 +34,16 @@ public static class ResourcingReportExcelExport
             ("Business area filter", businessAreaFilter),
             ("Directorate filter", directorateFilter),
             ("Submitted work items", report.SubmittedWorkItemCount.ToString(CultureInfo.InvariantCulture)),
-            ("Admin FTE", report.TotalAdminFte.ToString("0.##", CultureInfo.InvariantCulture)),
-            ("Programme FTE", report.TotalProgrammeFte.ToString("0.##", CultureInfo.InvariantCulture)),
-            ("Capital FTE", report.TotalCapitalFte.ToString("0.##", CultureInfo.InvariantCulture)),
-            ("FTE total", report.TotalPermFte.ToString("0.##", CultureInfo.InvariantCulture)),
-            ("Managed service total", report.TotalMspFte.ToString("0.##", CultureInfo.InvariantCulture)),
-            ("Combined total (FTE + managed service)", report.TotalResourcingFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("DDT Admin", report.TotalAdminFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("DDT Programme", report.TotalProgrammeFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("DDT Capital", report.TotalCapitalFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("DDT total", report.TotalPermFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("Contractor Admin", report.TotalMspAdminFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("Contractor Programme", report.TotalMspProgrammeFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("Contractor Capital", report.TotalMspCapitalFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("Contractor / External Resource total", report.TotalMspFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("Other Permanent", report.TotalOtherPermFte.ToString("0.##", CultureInfo.InvariantCulture)),
+            ("Combined total", report.TotalResourcingFte.ToString("0.##", CultureInfo.InvariantCulture)),
         };
 
         worksheet.Cell(1, 1).Value = "Field";
@@ -87,11 +91,15 @@ public static class ResourcingReportExcelExport
             worksheet,
             nameHeader,
             "Work items",
-            "Admin",
-            "Programme",
-            "Capital",
-            "FTE total",
-            "Managed service",
+            "DDT Admin",
+            "DDT Programme",
+            "DDT Capital",
+            "DDT total",
+            "Contractor Admin",
+            "Contractor Programme",
+            "Contractor Capital",
+            "Contractor total",
+            "Other Permanent",
             "Combined",
             "Band");
 
@@ -104,13 +112,17 @@ public static class ResourcingReportExcelExport
             worksheet.Cell(rowNumber, 4).Value = row.ProgrammeFteTotal;
             worksheet.Cell(rowNumber, 5).Value = row.CapitalFteTotal;
             worksheet.Cell(rowNumber, 6).Value = row.PermFteTotal;
-            worksheet.Cell(rowNumber, 7).Value = row.MspFteTotal;
-            worksheet.Cell(rowNumber, 8).Value = row.ResourcingFteTotal;
-            worksheet.Cell(rowNumber, 9).Value = row.BandName;
+            worksheet.Cell(rowNumber, 7).Value = row.MspAdminFteTotal;
+            worksheet.Cell(rowNumber, 8).Value = row.MspProgrammeFteTotal;
+            worksheet.Cell(rowNumber, 9).Value = row.MspCapitalFteTotal;
+            worksheet.Cell(rowNumber, 10).Value = row.MspFteTotal;
+            worksheet.Cell(rowNumber, 11).Value = row.OtherPermFteTotal;
+            worksheet.Cell(rowNumber, 12).Value = row.ResourcingFteTotal;
+            worksheet.Cell(rowNumber, 13).Value = row.BandName;
             rowNumber++;
         }
 
-        FinishTable(worksheet, 9);
+        FinishTable(worksheet, 13);
     }
 
     private static void WriteWorkItemsSheet(IXLWorksheet worksheet, IReadOnlyList<ResourcingWorkItemRow> rows)
@@ -122,11 +134,15 @@ public static class ResourcingReportExcelExport
             "Business area",
             "Directorates",
             "Priority",
-            "Admin",
-            "Programme",
-            "Capital",
-            "FTE total",
-            "Managed service",
+            "DDT Admin",
+            "DDT Programme",
+            "DDT Capital",
+            "DDT total",
+            "Contractor Admin",
+            "Contractor Programme",
+            "Contractor Capital",
+            "Contractor total",
+            "Other Permanent",
             "Combined",
             "Band");
 
@@ -142,13 +158,17 @@ public static class ResourcingReportExcelExport
             worksheet.Cell(rowNumber, 7).Value = row.ProgrammeFte;
             worksheet.Cell(rowNumber, 8).Value = row.CapitalFte;
             worksheet.Cell(rowNumber, 9).Value = row.PermFte;
-            worksheet.Cell(rowNumber, 10).Value = row.MspFte;
-            worksheet.Cell(rowNumber, 11).Value = row.ResourcingFte;
-            worksheet.Cell(rowNumber, 12).Value = row.BandName;
+            worksheet.Cell(rowNumber, 10).Value = row.MspAdminFte;
+            worksheet.Cell(rowNumber, 11).Value = row.MspProgrammeFte;
+            worksheet.Cell(rowNumber, 12).Value = row.MspCapitalFte;
+            worksheet.Cell(rowNumber, 13).Value = row.MspFte;
+            worksheet.Cell(rowNumber, 14).Value = row.OtherPermFte;
+            worksheet.Cell(rowNumber, 15).Value = row.ResourcingFte;
+            worksheet.Cell(rowNumber, 16).Value = row.BandName;
             rowNumber++;
         }
 
-        FinishTable(worksheet, 12);
+        FinishTable(worksheet, 16);
     }
 
     private static void WriteTrendSheet(IXLWorksheet worksheet, IReadOnlyList<ResourcingTrendMonthPoint> points)
@@ -157,11 +177,15 @@ public static class ResourcingReportExcelExport
             worksheet,
             "Month",
             "Submitted work items",
-            "Admin",
-            "Programme",
-            "Capital",
-            "FTE total",
-            "Managed service",
+            "DDT Admin",
+            "DDT Programme",
+            "DDT Capital",
+            "DDT total",
+            "Contractor Admin",
+            "Contractor Programme",
+            "Contractor Capital",
+            "Contractor total",
+            "Other Permanent",
             "Combined",
             "Change",
             "% change");
@@ -181,15 +205,19 @@ public static class ResourcingReportExcelExport
             worksheet.Cell(rowNumber, 4).Value = point.ProgrammeFteTotal;
             worksheet.Cell(rowNumber, 5).Value = point.CapitalFteTotal;
             worksheet.Cell(rowNumber, 6).Value = point.PermFteTotal;
-            worksheet.Cell(rowNumber, 7).Value = point.MspFteTotal;
-            worksheet.Cell(rowNumber, 8).Value = point.ResourcingFteTotal;
-            worksheet.Cell(rowNumber, 9).Value = delta.HasValue ? delta.Value : "";
-            worksheet.Cell(rowNumber, 10).Value = deltaPct.HasValue ? deltaPct.Value : "";
+            worksheet.Cell(rowNumber, 7).Value = point.MspAdminFteTotal;
+            worksheet.Cell(rowNumber, 8).Value = point.MspProgrammeFteTotal;
+            worksheet.Cell(rowNumber, 9).Value = point.MspCapitalFteTotal;
+            worksheet.Cell(rowNumber, 10).Value = point.MspFteTotal;
+            worksheet.Cell(rowNumber, 11).Value = point.OtherPermFteTotal;
+            worksheet.Cell(rowNumber, 12).Value = point.ResourcingFteTotal;
+            worksheet.Cell(rowNumber, 13).Value = delta.HasValue ? delta.Value : "";
+            worksheet.Cell(rowNumber, 14).Value = deltaPct.HasValue ? deltaPct.Value : "";
             previous = point;
             rowNumber++;
         }
 
-        FinishTable(worksheet, 10);
+        FinishTable(worksheet, 14);
     }
 
     private static void WriteHeaderRow(IXLWorksheet worksheet, params string[] headers)

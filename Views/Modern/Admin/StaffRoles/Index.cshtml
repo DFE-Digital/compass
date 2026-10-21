@@ -1,0 +1,70 @@
+@model List<Compass.Models.ServiceSchema.StaffRole>
+@using Compass.ViewModels.Modern
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Staff roles";
+}
+@section Breadcrumbs {
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+ <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernAdmin")">Admin</a></li>
+ <li class="govuk-breadcrumbs__list-item" aria-current="page">Staff roles</li>
+}
+<div class="admin-hub">
+ @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
+   Caption = "Administration",
+   Title = "Staff roles",
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Roles from the <a class=\"govuk-link\" href=\"https://understand-digital-data-roles-skills.service.gov.uk/\">Government Digital and Data Profession Capability Framework</a>, plus any local roles. These are for contacts managed outside CMDB contact types.</p>")
+ })
+ @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Messages.cshtml")
+ <h2 class="govuk-heading-m">Add a role</h2>
+ <form method="post" action="@Url.Action("Save", "ModernAdminStaffRoles")">
+  @Html.AntiForgeryToken()
+  <div class="govuk-form-group">
+   <label class="govuk-label" for="family">Family</label>
+   <input class="govuk-input govuk-!-width-one-half" id="family" name="family" maxlength="80" />
+  </div>
+  <div class="govuk-form-group">
+   <label class="govuk-label" for="name">Role</label>
+   <input class="govuk-input govuk-!-width-one-half" id="name" name="name" maxlength="100" />
+  </div>
+  <div class="govuk-form-group">
+   <label class="govuk-label" for="description">Description</label>
+   <textarea class="govuk-textarea" id="description" name="description" rows="2"></textarea>
+  </div>
+  <button class="govuk-button" type="submit">Add role</button>
+ </form>
+ @foreach (var family in Model.GroupBy(r => r.Family).OrderBy(g => g.Key))
+ {
+  <h2 class="govuk-heading-m">@family.Key</h2>
+  <table class="govuk-table">
+   <thead class="govuk-table__head"><tr class="govuk-table__row"><th class="govuk-table__header">Role</th><th class="govuk-table__header">Active</th><th class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th></tr></thead>
+   <tbody class="govuk-table__body">
+    @foreach (var role in family)
+    {
+     <tr class="govuk-table__row">
+      <td class="govuk-table__cell">
+       <form method="post" action="@Url.Action("Update", "ModernAdminStaffRoles", new { id = role.Id })" id="role-@role.Id">
+        @Html.AntiForgeryToken()
+        <input class="govuk-input" name="name" value="@role.Name" maxlength="100" aria-label="Role name" />
+        <input type="hidden" name="description" value="@role.Description" />
+       </form>
+       @if (role.IsFrameworkRole)
+       {
+        <div class="govuk-hint govuk-!-margin-bottom-0">Framework role</div>
+       }
+      </td>
+      <td class="govuk-table__cell">
+       <div class="govuk-checkboxes govuk-checkboxes--small">
+        <div class="govuk-checkboxes__item">
+         <input class="govuk-checkboxes__input" id="active-@role.Id" name="isActive" type="checkbox" value="true" form="role-@role.Id" @(role.IsActive ? "checked" : null) />
+         <label class="govuk-label govuk-checkboxes__label" for="active-@role.Id">Active</label>
+        </div>
+       </div>
+      </td>
+      <td class="govuk-table__cell"><button class="govuk-button govuk-button--secondary" type="submit" form="role-@role.Id">Save</button></td>
+     </tr>
+    }
+   </tbody>
+  </table>
+ }
+</div>

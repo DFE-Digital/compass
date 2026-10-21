@@ -230,6 +230,9 @@ public class BusinessAreaProjectItem
     public decimal? CapitalFte { get; set; }
     public decimal? OtherPermFte { get; set; }
     public decimal? MspFte { get; set; }
+    public decimal? MspAdminFte { get; set; }
+    public decimal? MspProgrammeFte { get; set; }
+    public decimal? MspCapitalFte { get; set; }
     /// <summary>Plain-text summary of milestones (completed, due soon, late).</summary>
     public string? MilestonesSummary { get; set; }
     public bool SubmittedUpdate { get; set; }

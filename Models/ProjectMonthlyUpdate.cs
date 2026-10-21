@@ -74,9 +74,21 @@ public class ProjectMonthlyUpdate
     [Column(TypeName = "decimal(18,2)")]
     public decimal? MonthlyOtherPermFte { get; set; }
 
-    /// <summary>Contractor / external resource FTE for this reporting month.</summary>
+    /// <summary>Total contractor / external resource FTE for this reporting month (Admin + Programme + Capital).</summary>
     [Column(TypeName = "decimal(18,2)")]
     public decimal? MonthlyMspFte { get; set; }
+
+    /// <summary>Contractor / external resource FTE funded from Admin budget for this reporting month.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MonthlyMspAdminFte { get; set; }
+
+    /// <summary>Contractor / external resource FTE funded from Programme budget for this reporting month.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MonthlyMspProgrammeFte { get; set; }
+
+    /// <summary>Contractor / external resource FTE funded from Capital budget for this reporting month.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MonthlyMspCapitalFte { get; set; }
 
     /// <summary>Narrative on people changes for this reporting month (moves, onboarding, offboarding).</summary>
     [MaxLength(4000)]

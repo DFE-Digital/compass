@@ -717,6 +717,7 @@ public partial class CompassDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        ConfigureServiceSchema(modelBuilder);
 
         modelBuilder.Entity<User>()
             .HasIndex(u => u.Email)

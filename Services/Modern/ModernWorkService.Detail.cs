@@ -62,6 +62,7 @@ public partial class ModernWorkService
             .Include(x => x.ProjectMissions).ThenInclude(pm => pm.Mission)
             .Include(x => x.ProjectObjectives).ThenInclude(po => po.Objective)
             .Include(x => x.ProjectContacts).ThenInclude(pc => pc.User)
+            .Include(x => x.ProjectContacts).ThenInclude(pc => pc.StaffRole)
             .Include(x => x.SeniorResponsibleOfficers).ThenInclude(sro => sro.User)
             .Include(x => x.ServiceOwners).ThenInclude(so => so.User)
             .Include(x => x.PmoContacts).ThenInclude(pmo => pmo.User)

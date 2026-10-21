@@ -746,6 +746,9 @@ public partial class ModernWorkService : IModernWorkService
                 ProgrammeFte = mu.MonthlyProgrammeFte,
                 CapitalFte = mu.MonthlyCapitalFte,
                 OtherPermFte = mu.MonthlyOtherPermFte,
+                MspAdminFte = mu.MonthlyMspAdminFte,
+                MspProgrammeFte = mu.MonthlyMspProgrammeFte,
+                MspCapitalFte = mu.MonthlyMspCapitalFte,
                 MspFte = mu.MonthlyMspFte
             };
             w.MonthlyUpdates.Add(monthly);

@@ -254,6 +254,42 @@ else
 
             @if (isAdd && !rolePreset)
             {
+              var staffRoles = ViewBag.StaffRoles as List<Compass.Models.ServiceSchema.StaffRole> ?? new();
+ <fieldset class="govuk-fieldset govuk-!-margin-bottom-4">
+  <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Where this contact is managed</legend>
+  <div class="govuk-radios">
+   <div class="govuk-radios__item">
+    <input class="govuk-radios__input" id="contact-kind-register" name="ContactKind" type="radio" value="register" checked />
+    <label class="govuk-label govuk-radios__label" for="contact-kind-register">Register contact role</label>
+    <div class="govuk-hint govuk-radios__hint">SRO, Service Owner, PMO, reporting contact, or another role stored with the work item.</div>
+   </div>
+   <div class="govuk-radios__item">
+    <input class="govuk-radios__input" id="contact-kind-staff" name="ContactKind" type="radio" value="staff" />
+    <label class="govuk-label govuk-radios__label" for="contact-kind-staff">Contact managed outside of the CMDB</label>
+    <div class="govuk-hint govuk-radios__hint">A staff role from the Digital and Data framework, managed in Admin → Staff Roles.</div>
+   </div>
+  </div>
+ </fieldset>
+ <div class="govuk-form-group @(HasErr("StaffRoleId") ? "govuk-form-group--error" : "")" id="addcontact-staff-role">
+  <label class="govuk-label govuk-label--m" for="StaffRoleId">Staff role</label>
+  @if (HasErr("StaffRoleId"))
+  {
+   <p id="StaffRoleId-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span>@ErrMsg("StaffRoleId")</p>
+  }
+  <select class="govuk-select govuk-!-width-one-half" id="StaffRoleId" name="StaffRoleId">
+   <option value="">Select a staff role</option>
+   @foreach (var family in staffRoles.GroupBy(r => r.Family))
+   {
+    <optgroup label="@family.Key">
+     @foreach (var role in family)
+     {
+      <option value="@role.Id">@role.Name</option>
+     }
+    </optgroup>
+   }
+  </select>
+ </div>
+ <div id="addcontact-register-role">
  <div class="govuk-form-group @(HasErr("ContactRoleTypeId") ? "govuk-form-group--error" : "")">
  <label class="govuk-label govuk-label--m" asp-for="ContactRoleTypeId" id="addcontact-role-type-label">Contact role</label>
  <div class="govuk-hint" id="addcontact-role-hint">Choose a standard role, or select <strong>Other</strong> to enter a custom one.</div>
@@ -279,6 +315,7 @@ else
               }
  <input class="govuk-input govuk-!-width-one-half @(HasErr("CustomRole") ? "govuk-input--error" : "")" type="text" name="CustomRole" id="CustomRole" value="@customRolePrefill" maxlength="100" autocomplete="off" aria-describedby="addcontact-custom-hint @(HasErr("CustomRole") ? "CustomRole-error" : "")" />
             </div>
+ </div>
             }
 
  <div id="edit-contact-user" class="user-picker-wrapper--full-width">
@@ -396,6 +433,23 @@ else
 
 @section Scripts {
 <script src="~/modern/js/work-add-contact.js" asp-append-version="true" nonce="@Context.Items["Nonce"]"></script>
+<script nonce="@Context.Items["Nonce"]">
+(function () {
+  function syncContactKind() {
+    var staff = document.getElementById('contact-kind-staff');
+    var staffBox = document.getElementById('addcontact-staff-role');
+    var registerBox = document.getElementById('addcontact-register-role');
+    if (!staff || !staffBox || !registerBox) return;
+    var useStaff = staff.checked;
+    staffBox.hidden = !useStaff;
+    registerBox.hidden = useStaff;
+  }
+  document.querySelectorAll('input[name="ContactKind"]').forEach(function (r) {
+    r.addEventListener('change', syncContactKind);
+  });
+  syncContactKind();
+})();
+</script>
 @if (isEditBudget)
 {
 <script nonce="@Context.Items["Nonce"]">

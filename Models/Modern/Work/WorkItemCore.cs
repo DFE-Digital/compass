@@ -119,6 +119,13 @@ public class WorkItemContact
     public int? ContactRoleTypeId { get; set; }
     /// <summary>When <see cref="ContactRoleTypeId"/> is custom (5), the label stored in <see cref="ProjectContact.Role"/>.</summary>
     public string? RoleName { get; set; }
+
+    /// <summary>Staff role from Admin → Staff Roles. Set for contacts managed outside the CMDB.</summary>
+    public int? StaffRoleId { get; set; }
+
+    public string? StaffRoleFamily { get; set; }
+
+    public bool ManagedOutsideCmdb { get; set; }
     /// <summary>Display name stored on <see cref="Compass.Models.ProjectContact.Name"/> (editable on the work item).</summary>
     public string DisplayName { get; set; } = "";
     public User? AppUser { get; set; }
@@ -217,6 +224,9 @@ public class MonthlyUpdate
     public decimal? CapitalFte { get; set; }
     public decimal? OtherPermFte { get; set; }
     public decimal? MspFte { get; set; }
+    public decimal? MspAdminFte { get; set; }
+    public decimal? MspProgrammeFte { get; set; }
+    public decimal? MspCapitalFte { get; set; }
     public string? PeopleNarrative { get; set; }
 }
 

@@ -33,10 +33,10 @@
   {
     if (Model.Contacts == null || !Model.Contacts.Any()) return new List<WorkItemContact>();
     if (itemKey.StartsWith("CustomRole:", StringComparison.Ordinal))
-      return Model.Contacts.Where(c => c.ContactRoleTypeId == 5 && string.Equals(c.RoleName, itemLabel, StringComparison.Ordinal)).ToList();
+      return Model.Contacts.Where(c => !c.ManagedOutsideCmdb && c.ContactRoleTypeId == 5 && string.Equals(c.RoleName, itemLabel, StringComparison.Ordinal)).ToList();
     var roleId = ContactRoleTypeIdFromKey(itemKey);
     if (!roleId.HasValue) return new List<WorkItemContact>();
-    return Model.Contacts.Where(c => c.ContactRoleTypeId == roleId.Value).ToList();
+    return Model.Contacts.Where(c => !c.ManagedOutsideCmdb && c.ContactRoleTypeId == roleId.Value).ToList();
   }
 
   string ContactListDisplayName(WorkItemContact c)
@@ -192,6 +192,65 @@
     </dl>
   </div>
 </div>
+
+@{
+  var outsideContacts = Model.Contacts?.Where(c => c.ManagedOutsideCmdb).OrderBy(c => c.StaffRoleFamily).ThenBy(c => c.RoleName).ToList()
+      ?? new List<WorkItemContact>();
+}
+@if (outsideContacts.Count > 0 || canEdit)
+{
+<div class="govuk-summary-card govuk-!-margin-top-6">
+  <div class="govuk-summary-card__title-wrapper">
+    <h2 class="govuk-summary-card__title">Contacts managed outside of the CMDB</h2>
+    @if (canEdit && !string.IsNullOrEmpty(addContactUrl))
+    {
+      <ul class="govuk-summary-card__actions">
+        <li class="govuk-summary-card__action">
+          <a href="@addContactUrl" class="govuk-link govuk-link--no-visited-state">Add contact</a>
+        </li>
+      </ul>
+    }
+  </div>
+  <div class="govuk-summary-card__content">
+    <p class="govuk-hint">Staff roles from the Digital and Data framework. These are separate from CMDB contact types.</p>
+    @if (outsideContacts.Count == 0)
+    {
+      <p class="govuk-body govuk-!-margin-bottom-0">None recorded.</p>
+    }
+    else
+    {
+      <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-0">
+        @foreach (var contact in outsideContacts)
+        {
+          <div class="govuk-summary-list__row@(canEdit ? "" : " govuk-summary-list__row--no-actions")">
+            <dt class="govuk-summary-list__key">@(string.IsNullOrWhiteSpace(contact.RoleName) ? "Staff role" : contact.RoleName)@if (!string.IsNullOrWhiteSpace(contact.StaffRoleFamily)) { <div class="govuk-hint govuk-!-margin-bottom-0">@contact.StaffRoleFamily</div> }</dt>
+            <dd class="govuk-summary-list__value">
+              @if (!string.IsNullOrWhiteSpace(contact.AppUser?.Email))
+              {
+                <a href="mailto:@contact.AppUser.Email" class="govuk-link">@ContactListDisplayName(contact)</a>
+              }
+              else
+              {
+                @ContactListDisplayName(contact)
+              }
+            </dd>
+            @if (canEdit)
+            {
+              <dd class="govuk-summary-list__actions">
+                <form method="post" action="@Url.Action("RemoveContact", "ModernWork", new { id = Model.Id, contactId = contact.Id })">
+                  @Html.AntiForgeryToken()
+                  <input type="hidden" name="returnTo" value="detail" />
+                  <button class="govuk-button govuk-button--warning" type="submit">Remove<span class="govuk-visually-hidden"> @ContactListDisplayName(contact)</span></button>
+                </form>
+              </dd>
+            }
+          </div>
+        }
+      </dl>
+    }
+  </div>
+</div>
+}
 
 @if (showBusinessCaseCard)
 {
