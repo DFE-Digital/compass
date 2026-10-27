@@ -23,7 +23,11 @@ public class MonthlyReportViewModel
     public decimal? ProgrammeFte { get; set; }
     public decimal? CapitalFte { get; set; }
     public decimal? OtherPermFte { get; set; }
+    /// <summary>Total contractor / external resource FTE (Admin + Programme + Capital).</summary>
     public decimal? MspFte { get; set; }
+    public decimal? MspAdminFte { get; set; }
+    public decimal? MspProgrammeFte { get; set; }
+    public decimal? MspCapitalFte { get; set; }
 
     public int? RagStatusId { get; set; }
     public string? RagJustification { get; set; }
@@ -75,6 +79,9 @@ public class MonthlyReportPreviousSubmission
     public decimal? CapitalFte { get; set; }
     public decimal? OtherPermFte { get; set; }
     public decimal? MspFte { get; set; }
+    public decimal? MspAdminFte { get; set; }
+    public decimal? MspProgrammeFte { get; set; }
+    public decimal? MspCapitalFte { get; set; }
     public string? RagName { get; set; }
     public string? RagCssClass { get; set; }
     public string? RagJustification { get; set; }

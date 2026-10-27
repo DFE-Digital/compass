@@ -871,6 +871,9 @@ public partial class ModernWorkController : Controller
             CapitalFte = mu.MonthlyCapitalFte,
             OtherPermFte = mu.MonthlyOtherPermFte,
             MspFte = mu.MonthlyMspFte,
+            MspAdminFte = mu.MonthlyMspAdminFte,
+            MspProgrammeFte = mu.MonthlyMspProgrammeFte,
+            MspCapitalFte = mu.MonthlyMspCapitalFte,
             PeopleNarrative = mu.PeopleNarrative
         };
 
@@ -1015,7 +1018,8 @@ public partial class ModernWorkController : Controller
     public async Task<IActionResult> MonthlyReportPost(
         int id, int year, int month,
         string? narrative, string? peopleNarrative,
-        decimal? adminFte, decimal? programmeFte, decimal? capitalFte, decimal? otherPermFte, decimal? mspFte,
+        decimal? adminFte, decimal? programmeFte, decimal? capitalFte, decimal? otherPermFte,
+        decimal? mspAdminFte, decimal? mspProgrammeFte, decimal? mspCapitalFte,
         int? ragStatusId, string? ragJustification, string? pathToGreen,
         string? command,
         CancellationToken cancellationToken = default)
@@ -1023,7 +1027,8 @@ public partial class ModernWorkController : Controller
         if (month < 1 || month > 12)
             return BadRequest("Invalid month.");
 
-        var permFte = SumMonthlyPermFte(adminFte, programmeFte, capitalFte);
+        var permFte = SumMonthlyFteParts(adminFte, programmeFte, capitalFte);
+        var mspFte = SumMonthlyFteParts(mspAdminFte, mspProgrammeFte, mspCapitalFte);
 
         var milestoneStatus = MilestoneReportHelper.ParsePostedIntKeyStringDictionary(Request.Form, "milestoneStatus");
         var milestoneRagStatusId = MilestoneReportHelper.ParsePostedIntKeyNullableIntDictionary(Request.Form, "milestoneRagStatusId");
@@ -1090,7 +1095,9 @@ public partial class ModernWorkController : Controller
             programmeFte,
             capitalFte,
             otherPermFte,
-            mspFte,
+            mspAdminFte,
+            mspProgrammeFte,
+            mspCapitalFte,
             ragStatusId,
             resolvedRag,
             ragJustification,
@@ -1108,6 +1115,9 @@ public partial class ModernWorkController : Controller
                 capitalFte,
                 otherPermFte,
                 permFte,
+                mspAdminFte,
+                mspProgrammeFte,
+                mspCapitalFte,
                 mspFte,
                 ragStatusId,
                 ragJustification,
@@ -1151,6 +1161,9 @@ public partial class ModernWorkController : Controller
         update.MonthlyCapitalFte = capitalFte;
         update.MonthlyOtherPermFte = otherPermFte;
         update.MonthlyPermFte = permFte;
+        update.MonthlyMspAdminFte = mspAdminFte;
+        update.MonthlyMspProgrammeFte = mspProgrammeFte;
+        update.MonthlyMspCapitalFte = mspCapitalFte;
         update.MonthlyMspFte = mspFte;
         update.UpdatedAt = DateTime.UtcNow;
 
@@ -1222,6 +1235,9 @@ public partial class ModernWorkController : Controller
                 capitalFte,
                 otherPermFte,
                 permFte,
+                mspAdminFte,
+                mspProgrammeFte,
+                mspCapitalFte,
                 mspFte,
                 ragStatusId,
                 ragJustification,
@@ -1283,6 +1299,9 @@ public partial class ModernWorkController : Controller
         decimal? CapitalFte,
         decimal? OtherPermFte,
         decimal? PermFte,
+        decimal? MspAdminFte,
+        decimal? MspProgrammeFte,
+        decimal? MspCapitalFte,
         decimal? MspFte,
         int? RagStatusId,
         string? RagJustification,
@@ -1298,7 +1317,7 @@ public partial class ModernWorkController : Controller
         !string.IsNullOrEmpty(name) &&
         string.Equals(name, "Green", StringComparison.OrdinalIgnoreCase);
 
-    private static decimal? SumMonthlyPermFte(decimal? adminFte, decimal? programmeFte, decimal? capitalFte)
+    private static decimal? SumMonthlyFteParts(decimal? adminFte, decimal? programmeFte, decimal? capitalFte)
     {
         if (!adminFte.HasValue && !programmeFte.HasValue && !capitalFte.HasValue)
             return null;
@@ -1307,7 +1326,7 @@ public partial class ModernWorkController : Controller
 
     /// <summary>
     /// Server-side validation for monthly report. Path to green is required only when submitting with a non-green RAG (field not in scope when green).
-    /// DDT Permanent FTE splits, Other Permanent FTE, and Contractor / External Resource FTE are required on submit only.
+    /// DDT Permanent FTE and Contractor / External Resource FTE funding splits, and Other Permanent FTE, are required on submit only.
     /// </summary>
     private static void ValidateMonthlyReportForm(
         ModelStateDictionary modelState,
@@ -1318,7 +1337,9 @@ public partial class ModernWorkController : Controller
         decimal? programmeFte,
         decimal? capitalFte,
         decimal? otherPermFte,
-        decimal? mspFte,
+        decimal? mspAdminFte,
+        decimal? mspProgrammeFte,
+        decimal? mspCapitalFte,
         int? ragStatusId,
         RagStatusLookup? resolvedRag,
         string? ragJustification,
@@ -1349,11 +1370,13 @@ public partial class ModernWorkController : Controller
         if (resolvedRag != null && !MonthlyReportIsGreenRagName(resolvedRag.Name))
             MaxLen(nameof(pathToGreen), pathToGreen, "Path to green");
 
-        ValidateFte(nameof(adminFte), adminFte, "Admin FTE");
-        ValidateFte(nameof(programmeFte), programmeFte, "Programme FTE");
-        ValidateFte(nameof(capitalFte), capitalFte, "Capital FTE");
+        ValidateFte(nameof(adminFte), adminFte, "DDT Permanent FTE — Admin");
+        ValidateFte(nameof(programmeFte), programmeFte, "DDT Permanent FTE — Programme");
+        ValidateFte(nameof(capitalFte), capitalFte, "DDT Permanent FTE — Capital");
+        ValidateFte(nameof(mspAdminFte), mspAdminFte, "Contractor / External Resource FTE — Admin");
+        ValidateFte(nameof(mspProgrammeFte), mspProgrammeFte, "Contractor / External Resource FTE — Programme");
+        ValidateFte(nameof(mspCapitalFte), mspCapitalFte, "Contractor / External Resource FTE — Capital");
         ValidateFte(nameof(otherPermFte), otherPermFte, "Other Permanent FTE");
-        ValidateFte(nameof(mspFte), mspFte, "Contractor / External Resource FTE");
 
         if (!isSubmit)
             return;
@@ -1362,19 +1385,25 @@ public partial class ModernWorkController : Controller
             modelState.AddModelError(nameof(narrative), "Enter a monthly update narrative.");
 
         if (!FieldHasBinderError(modelState, nameof(adminFte)) && !adminFte.HasValue)
-            modelState.AddModelError(nameof(adminFte), "Enter Admin FTE.");
+            modelState.AddModelError(nameof(adminFte), "Enter Admin FTE for DDT Permanent FTE.");
 
         if (!FieldHasBinderError(modelState, nameof(programmeFte)) && !programmeFte.HasValue)
-            modelState.AddModelError(nameof(programmeFte), "Enter Programme FTE.");
+            modelState.AddModelError(nameof(programmeFte), "Enter Programme FTE for DDT Permanent FTE.");
 
         if (!FieldHasBinderError(modelState, nameof(capitalFte)) && !capitalFte.HasValue)
-            modelState.AddModelError(nameof(capitalFte), "Enter Capital FTE.");
+            modelState.AddModelError(nameof(capitalFte), "Enter Capital FTE for DDT Permanent FTE.");
+
+        if (!FieldHasBinderError(modelState, nameof(mspAdminFte)) && !mspAdminFte.HasValue)
+            modelState.AddModelError(nameof(mspAdminFte), "Enter Admin FTE for Contractor / External Resource FTE.");
+
+        if (!FieldHasBinderError(modelState, nameof(mspProgrammeFte)) && !mspProgrammeFte.HasValue)
+            modelState.AddModelError(nameof(mspProgrammeFte), "Enter Programme FTE for Contractor / External Resource FTE.");
+
+        if (!FieldHasBinderError(modelState, nameof(mspCapitalFte)) && !mspCapitalFte.HasValue)
+            modelState.AddModelError(nameof(mspCapitalFte), "Enter Capital FTE for Contractor / External Resource FTE.");
 
         if (!FieldHasBinderError(modelState, nameof(otherPermFte)) && !otherPermFte.HasValue)
             modelState.AddModelError(nameof(otherPermFte), "Enter Other Permanent FTE.");
-
-        if (!FieldHasBinderError(modelState, nameof(mspFte)) && !mspFte.HasValue)
-            modelState.AddModelError(nameof(mspFte), "Enter Contractor / External Resource FTE.");
 
         if (!ragStatusId.HasValue)
         {
@@ -1507,6 +1536,9 @@ public partial class ModernWorkController : Controller
             CapitalFte = update?.MonthlyCapitalFte,
             OtherPermFte = update?.MonthlyOtherPermFte,
             PermFte = update?.MonthlyPermFte,
+            MspAdminFte = update?.MonthlyMspAdminFte,
+            MspProgrammeFte = update?.MonthlyMspProgrammeFte,
+            MspCapitalFte = update?.MonthlyMspCapitalFte,
             MspFte = update?.MonthlyMspFte,
             RagStatusId = currentRagId,
             RagJustification = currentRagJustification,
@@ -1532,6 +1564,9 @@ public partial class ModernWorkController : Controller
             vm.CapitalFte = posted.CapitalFte;
             vm.OtherPermFte = posted.OtherPermFte;
             vm.PermFte = posted.PermFte;
+            vm.MspAdminFte = posted.MspAdminFte;
+            vm.MspProgrammeFte = posted.MspProgrammeFte;
+            vm.MspCapitalFte = posted.MspCapitalFte;
             vm.MspFte = posted.MspFte;
             vm.RagStatusId = posted.RagStatusId;
             vm.RagJustification = posted.RagJustification;
@@ -1654,6 +1689,9 @@ public partial class ModernWorkController : Controller
             CapitalFte = prevUpdate.MonthlyCapitalFte,
             OtherPermFte = prevUpdate.MonthlyOtherPermFte,
             PermFte = prevUpdate.MonthlyPermFte,
+            MspAdminFte = prevUpdate.MonthlyMspAdminFte,
+            MspProgrammeFte = prevUpdate.MonthlyMspProgrammeFte,
+            MspCapitalFte = prevUpdate.MonthlyMspCapitalFte,
             MspFte = prevUpdate.MonthlyMspFte,
             RagName = prevRagName,
             RagCssClass = prevRagCssClass,

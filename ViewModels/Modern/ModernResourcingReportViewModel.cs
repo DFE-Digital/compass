@@ -2,7 +2,7 @@ using Compass.Models;
 
 namespace Compass.ViewModels.Modern;
 
-/// <summary>Monthly resourcing report totals (permanent FTE by funding type + managed service) with configurable bands.</summary>
+/// <summary>Monthly resourcing report totals (DDT and contractor FTE by funding type, plus other permanent FTE) with configurable bands.</summary>
 public sealed class ModernResourcingReportViewModel
 {
     public int ReportYear { get; set; }
@@ -36,7 +36,11 @@ public sealed class ModernResourcingReportViewModel
     public decimal TotalProgrammeFte { get; set; }
     public decimal TotalCapitalFte { get; set; }
     public decimal TotalPermFte { get; set; }
+    public decimal TotalMspAdminFte { get; set; }
+    public decimal TotalMspProgrammeFte { get; set; }
+    public decimal TotalMspCapitalFte { get; set; }
     public decimal TotalMspFte { get; set; }
+    public decimal TotalOtherPermFte { get; set; }
     public decimal TotalResourcingFte { get; set; }
     public int SubmittedWorkItemCount { get; set; }
 
@@ -69,7 +73,11 @@ public sealed class ResourcingAggregateRow
     public decimal ProgrammeFteTotal { get; set; }
     public decimal CapitalFteTotal { get; set; }
     public decimal PermFteTotal { get; set; }
+    public decimal MspAdminFteTotal { get; set; }
+    public decimal MspProgrammeFteTotal { get; set; }
+    public decimal MspCapitalFteTotal { get; set; }
     public decimal MspFteTotal { get; set; }
+    public decimal OtherPermFteTotal { get; set; }
     public decimal ResourcingFteTotal { get; set; }
     public string BandName { get; set; } = "—";
     public string? BandCssClass { get; set; }
@@ -88,7 +96,11 @@ public sealed class ResourcingWorkItemRow
     public decimal ProgrammeFte { get; set; }
     public decimal CapitalFte { get; set; }
     public decimal PermFte { get; set; }
+    public decimal MspAdminFte { get; set; }
+    public decimal MspProgrammeFte { get; set; }
+    public decimal MspCapitalFte { get; set; }
     public decimal MspFte { get; set; }
+    public decimal OtherPermFte { get; set; }
     public decimal ResourcingFte { get; set; }
     public string BandName { get; set; } = "—";
     public string? BandCssClass { get; set; }
@@ -103,7 +115,11 @@ public sealed class ResourcingTrendMonthPoint
     public decimal ProgrammeFteTotal { get; set; }
     public decimal CapitalFteTotal { get; set; }
     public decimal PermFteTotal { get; set; }
+    public decimal MspAdminFteTotal { get; set; }
+    public decimal MspProgrammeFteTotal { get; set; }
+    public decimal MspCapitalFteTotal { get; set; }
     public decimal MspFteTotal { get; set; }
+    public decimal OtherPermFteTotal { get; set; }
     public decimal ResourcingFteTotal { get; set; }
     public int SubmittedWorkItemCount { get; set; }
     public List<int> WorkItemIds { get; set; } = new();

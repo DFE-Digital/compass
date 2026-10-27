@@ -217,6 +217,9 @@ public class MonthlyUpdate
     public decimal? CapitalFte { get; set; }
     public decimal? OtherPermFte { get; set; }
     public decimal? MspFte { get; set; }
+    public decimal? MspAdminFte { get; set; }
+    public decimal? MspProgrammeFte { get; set; }
+    public decimal? MspCapitalFte { get; set; }
     public string? PeopleNarrative { get; set; }
 }
 
