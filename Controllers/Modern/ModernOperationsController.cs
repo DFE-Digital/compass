@@ -2278,6 +2278,9 @@ public class ModernOperationsController : Controller
             Rules = rules,
             SubNav = subNav,
             CanSyncFromCmdb = true,
+            CmdbEndpoint = string.IsNullOrWhiteSpace(syncConfig.Cmdb?.Endpoint)
+                ? null
+                : syncConfig.Cmdb.Endpoint.Trim(),
             LastImportResult = lastImport,
             LastStrapiImportResult = lastStrapiImport,
             LastBulkSyncAtDisplay = lastRun == null

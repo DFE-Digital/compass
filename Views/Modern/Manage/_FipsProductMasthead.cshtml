@@ -1,9 +1,13 @@
 @model FipsProductDetailViewModel
 @using Compass.Models.Fips
+@using Compass.Models.Modern.Work
 @{
   var p = Model.Product;
   var aiss = Model.AissAccessibility;
+  var dq = Model.DataCompletion;
   var accessibilityTabUrl = Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "accessibility" }) ?? "#";
+  var schemaTabUrl = Url.Action("ServiceSchemaProduct", "ModernManage", new { id = p.Id }) ?? "#";
+  var dqBadgeClass = WorkBadgeCss.ServiceRegisterCompletionBadgeClass(dq.PercentRounded);
 
   string StatusBadgeClass(CMDBProductStatus status) => status switch
   {
@@ -32,6 +36,7 @@
               <th scope="col" class="govuk-table__header">Business area</th>
               <th scope="col" class="govuk-table__header">Phase</th>
               <th scope="col" class="govuk-table__header">Accessibility</th>
+              <th scope="col" class="govuk-table__header">DQ</th>
               <th scope="col" class="govuk-table__header">View product</th>
             </tr>
           </thead>
@@ -74,6 +79,23 @@
                 else
                 {
                   <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--grey">No data</span>
+                }
+              </td>
+              <td class="govuk-table__cell">
+                @{
+                  var dqLabel = $"{dq.PercentRounded}% data quality, {dq.Score} of {dq.Max} fields complete";
+                }
+                @if (Model.ShowServiceRegisterSchema)
+                {
+                  <a href="@schemaTabUrl" class="govuk-link govuk-link--no-visited-state">
+                    <span class="@dqBadgeClass">@dq.PercentRounded%</span>
+                    <span class="govuk-visually-hidden"> @dqLabel — view service schema</span>
+                  </a>
+                }
+                else
+                {
+                  <span class="@dqBadgeClass">@dq.PercentRounded%</span>
+                  <span class="govuk-visually-hidden">@dqLabel</span>
                 }
               </td>
               <td class="govuk-table__cell">

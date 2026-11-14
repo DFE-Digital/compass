@@ -12,6 +12,9 @@ public sealed class ServiceRegisterSyncSettingsViewModel
 
     public bool CanSyncFromCmdb { get; init; }
 
+    /// <summary>ServiceNow table URL used for the service offering query (<c>FipsSync:Cmdb:Endpoint</c>).</summary>
+    public string? CmdbEndpoint { get; init; }
+
     public FipsCompletionImportResult? LastImportResult { get; init; }
 
     public FipsCompletionImportResult? LastStrapiImportResult { get; init; }

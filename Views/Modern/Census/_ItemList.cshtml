@@ -1,0 +1,75 @@
+@model Compass.ViewModels.Modern.ServiceCensusQuestionViewModel
+@using System.Text.Json
+@{
+  var emptyLabel = string.IsNullOrWhiteSpace(Model.EmptyLabel) ? "No items added" : Model.EmptyLabel;
+  var addLabel = string.IsNullOrWhiteSpace(Model.AddLabel) ? "Add an item" : Model.AddLabel;
+  var hasItems = Model.Items.Count > 0;
+  var itemError = ViewData.ModelState["Items"]?.Errors.Any() == true;
+  var itemErrorText = ViewData.ModelState["Items"]?.Errors.FirstOrDefault()?.ErrorMessage;
+  var itemListJson = JsonSerializer.Serialize(Model.Items.Select(i => new { title = i.Title, url = i.ExternalUrl, code = i.LookupCode }));
+}
+<div class="govuk-form-group@(itemError ? " govuk-form-group--error" : "") census-item-list" data-module="census-item-list" data-add-label="@addLabel" data-noun="@Model.ItemNoun" data-capture-url="@(Model.CaptureUrl ? "true" : "false")" data-pick-register="@(Model.PickFromRegister ? "true" : "false")" data-suggest-url="@Model.DependencySuggestUrl">
+  <input type="hidden" name="ItemListPosted" value="true">
+  <input type="hidden" name="ItemListJson" id="census-item-json" value="@itemListJson">
+  @if (itemError && !string.IsNullOrWhiteSpace(itemErrorText))
+  {
+    <p id="census-item-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @itemErrorText</p>
+  }
+  <div class="govuk-inset-text census-item-list__empty" id="census-item-empty" @(hasItems ? "hidden" : null)>
+    <p class="govuk-body govuk-!-margin-bottom-2">@emptyLabel</p>
+    <p class="govuk-body govuk-!-margin-bottom-0">
+      <button type="button" class="govuk-button js-census-item-add">@addLabel</button>
+    </p>
+  </div>
+  <div class="census-item-list__table-wrap" id="census-item-table-wrap" @(!hasItems ? "hidden" : null)>
+    <table class="govuk-table" id="census-item-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header">@Model.TitleLabel</th>
+          @if (Model.CaptureUrl)
+          {
+            <th scope="col" class="govuk-table__header">Link</th>
+          }
+          <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body" id="census-item-body">
+        @for (var i = 0; i < Model.Items.Count; i++)
+        {
+          var item = Model.Items[i];
+          <tr class="govuk-table__row" data-index="@i" data-url="@item.ExternalUrl" data-code="@item.LookupCode">
+            <td class="govuk-table__cell">
+              <input type="hidden" class="js-census-item-title" name="Items[@i].Title" value="@item.Title">
+              <input type="hidden" class="js-census-item-code" name="Items[@i].LookupCode" value="@item.LookupCode">
+              <span class="census-item-list__text">@item.Title</span>
+            </td>
+            @if (Model.CaptureUrl)
+            {
+              <td class="govuk-table__cell census-item-list__url">
+                <input type="hidden" class="js-census-item-url" name="Items[@i].ExternalUrl" value="@item.ExternalUrl">
+                @if (!string.IsNullOrWhiteSpace(item.ExternalUrl))
+                {
+                  <a class="govuk-link" href="@item.ExternalUrl" rel="noreferrer noopener">@item.ExternalUrl</a>
+                }
+                else
+                {
+                  <text>Not set</text>
+                }
+              </td>
+            }
+            <td class="govuk-table__cell">
+              <div class="govuk-button-group census-item-actions">
+                <button type="button" class="govuk-button govuk-button--secondary js-census-item-edit">Change</button>
+                <button type="button" class="govuk-button govuk-button--secondary js-census-item-remove">Remove</button>
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <p class="govuk-body">
+      <button type="button" class="govuk-button js-census-item-add">Add another @(string.IsNullOrWhiteSpace(Model.ItemNoun) ? "item" : Model.ItemNoun)</button>
+    </p>
+  </div>
+  <div id="census-item-fields"></div>
+</div>

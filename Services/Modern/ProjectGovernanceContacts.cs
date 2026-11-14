@@ -303,8 +303,11 @@ internal static class ProjectGovernanceContacts
             if (string.Equals(pc.TeamStatus, GovernanceTeamStatus, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var roleId = StandardRoleToId.TryGetValue(pc.Role, out var rid) ? rid : 5;
-            if (roleId is >= 1 and <= 4 && pc.UserId is int uid && seenUserRole.Contains((uid, roleId)))
+            var outsideCmdb = pc.StaffRoleId != null;
+            var roleId = outsideCmdb
+                ? 5
+                : StandardRoleToId.TryGetValue(pc.Role, out var rid) ? rid : 5;
+            if (!outsideCmdb && roleId is >= 1 and <= 4 && pc.UserId is int uid && seenUserRole.Contains((uid, roleId)))
                 continue;
 
             work.Contacts.Add(new WorkItemContact
@@ -312,12 +315,15 @@ internal static class ProjectGovernanceContacts
                 Id = pc.Id,
                 WorkItemId = work.Id,
                 ContactRoleTypeId = roleId,
-                RoleName = roleId == 5 ? pc.Role : null,
+                RoleName = outsideCmdb || roleId == 5 ? pc.Role : null,
+                StaffRoleId = pc.StaffRoleId,
+                StaffRoleFamily = pc.StaffRole?.Family,
+                ManagedOutsideCmdb = outsideCmdb,
                 DisplayName = pc.Name ?? "",
                 AppUser = pc.User
             });
 
-            if (roleId is >= 1 and <= 4 && pc.UserId is int userId)
+            if (!outsideCmdb && roleId is >= 1 and <= 4 && pc.UserId is int userId)
                 seenUserRole.Add((userId, roleId));
         }
 

@@ -60,7 +60,9 @@ public sealed class ModernUiViewLocationExpander : IViewLocationExpander
             yield return "/Views/Modern/Standards/{0}.cshtml";
             yield return "/Views/Modern/Shared/{0}.cshtml";
         }
-        else if (string.Equals(controllerName, "ModernAdmin", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(controllerName, "ModernAdmin", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(controllerName, "ModernAdminStaffRoles", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(controllerName, "ModernAdminServiceSchema", StringComparison.OrdinalIgnoreCase))
         {
             yield return "/Views/Modern/Admin/{0}.cshtml";
             yield return "/Views/Modern/Shared/{0}.cshtml";
@@ -73,6 +75,11 @@ public sealed class ModernUiViewLocationExpander : IViewLocationExpander
         else if (string.Equals(controllerName, "ModernActivityTime", StringComparison.OrdinalIgnoreCase))
         {
             yield return "/Views/Modern/ActivityTime/{0}.cshtml";
+            yield return "/Views/Modern/Shared/{0}.cshtml";
+        }
+        else if (string.Equals(controllerName, "ModernCensus", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "/Views/Modern/Census/{0}.cshtml";
             yield return "/Views/Modern/Shared/{0}.cshtml";
         }
     }

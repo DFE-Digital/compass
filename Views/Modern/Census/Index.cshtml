@@ -1,0 +1,98 @@
+@model Compass.ViewModels.Modern.ServiceCensusProductListViewModel
+@using Compass.Models.Modern.Work
+@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = Model.ShowAll ? "All products" : "Your products";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Service census</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+  Title = "Service census",
+  Caption = Model.ShowAll ? "All products" : "Your products",
+  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Complete census information for products on the service register. Anyone signed in can record answers. Final submission must be by a named CMDB contact or an admin, once every question is complete.</p>")
+})
+
+@{
+  var suggestUrl = Url.Action("Suggest", "ModernCensus", new { all = Model.ShowAll }) ?? "";
+}
+<form method="get" class="govuk-!-margin-bottom-6" action="@(Model.ShowAll ? Url.Action("All") : Url.Action("Index"))" role="search">
+  <div class="govuk-form-group govuk-!-margin-bottom-0">
+    <label class="govuk-label" for="census-product-search">Find a product</label>
+    <div class="govuk-hint" id="census-product-search-hint">Start typing a name, then choose a product. Or search to filter the table.</div>
+    <div class="census-search-toolbar">
+      <div class="census-search" data-module="census-product-search" data-suggest-url="@suggestUrl">
+        <input class="govuk-input census-search__input"
+               id="census-product-search"
+               name="q"
+               type="search"
+               value="@Model.Search"
+               autocomplete="off"
+               spellcheck="false"
+               aria-describedby="census-product-search-hint"
+               aria-label="Find a product">
+        <ul class="census-search__results" id="census-product-search-results" role="listbox" hidden></ul>
+      </div>
+      <button type="submit" class="govuk-button" id="census-product-search-submit">Search</button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Search))
+    {
+      <p class="govuk-body govuk-!-margin-top-2 govuk-!-margin-bottom-0"><a class="govuk-link" href="@(Model.ShowAll ? Url.Action("All") : Url.Action("Index"))">Clear search</a></p>
+    }
+  </div>
+</form>
+
+@section Scripts {
+  <script src="~/modern/js/census-product-search.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+}
+
+<p class="govuk-body">@(Model.ShowAll ? Model.AllProductCount : Model.YourProductCount) product@((Model.ShowAll ? Model.AllProductCount : Model.YourProductCount) == 1 ? "" : "s")</p>
+
+@if (Model.Products.Count == 0)
+{
+  <p class="govuk-body">@(Model.ShowAll ? "No products match this view." : "You are not a named contact on any active product. Open All products to record census information for the register.")</p>
+}
+else
+{
+  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+    <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+      <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">@(Model.ShowAll ? "All products" : "Your products")</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="ascending"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Census completion</button></th>
+          <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Action</span></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var row in Model.Products)
+        {
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("TaskList", "ModernCensus", new { id = row.Id, all = Model.ShowAll })">@row.Title</a>
+            </td>
+            <td class="govuk-table__cell">@row.Status</td>
+            <td class="govuk-table__cell">
+              @if (row.Submitted)
+              {
+                <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Submitted</span>
+              }
+              else
+              {
+                <span class="@WorkBadgeCss.ServiceRegisterCompletionBadgeClass(row.Percent)">@row.TasksComplete of @row.TaskCount (@row.Percent%)</span>
+              }
+            </td>
+            <td class="govuk-table__cell">
+              <a class="govuk-link" href="@Url.Action("TaskList", "ModernCensus", new { id = row.Id, all = Model.ShowAll })">@(row.TasksComplete == 0 ? "Start" : "Continue")</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

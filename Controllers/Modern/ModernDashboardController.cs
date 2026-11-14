@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Compass.Attributes;
 using Compass.Data;
 using Compass.Models;
 using Compass.Services;
@@ -41,6 +42,7 @@ public class ModernDashboardController : Controller
     }
 
     [HttpGet("dashboard")]
+    [CensusPromptBanner]
     public async Task<IActionResult> Index(string? testRole = null, int? testUserId = null)
     {
         try
