@@ -83,6 +83,10 @@ public sealed class CensusFormField
     public IReadOnlyList<CensusChoice> Options { get; init; } = [];
     public string? RevealNarrativeFor { get; init; }
     public string? NarrativeLabel { get; init; }
+    public string? RevealChoicesFor { get; init; }
+    public IReadOnlyList<CensusChoice> RevealChoices { get; init; } = [];
+    public string? RevealChoicesLegend { get; init; }
+    public string? RevealChoicesHint { get; init; }
 }
 
 public sealed class CensusContactRole
@@ -97,6 +101,40 @@ public static class CensusDefinition
 {
     public const string AccessibilityEnrolUrl =
         "https://accessibility-statements.education.gov.uk/services?tab=not-onboarded&utm_source=census&utm_medium=referral&utm_campaign=service_onboarding";
+
+    public const string GroupEnabling = "enabling";
+    public const string GroupCrossCutting = "cross-cutting";
+    public const string GroupSpanAnswerTitle = "span";
+
+    private static readonly IReadOnlyList<CensusChoice> GroupSpanOptions =
+    [
+        new() { Value = "families-csc", Label = "Families: CSC", Hint = "Children's Social Care." },
+        new() { Value = "families-ey", Label = "Families: EY", Hint = "Early Years." },
+        new() { Value = "schools-send", Label = "Schools: SEND" },
+        new() { Value = "schools-14-16-technical", Label = "Schools: 14-16 Technical" },
+        new() { Value = "schools-other", Label = "Schools: Other" },
+        new() { Value = "skills", Label = "Skills" },
+        new() { Value = "regions", Label = "Regions" },
+        new() { Value = "funding", Label = "Funding" }
+    ];
+
+    private static readonly IReadOnlyList<CensusChoice> GroupPrimaryOptions =
+    [
+        ..GroupSpanOptions,
+        new()
+        {
+            Value = GroupEnabling,
+            Label = "Enabling",
+            Hint = "Work whose primary outcome is improving DfE's corporate capability to operate and deliver.",
+            DividerBefore = true
+        },
+        new()
+        {
+            Value = GroupCrossCutting,
+            Label = "Cross-cutting",
+            Hint = "Work whose primary outcome spans multiple DfE policy groups or sectors and cannot be attributed to one group, but is still directed at policy or sector outcomes rather than DfE's internal operation."
+        }
+    ];
 
     public static IReadOnlyList<CensusContactRole> ContactRoles { get; } =
     [
@@ -229,16 +267,41 @@ public static class CensusDefinition
             Kind = CensusTaskKind.Accessibility,
             RegisterDomainKey = "accessibility"
         },
+        LongText("aim", "purpose", "Purpose and value",
+            "Aim",
+            "Review the aim for this product. Explain what you are delivering, how it will be used, and what outcome it will enable. Be specific enough that someone unfamiliar with the work can understand its purpose.",
+            "Aim", "aim"),
         Item("outcome", "purpose", "Purpose and value", "Outcomes",
             "Record the intended change this product contributes to. Add one entry per outcome.",
             "outcome", "outcomes", "outcome"),
         Item("benefit", "purpose", "Purpose and value", "Benefits",
             "Record the expected value of this product. Add one entry per benefit.",
             "benefit", "benefits", "benefit"),
-        Lookup("mission-pillar", "purpose", "Purpose and value",
-            "Mission pillars",
-            "Select the mission pillars this product aligns to.",
-            CensusLookupSource.MissionPillar, CensusLookupControl.Checkbox, "mission-pillar"),
+        new()
+        {
+            Key = "group",
+            GroupKey = "purpose",
+            GroupName = "Purpose and value",
+            Heading = "Group",
+            Help = "Choose the group this product primarily belongs to. A group or subgroup is for work whose primary outcome is delivering or enabling a particular policy or sector outcome. If the work spans more than one group and cannot be attributed to one of them, choose Cross-cutting and then select every group it spans.",
+            Kind = CensusTaskKind.Form,
+            RegisterDomainKey = "group",
+            FormFields =
+            [
+                new()
+                {
+                    Key = "group",
+                    Label = "Group",
+                    Hint = "Select one option. Cross-cutting then lets you select more than one group.",
+                    Kind = CensusFormFieldKind.Radio,
+                    Options = GroupPrimaryOptions,
+                    RevealChoicesFor = GroupCrossCutting,
+                    RevealChoices = GroupSpanOptions,
+                    RevealChoicesLegend = "Which groups does this work span?",
+                    RevealChoicesHint = "Select every group this work covers. Choose at least two."
+                }
+            ]
+        },
         Lookup("strategic-objective", "purpose", "Purpose and value",
             "Strategic objectives",
             "Select the strategic objectives this product supports.",
@@ -335,6 +398,30 @@ public static class CensusDefinition
             LookupSource = CensusLookupSource.Technology,
             LookupControl = CensusLookupControl.Checkbox,
             RegisterDomainKey = "technology"
+        },
+        new()
+        {
+            Key = "ai",
+            GroupKey = "technology",
+            GroupName = "Technology",
+            Heading = "AI functionality",
+            Help = "Select Yes where AI is embedded in the service or its operation. Do not select Yes simply because AI tools were used to design, develop, test or manage the service.",
+            Kind = CensusTaskKind.Form,
+            RegisterDomainKey = "ai",
+            FormFields =
+            [
+                new()
+                {
+                    Key = "ai",
+                    Label = "Does this product include AI functionality?",
+                    Kind = CensusFormFieldKind.Radio,
+                    Options =
+                    [
+                        new() { Value = "yes", Label = "Yes", Hint = "AI is embedded in the service or how it operates." },
+                        new() { Value = "no", Label = "No" }
+                    ]
+                }
+            ]
         },
         Item("api-use", "technology", "Technology",
             "What APIs does this product make use of (this is often called consuming an API)",
