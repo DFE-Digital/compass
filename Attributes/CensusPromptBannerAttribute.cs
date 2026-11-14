@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using Compass.Models;
+using Compass.Services;
 using Compass.Services.Census;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -21,6 +23,10 @@ public sealed class CensusPromptBannerAttribute : Attribute, IAsyncActionFilter
         var fipsOn = controller.ViewBag.ShowFipsDatabaseServiceRegister as bool? == true
             || controller.ViewBag.FipsServiceRegisterEnabled as bool? == true;
         if (!fipsOn)
+            return;
+
+        var features = context.HttpContext.RequestServices.GetRequiredService<IGlobalFeatureToggleService>();
+        if (!await features.IsFeatureEnabledForPrincipalAsync(FeatureCodes.ServiceCensusBanner, context.HttpContext.User))
             return;
 
         var email = context.HttpContext.User.Identity?.Name

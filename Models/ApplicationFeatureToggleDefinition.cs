@@ -53,6 +53,12 @@ public sealed record ApplicationFeatureToggleDefinition(
                 Label: "Service register schema",
                 Hint: "Service schema in the service register, in the sub-navigation before Service lines. When Off, that area is hidden. Data quality in the entry header stays visible.",
                 DefaultEnabled: true),
+            new(
+                Code: FeatureCodes.ServiceCensusBanner,
+                Name: "Service census notification banner",
+                Label: "Service census notification banner",
+                Hint: "Shows the dashboard notification that asks named contacts to complete the service census. Turn this Off to hide the banner without turning the census itself off.",
+                DefaultEnabled: true),
         };
 
     public static HashSet<string> AllowedCodes { get; } =

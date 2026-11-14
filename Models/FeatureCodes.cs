@@ -19,4 +19,7 @@ public static class FeatureCodes
 
     /// <summary>Service census on each service register product (<c>?tab=additional</c>).</summary>
     public const string ServiceRegisterSchema = "service_register_schema";
+
+    /// <summary>Dashboard notification prompting named contacts to complete the service census. Independent of the census itself.</summary>
+    public const string ServiceCensusBanner = "service_census_banner";
 }

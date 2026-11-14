@@ -1753,6 +1753,26 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         Console.WriteLine("✓ Created feature: Service register schema (global toggle)");
     }
 
+    var censusBannerFeature = await context.Features
+        .FirstOrDefaultAsync(f => f.Code == Compass.Models.FeatureCodes.ServiceCensusBanner);
+
+    if (censusBannerFeature == null)
+    {
+        censusBannerFeature = new Compass.Models.Feature
+        {
+            Name = "Service census notification banner",
+            Code = Compass.Models.FeatureCodes.ServiceCensusBanner,
+            Description = "Dashboard notification prompting named contacts to complete the service census",
+            IsActive = true,
+            AccessMode = Compass.Models.FeatureAccessMode.OnForAll,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        context.Features.Add(censusBannerFeature);
+        await context.SaveChangesAsync();
+        Console.WriteLine("✓ Created feature: Service census notification banner (global toggle)");
+    }
+
     await Compass.Services.ServiceSchema.ServiceSchemaSeed.EnsureAsync(context);
 
     foreach (Compass.Models.PermissionType permission in Enum.GetValues<Compass.Models.PermissionType>())
