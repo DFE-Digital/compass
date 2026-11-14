@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using ClosedXML.Excel;
+using Compass.Attributes;
 using Compass.Data;
 using Compass.Helpers;
 using Compass.Models;
@@ -158,6 +159,7 @@ public partial class ModernWorkController : Controller
     }
 
     [HttpGet("dashboard")]
+    [CensusPromptBanner]
     public async Task<IActionResult> Dashboard(string? tab)
     {
         var scope = await ResolveViewScopeUserAsync();

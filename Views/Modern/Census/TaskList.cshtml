@@ -1,0 +1,84 @@
+@model Compass.ViewModels.Modern.ServiceCensusTaskListViewModel
+@using Microsoft.AspNetCore.Html
+@{
+  ViewBag.CensusProductId = Model.ProductId;
+  ViewBag.CensusShowAll = Model.ShowAll;
+  ViewBag.CensusCurrent = "";
+  ViewBag.CensusOnTaskList = true;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@(Model.ShowAll ? Url.Action("All") : Url.Action("Index"))">Service census</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.ProductTitle</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+  Title = Model.ProductTitle,
+  Caption = "Service census",
+  Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{Model.TasksComplete} of {Model.TaskCount} questions complete.</p>")
+})
+
+<div class="govuk-grid-row census-task-layout">
+  <div class="govuk-grid-column-one-quarter-from-desktop census-task-layout__nav">
+    @await Html.PartialAsync("~/Views/Modern/Census/_SideNav.cshtml", Model.Nav)
+  </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop">
+    @if (Model.Submitted)
+    {
+      <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="census-submitted-title">
+        <div class="govuk-notification-banner__header">
+          <h2 class="govuk-notification-banner__title" id="census-submitted-title">Success</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+          <p class="govuk-notification-banner__heading">This census was submitted@(Model.SubmittedAt.HasValue ? " on " + Model.SubmittedAt.Value.ToLocalTime().ToString("d MMMM yyyy") : "").</p>
+        </div>
+      </div>
+    }
+
+    @foreach (var group in Model.Groups)
+    {
+      <h2 class="govuk-heading-m">@group.Name</h2>
+      <ul class="govuk-task-list">
+        @foreach (var task in group.Tasks)
+        {
+          var statusId = "census-task-" + task.Key + "-status";
+          var hintId = "census-task-" + task.Key + "-hint";
+          <li class="govuk-task-list__item govuk-task-list__item--with-link">
+            <div class="govuk-task-list__name-and-hint">
+              <a class="govuk-link govuk-task-list__link govuk-link--no-visited-state" href="@Url.Action("Question", "ModernCensus", new { id = Model.ProductId, taskKey = task.Key, all = Model.ShowAll })" aria-describedby="@hintId @statusId">@task.Heading</a>
+              <div id="@hintId" class="govuk-task-list__hint">@task.Help</div>
+            </div>
+            <div class="govuk-task-list__status" id="@statusId">
+              @await Html.PartialAsync("~/Views/Modern/Census/_StatusTag.cshtml", task.Status)
+            </div>
+          </li>
+        }
+      </ul>
+    }
+
+    <h2 class="govuk-heading-m">Submit</h2>
+    @await Html.PartialAsync("~/Views/Modern/Census/_NamedSubmitters.cshtml", Model.NamedSubmitters)
+    @if (!Model.Submitted && !Model.CanSubmit)
+    {
+      <div class="govuk-inset-text">
+        @if (!Model.AllComplete)
+        {
+          <p class="govuk-body@(Model.UserIsNamedSubmitter ? " govuk-!-margin-bottom-0" : "")">You cannot submit until every question is marked complete.</p>
+        }
+        @if (Model.NamedSubmitters.Count == 0)
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0">You cannot submit until people are named on the contacts page.</p>
+        }
+        else if (!Model.UserIsNamedSubmitter)
+        {
+          <p class="govuk-body govuk-!-margin-bottom-0">You cannot submit because you are not one of the people listed.</p>
+        }
+      </div>
+    }
+    else if (Model.CanSubmit)
+    {
+      <a class="govuk-button" href="@Url.Action("Submit", "ModernCensus", new { id = Model.ProductId, all = Model.ShowAll })">Check and submit</a>
+    }
+  </div>
+</div>

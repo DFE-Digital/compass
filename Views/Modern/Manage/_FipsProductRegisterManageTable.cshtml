@@ -1,0 +1,62 @@
+@model Compass.ViewModels.Modern.FipsRegisterManageTableModel
+<table class="govuk-table">
+  <thead class="govuk-table__head">
+    <tr class="govuk-table__row">
+      <th class="govuk-table__header">@Model.TitleLabel</th>
+      <th class="govuk-table__header">Detail</th>
+      @if (Model.CanRemove)
+      {
+        <th class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+      }
+    </tr>
+  </thead>
+  <tbody class="govuk-table__body">
+    @foreach (var entry in Model.Entries)
+    {
+      <tr class="govuk-table__row">
+        <th class="govuk-table__header" scope="row">
+          @if (entry.LinkedProductId is Guid linkedId)
+          {
+            <a class="govuk-link" href="@Url.Action("FipsProduct", "ModernManage", new { id = linkedId })">@entry.Title</a>
+          }
+          else
+          {
+            @entry.Title
+          }
+        </th>
+        <td class="govuk-table__cell">
+          @if (!string.IsNullOrWhiteSpace(entry.Meta)) { <div>@entry.Meta</div> }
+          @if (!string.IsNullOrWhiteSpace(entry.Narrative)) { <div>@entry.Narrative</div> }
+          @if (!string.IsNullOrWhiteSpace(entry.Url))
+          {
+            var reference = entry.Url.Trim();
+            var isWebLink = reference.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || reference.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
+            <div>
+              @if (isWebLink)
+              {
+                <a class="govuk-link" href="@reference">@reference</a>
+              }
+              else
+              {
+                @reference
+              }
+            </div>
+          }
+        </td>
+        @if (Model.CanRemove)
+        {
+          <td class="govuk-table__cell">
+            @if (!entry.FromRegister)
+            {
+              <form method="post" action="@Url.RouteUrl("RemoveSchemaEntry", new { id = Model.ProductId, entryId = entry.Id })" data-confirm-title="Remove this response?" data-confirm-message="Remove @entry.Title from this list?">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="sectionKey" value="@Model.TopicKey" />
+                <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" type="submit">Remove</button>
+              </form>
+            }
+          </td>
+        }
+      </tr>
+    }
+  </tbody>
+</table>

@@ -23,6 +23,8 @@ public class AdminHubViewModel
     public List<AdminLookupRow> BusinessAreas { get; set; } = new();
     public List<AdminLookupRow> UniversalBarriers { get; set; } = new();
     public List<AdminLookupRow> Phases { get; set; } = new();
+    public List<AdminLookupRow> CensusTechnologies { get; set; } = new();
+    public List<AdminLookupRow> CensusIntegrations { get; set; } = new();
     public List<AdminLookupRow> Directorates { get; set; } = new();
     public List<AdminPriorityRow> Priorities { get; set; } = new();
     public List<AdminRagRow> RagDefinitions { get; set; } = new();

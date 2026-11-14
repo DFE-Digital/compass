@@ -1,4 +1,5 @@
 using Compass.Models;
+using Compass.Models.Census;
 using Compass.Models.ServiceSchema;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +19,12 @@ public partial class CompassDbContext
     public DbSet<CensusSectionDeclaration> CensusSectionDeclarations { get; set; } = null!;
     public DbSet<ServiceSchemaAreaConfig> ServiceSchemaAreaConfigs { get; set; } = null!;
     public DbSet<ServiceSchemaQuestion> ServiceSchemaQuestions { get; set; } = null!;
+    public DbSet<ServiceCensusResponse> ServiceCensusResponses { get; set; } = null!;
+    public DbSet<ServiceCensusTaskState> ServiceCensusTaskStates { get; set; } = null!;
+    public DbSet<ServiceCensusAnswer> ServiceCensusAnswers { get; set; } = null!;
+    public DbSet<ServiceCensusContactReview> ServiceCensusContactReviews { get; set; } = null!;
+    public DbSet<CensusTechnologyLookup> CensusTechnologyLookups { get; set; } = null!;
+    public DbSet<CensusIntegrationLookup> CensusIntegrationLookups { get; set; } = null!;
 
     private void ConfigureServiceSchema(ModelBuilder modelBuilder)
     {
@@ -199,5 +206,98 @@ public partial class CompassDbContext
             .WithMany()
             .HasForeignKey(pc => pc.StaffRoleId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ServiceCensusResponse>(e =>
+        {
+            e.ToTable(t =>
+            {
+                t.HasTrigger("TR_ServiceCensusResponses");
+                t.UseSqlOutputClause(false);
+            });
+            e.HasIndex(x => x.ProductId).IsUnique();
+            e.Property(x => x.Status).HasMaxLength(40);
+            e.Property(x => x.ServiceDescription).HasMaxLength(4000);
+            e.Property(x => x.ServiceLineDescription).HasMaxLength(4000);
+            e.Property(x => x.AccessibilityNotEnrolledReason).HasMaxLength(4000);
+            e.Property(x => x.SubmittedBy).HasMaxLength(255);
+            e.Property(x => x.CreatedBy).HasMaxLength(255);
+            e.Property(x => x.UpdatedBy).HasMaxLength(255);
+            e.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceCensusTaskState>(e =>
+        {
+            e.ToTable(t =>
+            {
+                t.HasTrigger("TR_ServiceCensusTaskStates");
+                t.UseSqlOutputClause(false);
+            });
+            e.HasIndex(x => new { x.ResponseId, x.TaskKey }).IsUnique();
+            e.Property(x => x.TaskKey).HasMaxLength(80);
+            e.Property(x => x.Status).HasMaxLength(40);
+            e.Property(x => x.CannotAnswerReason).HasMaxLength(4000);
+            e.Property(x => x.UpdatedBy).HasMaxLength(255);
+            e.HasOne(x => x.Response)
+                .WithMany(r => r.Tasks)
+                .HasForeignKey(x => x.ResponseId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceCensusAnswer>(e =>
+        {
+            e.ToTable(t =>
+            {
+                t.HasTrigger("TR_ServiceCensusAnswers");
+                t.UseSqlOutputClause(false);
+            });
+            e.Property(x => x.Title).HasMaxLength(300);
+            e.Property(x => x.Narrative).HasColumnType("nvarchar(max)");
+            e.Property(x => x.LookupCode).HasMaxLength(80);
+            e.Property(x => x.SecondaryLookupCode).HasMaxLength(80);
+            e.Property(x => x.ExternalUrl).HasMaxLength(500);
+            e.HasOne(x => x.TaskState)
+                .WithMany(t => t.Answers)
+                .HasForeignKey(x => x.TaskStateId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceCensusContactReview>(e =>
+        {
+            e.ToTable(t =>
+            {
+                t.HasTrigger("TR_ServiceCensusContactReviews");
+                t.UseSqlOutputClause(false);
+            });
+            e.HasIndex(x => new { x.ResponseId, x.RoleKey }).IsUnique();
+            e.Property(x => x.RoleKey).HasMaxLength(80);
+            e.Property(x => x.CmdbName).HasMaxLength(200);
+            e.Property(x => x.CmdbEmail).HasMaxLength(320);
+            e.Property(x => x.IncorrectReason).HasMaxLength(4000);
+            e.HasOne(x => x.Response)
+                .WithMany(r => r.ContactReviews)
+                .HasForeignKey(x => x.ResponseId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CensusTechnologyLookup>(e =>
+        {
+            e.ToTable("CensusTechnologyLookups");
+            e.HasIndex(x => x.Name);
+            e.Property(x => x.Name).HasMaxLength(120);
+            e.Property(x => x.Description).HasMaxLength(4000);
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<CensusIntegrationLookup>(e =>
+        {
+            e.ToTable("CensusIntegrationLookups");
+            e.HasIndex(x => x.Name);
+            e.Property(x => x.Name).HasMaxLength(120);
+            e.Property(x => x.Description).HasMaxLength(4000);
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+        });
     }
 }

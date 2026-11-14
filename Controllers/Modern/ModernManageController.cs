@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Compass.Attributes;
 using Compass.Data;
 using Compass.Helpers;
 using Compass.Models;
@@ -148,7 +149,9 @@ public partial class ModernManageController : Controller
             _ when string.Equals(tab, "workitems", StringComparison.OrdinalIgnoreCase) => "work",
             _ when string.Equals(tab, "strategic-alignment", StringComparison.OrdinalIgnoreCase) => "strategic-alignment",
             _ when string.Equals(tab, "strategicalignment", StringComparison.OrdinalIgnoreCase) => "strategic-alignment",
-            _ when string.Equals(tab, "additional", StringComparison.OrdinalIgnoreCase) => "additional",
+            _ when string.Equals(tab, "additional", StringComparison.OrdinalIgnoreCase) => "purpose",
+            _ when string.Equals(tab, "schema", StringComparison.OrdinalIgnoreCase) => "purpose",
+            _ when FipsCensusManageTabs.IsManageTab(tab) => tab!.ToLowerInvariant(),
             _ when string.Equals(tab, "details", StringComparison.OrdinalIgnoreCase) => "information",
             _ => "information"
         };
@@ -158,6 +161,7 @@ public partial class ModernManageController : Controller
     [HttpGet("")]
     [HttpGet("fips")]
     [HttpGet("fips/dashboard")]
+    [CensusPromptBanner]
     public async Task<IActionResult> FipsDashboard(
         string? tab,
         string? search,
@@ -307,14 +311,15 @@ public partial class ModernManageController : Controller
 
         var schemaEnabled = await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(
             FeatureCodes.ServiceRegisterSchema, User);
-        var wantsAdditional = string.Equals(tab, "schema", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(tab, "additional", StringComparison.OrdinalIgnoreCase);
-        if (wantsAdditional && !schemaEnabled)
+        var wantsCensusManage = string.Equals(tab, "schema", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(tab, "additional", StringComparison.OrdinalIgnoreCase)
+            || FipsCensusManageTabs.IsManageTab(tab);
+        if (wantsCensusManage && !schemaEnabled)
             tab = null;
-        else if (wantsAdditional)
-            tab = "additional";
 
         var detailTab = NormalizeFipsDetailTab(tab);
+        if (!schemaEnabled && FipsCensusManageTabs.IsManageTab(detailTab))
+            detailTab = "information";
 
         var product = await FipsProductDetailLoader.LoadProductAsync(_context, id, detailTab, ct);
 
@@ -349,20 +354,10 @@ public partial class ModernManageController : Controller
             ShowServiceRegisterSchema = schemaEnabled,
         };
 
-        if (schemaEnabled)
-        {
-            var progress = await ServiceSchemaWorkspace.LoadProgressAsync(_context, id, ct);
-            vm.ServiceCensusSectionsComplete = progress.SectionsComplete;
-            vm.ServiceCensusSectionCount = progress.SectionCount;
-            vm.ShowServiceCensusPrompt = (isNamedContact || isNamedInResponsibilities)
-                && progress.SectionCount > 0
-                && progress.SectionsComplete < progress.SectionCount;
-        }
-
-        if (detailTab == "additional")
+        if (schemaEnabled && FipsCensusManageTabs.IsManageTab(detailTab))
         {
             vm.AdditionalInformation = await ServiceSchemaWorkspace.LoadRecordAsync(
-                _context, id, section, topic, canEditSchema, ct);
+                _context, id, FipsCensusManageTabs.SectionKey(detailTab), null, canEditSchema, ct);
         }
 
         await FipsProductCategorisationPresentation.PopulateAsync(
@@ -371,7 +366,7 @@ public partial class ModernManageController : Controller
             includeEditSections: false,
             ct);
 
-        if (detailTab == "additional" && vm.AdditionalInformation?.ProductDetails != null)
+        if (vm.AdditionalInformation?.ProductDetails != null)
             AttachProductDetailsPanel(vm);
 
         if (FipsProductDetailLoader.NeedsStrategicAlignment(detailTab))

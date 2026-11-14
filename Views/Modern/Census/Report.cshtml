@@ -1,0 +1,322 @@
+@model Compass.ViewModels.Modern.ServiceCensusReportViewModel
+@using System.Text.Json
+@using Compass.Models.Modern.Work
+@using Microsoft.AspNetCore.Html
+@{
+  var m = Model ?? new Compass.ViewModels.Modern.ServiceCensusReportViewModel();
+  var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+  var weekJson = JsonSerializer.Serialize(m.Weeks, jsonOpts);
+  string Tone(int percent) => percent == 0 ? "empty" : percent < 25 ? "low" : percent < 60 ? "mid" : "ok";
+  string AreaHref(string? area) => Url.Action("Report", "ModernCensus", new { area }) ?? "#";
+}
+
+@section Styles {
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/service-schema-report.css")" asp-append-version="true" />
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernCensus")">Service census</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Report</li>
+}
+
+@{
+  IHtmlContent? reportActions = null;
+  if (m.CanExport)
+  {
+    var exportHref = Url.Action("ExportReport", "ModernCensus", new { area = m.BusinessAreaFilter }) ?? "#";
+    reportActions = new HtmlString("<a class=\"govuk-button govuk-button--secondary govuk-!-margin-bottom-0\" href=\"" + exportHref + "\">Export spreadsheet</a>");
+  }
+}
+@await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+  Caption = "Service census",
+  Title = "Census report",
+  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Completion across the register, by business area, with weekly run rate and a 12-week trend. A product in more than one business area is counted in each.</p>"),
+  Actions = reportActions
+})
+@if (TempData["ErrorMessage"] != null)
+{
+  <div class="govuk-error-summary" data-module="govuk-error-summary">
+    <div class="govuk-error-summary__body">
+      <p class="govuk-body">@TempData["ErrorMessage"]</p>
+    </div>
+  </div>
+}
+
+<form method="get" action="@Url.Action("Report", "ModernCensus")" class="govuk-!-margin-bottom-6" role="search">
+  <div class="govuk-form-group govuk-!-margin-bottom-0">
+    <label class="govuk-label" for="census-report-area">Business area</label>
+    <div class="govuk-hint" id="census-report-area-hint">Choose a business area, then apply the filter.</div>
+    <div class="census-search-toolbar">
+      <select class="govuk-select" id="census-report-area" name="area" aria-describedby="census-report-area-hint">
+        <option value="">All business areas</option>
+        @foreach (var option in m.BusinessAreaOptions)
+        {
+          if (string.Equals(m.BusinessAreaFilter, option, StringComparison.OrdinalIgnoreCase))
+          {
+            <option value="@option" selected>@option</option>
+          }
+          else
+          {
+            <option value="@option">@option</option>
+          }
+        }
+      </select>
+      <button type="submit" class="govuk-button" id="census-report-area-submit">Apply filter</button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(m.BusinessAreaFilter))
+    {
+      <p class="govuk-body govuk-!-margin-top-2 govuk-!-margin-bottom-0"><a class="govuk-link" href="@AreaHref(null)">Clear filter</a></p>
+    }
+  </div>
+</form>
+
+<section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-overall">
+  <h2 id="census-report-overall" class="govuk-heading-m">Overall completion</h2>
+  <div class="dfe-f-card-grid">
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Average completion</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.OverallPercent%</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Products</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.ProductCount.ToString("N0")</p>
+    </div>
+    <div class="dfe-f-stat-card">
+      <p class="govuk-body-s dfe-f-stat-card__label">Not started</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.NotStarted.ToString("N0")</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">In progress</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.InProgress.ToString("N0")</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+      <p class="govuk-body-s dfe-f-stat-card__label">Submitted</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.Submitted.ToString("N0")</p>
+    </div>
+  </div>
+</section>
+
+<section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-runrate">
+  <h2 id="census-report-runrate" class="govuk-heading-m">Run rate</h2>
+  <p class="govuk-body">Weekly pace of questions marked complete and products submitted. Trend compares the last 4 weeks with the 4 weeks before that.</p>
+  <div class="dfe-f-card-grid">
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Questions completed this week</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.TasksCompleteThisWeek.ToString("N0")</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Submitted this week</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.SubmittedThisWeek.ToString("N0")</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">4-week average submissions</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.AverageWeeklySubmissions.ToString("0.0")</p>
+    </div>
+    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+      <p class="govuk-body-s dfe-f-stat-card__label">Previous 4-week average</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.PreviousAverageWeeklySubmissions.ToString("0.0")</p>
+    </div>
+  </div>
+  <p class="govuk-body govuk-!-margin-top-3"><strong>@m.RunRateTrendLabel.</strong> @m.WeeksToFinishLabel.</p>
+  <div class="govuk-!-margin-top-4" style="max-width: 48rem; height: 16rem;">
+    <canvas id="census-runrate-chart" aria-label="Weekly questions completed and products submitted"></canvas>
+  </div>
+</section>
+
+<section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-trend">
+  <h2 id="census-report-trend" class="govuk-heading-m">Trend</h2>
+  <p class="govuk-body">Cumulative question completion across the estate, reconstructed from when each question was marked complete, and cumulative product submissions.</p>
+  <div class="govuk-!-margin-top-2" style="max-width: 48rem; height: 16rem;">
+    <canvas id="census-trend-chart" aria-label="12 week census completion trend"></canvas>
+  </div>
+</section>
+
+<section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-areas">
+  <h2 id="census-report-areas" class="govuk-heading-m">Completion by business area</h2>
+  @if (m.BusinessAreas.Count == 0)
+  {
+    <p class="govuk-body">No products in this view.</p>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <caption class="govuk-table__caption govuk-visually-hidden">Completion by business area</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Products</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Coverage</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Not started</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">In progress</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Complete</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Submitted</button></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var ba in m.BusinessAreas)
+          {
+            <tr class="govuk-table__row ss-row @Tone(ba.AveragePercent)">
+              <th scope="row" class="govuk-table__header">
+                <a class="govuk-link govuk-link--no-visited-state" href="@AreaHref(ba.Name)">@ba.Name</a>
+              </th>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@ba.ProductCount.ToString("N0")</td>
+              <td class="govuk-table__cell">
+                <div class="ss-coverage">
+                  <div class="ss-bar" aria-hidden="true"><span style="width: @ba.AveragePercent%"></span></div>
+                  <span>@ba.AveragePercent%</span>
+                </div>
+              </td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@ba.NotStarted.ToString("N0")</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@ba.InProgress.ToString("N0")</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@ba.QuestionsComplete.ToString("N0")</td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@ba.Submitted.ToString("N0")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+<section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-sections">
+  <h2 id="census-report-sections" class="govuk-heading-m">Completion by census section</h2>
+  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+    <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+      <caption class="govuk-table__caption govuk-visually-hidden">Completion by census section</caption>
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Section</button></th>
+          <th scope="col" class="govuk-table__header">Coverage</th>
+          <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Products complete</button></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        @foreach (var censusSection in m.Sections)
+        {
+          <tr class="govuk-table__row ss-row @Tone(censusSection.AveragePercent)">
+            <th scope="row" class="govuk-table__header">@censusSection.Name</th>
+            <td class="govuk-table__cell">
+              <div class="ss-coverage">
+                <div class="ss-bar" aria-hidden="true"><span style="width: @censusSection.AveragePercent%"></span></div>
+                <span>@censusSection.AveragePercent%</span>
+              </div>
+            </td>
+            <td class="govuk-table__cell govuk-table__cell--numeric">@censusSection.CompleteProducts of @censusSection.ProductCount</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-products">
+  <h2 id="census-report-products" class="govuk-heading-m">All products</h2>
+  @if (m.Products.Count == 0)
+  {
+    <p class="govuk-body">No products in this view.</p>
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <caption class="govuk-table__caption govuk-visually-hidden">Census completion for all products</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Census</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Completion</button></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in m.Products)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("TaskList", "ModernCensus", new { id = row.Id, all = true })">@row.Title</a>
+              </td>
+              <td class="govuk-table__cell">@row.Areas</td>
+              <td class="govuk-table__cell">
+                <span class="@WorkBadgeCss.ServiceRegisterCompletionBadgeClass(row.Percent)">@row.CensusStatus</span>
+              </td>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@row.TasksComplete of @row.TaskCount (@row.Percent%)</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+@section Scripts {
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
+  <script nonce="@Context.Items["Nonce"]">
+    (function () {
+      var weeks = @Html.Raw(weekJson);
+      if (!weeks.length || typeof Chart === 'undefined') return;
+      var labels = weeks.map(function (w) { return w.label; });
+      var runrate = document.getElementById('census-runrate-chart');
+      if (runrate) {
+        new Chart(runrate.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              { label: 'Questions completed', data: weeks.map(function (w) { return w.tasksCompleted; }), backgroundColor: '#1d70b8' },
+              { label: 'Products submitted', data: weeks.map(function (w) { return w.productsSubmitted; }), backgroundColor: '#00703c' }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+          }
+        });
+      }
+      var trend = document.getElementById('census-trend-chart');
+      if (trend) {
+        new Chart(trend.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Cumulative question completion %',
+                data: weeks.map(function (w) { return w.cumulativePercent; }),
+                borderColor: '#1d70b8',
+                backgroundColor: 'rgba(29, 112, 184, 0.08)',
+                fill: true,
+                tension: 0,
+                yAxisID: 'y'
+              },
+              {
+                label: 'Cumulative submissions',
+                data: weeks.map(function (w) { return w.cumulativeSubmitted; }),
+                borderColor: '#00703c',
+                backgroundColor: 'transparent',
+                fill: false,
+                tension: 0,
+                yAxisID: 'y1'
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: {
+              y: { beginAtZero: true, max: 100, title: { display: true, text: 'Completion %' } },
+              y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0 }, title: { display: true, text: 'Submissions' } }
+            }
+          }
+        });
+      }
+    })();
+  </script>
+}

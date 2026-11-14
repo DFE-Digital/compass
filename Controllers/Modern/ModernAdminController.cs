@@ -32,7 +32,7 @@ public partial class ModernAdminController : Controller
     private static readonly HashSet<string> AdminHubValidPanels = new(StringComparer.OrdinalIgnoreCase)
     {
         "hub",
-        "business-areas", "directorates", "phases", "priorities", "risk-tiers",
+        "business-areas", "directorates", "phases", "census-technologies", "census-integrations", "priorities", "risk-tiers",
         "risk-categories", "issue-categories",
         "product-types", "rag-defns", "departments", "compliance",
         "scoring-fw", "perf-cycles", "assess-cycles",
@@ -121,6 +121,20 @@ public partial class ModernAdminController : Controller
 
             case "phases":
                 vm.Phases = await _context.PhaseLookups.AsNoTracking()
+                    .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+                    .Select(x => new AdminLookupRow { Id = x.Id, Name = x.Name, Description = x.Description, SortOrder = x.SortOrder, IsActive = x.IsActive })
+                    .ToListAsync();
+                break;
+
+            case "census-technologies":
+                vm.CensusTechnologies = await _context.CensusTechnologyLookups.AsNoTracking()
+                    .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+                    .Select(x => new AdminLookupRow { Id = x.Id, Name = x.Name, Description = x.Description, SortOrder = x.SortOrder, IsActive = x.IsActive })
+                    .ToListAsync();
+                break;
+
+            case "census-integrations":
+                vm.CensusIntegrations = await _context.CensusIntegrationLookups.AsNoTracking()
                     .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
                     .Select(x => new AdminLookupRow { Id = x.Id, Name = x.Name, Description = x.Description, SortOrder = x.SortOrder, IsActive = x.IsActive })
                     .ToListAsync();
@@ -945,6 +959,108 @@ public partial class ModernAdminController : Controller
         await _context.SaveChangesAsync();
         TempData["AdminMessage"] = $"\"{entity.Name}\" is now {(entity.IsActive ? "active" : "inactive")}.";
         return RedirectToAction(nameof(LookupEdit), new { panel = "phases", id });
+    }
+
+    [HttpPost("census-technology/create")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CensusTechnologyCreate(string name, string? description, int sortOrder)
+    {
+        name = (name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["AdminMessage"] = "Name is required.";
+            return RedirectToAction(nameof(Index), new { panel = "census-technologies" });
+        }
+        var entity = new Compass.Models.Census.CensusTechnologyLookup { Name = name, Description = description?.Trim(), SortOrder = sortOrder };
+        _context.CensusTechnologyLookups.Add(entity);
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Technology \"{name}\" added.";
+        return RedirectToAction(nameof(LookupEdit), new { panel = "census-technologies", id = entity.Id });
+    }
+
+    [HttpPost("census-technology/{id:int}/edit")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CensusTechnologyEdit(int id, string name, string? description, int sortOrder)
+    {
+        var entity = await _context.CensusTechnologyLookups.FindAsync(id);
+        if (entity == null) return NotFound();
+        name = (name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["AdminMessage"] = "Name is required.";
+            return RedirectToAction(nameof(LookupEdit), new { panel = "census-technologies", id });
+        }
+        entity.Name = name;
+        entity.Description = description?.Trim();
+        entity.SortOrder = sortOrder;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Technology \"{name}\" updated.";
+        return RedirectToAction(nameof(Index), new { panel = "census-technologies" });
+    }
+
+    [HttpPost("census-technology/{id:int}/toggle")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CensusTechnologyToggle(int id)
+    {
+        var entity = await _context.CensusTechnologyLookups.FindAsync(id);
+        if (entity == null) return NotFound();
+        entity.IsActive = !entity.IsActive;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"\"{entity.Name}\" is now {(entity.IsActive ? "active" : "inactive")}.";
+        return RedirectToAction(nameof(LookupEdit), new { panel = "census-technologies", id });
+    }
+
+    [HttpPost("census-integration/create")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CensusIntegrationCreate(string name, string? description, int sortOrder)
+    {
+        name = (name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["AdminMessage"] = "Name is required.";
+            return RedirectToAction(nameof(Index), new { panel = "census-integrations" });
+        }
+        var entity = new Compass.Models.Census.CensusIntegrationLookup { Name = name, Description = description?.Trim(), SortOrder = sortOrder };
+        _context.CensusIntegrationLookups.Add(entity);
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Integration \"{name}\" added.";
+        return RedirectToAction(nameof(LookupEdit), new { panel = "census-integrations", id = entity.Id });
+    }
+
+    [HttpPost("census-integration/{id:int}/edit")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CensusIntegrationEdit(int id, string name, string? description, int sortOrder)
+    {
+        var entity = await _context.CensusIntegrationLookups.FindAsync(id);
+        if (entity == null) return NotFound();
+        name = (name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            TempData["AdminMessage"] = "Name is required.";
+            return RedirectToAction(nameof(LookupEdit), new { panel = "census-integrations", id });
+        }
+        entity.Name = name;
+        entity.Description = description?.Trim();
+        entity.SortOrder = sortOrder;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"Integration \"{name}\" updated.";
+        return RedirectToAction(nameof(Index), new { panel = "census-integrations" });
+    }
+
+    [HttpPost("census-integration/{id:int}/toggle")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CensusIntegrationToggle(int id)
+    {
+        var entity = await _context.CensusIntegrationLookups.FindAsync(id);
+        if (entity == null) return NotFound();
+        entity.IsActive = !entity.IsActive;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        TempData["AdminMessage"] = $"\"{entity.Name}\" is now {(entity.IsActive ? "active" : "inactive")}.";
+        return RedirectToAction(nameof(LookupEdit), new { panel = "census-integrations", id });
     }
 
     // ── Directorates CRUD ──

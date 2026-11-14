@@ -1,0 +1,544 @@
+@model Compass.ViewModels.Modern.ServiceCensusQuestionViewModel
+@using Compass.Models
+@using Compass.Services.Census
+@using Microsoft.AspNetCore.Html
+@{
+  ViewBag.CensusProductId = Model.ProductId;
+  ViewBag.CensusShowAll = Model.ShowAll;
+  ViewBag.CensusCurrent = Model.TaskKey;
+  bool HasError(string field) => ViewData.ModelState[field]?.Errors?.Any() == true;
+  bool HasPageError = !ViewData.ModelState.IsValid;
+  string? PageError = ViewData.ModelState[""]?.Errors.FirstOrDefault()?.ErrorMessage
+      ?? ViewData.ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@(Model.ShowAll ? Url.Action("All") : Url.Action("Index"))">Service census</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("TaskList", new { id = Model.ProductId, all = Model.ShowAll })">@Model.ProductTitle</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Heading</li>
+}
+
+<div class="govuk-grid-row census-task-layout">
+  <div class="govuk-grid-column-one-quarter-from-desktop census-task-layout__nav">
+    @await Html.PartialAsync("~/Views/Modern/Census/_SideNav.cshtml", Model.Nav)
+  </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop">
+    <p class="govuk-caption-m govuk-!-margin-bottom-1">@Model.GroupName</p>
+    <h1 class="govuk-heading-l">@Model.Heading</h1>
+    <p class="govuk-body">@Model.Help</p>
+
+    <div class="govuk-notification-banner" id="census-unsaved" role="region" aria-labelledby="census-unsaved-title" hidden>
+      <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="census-unsaved-title">Important</h2>
+      </div>
+      <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">Click Save, or Save and continue to ensure changes are saved</p>
+      </div>
+    </div>
+
+    @if (HasPageError && !string.IsNullOrWhiteSpace(PageError))
+    {
+      <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert">
+        <div role="alert">
+          <h2 class="govuk-error-summary__title">There is a problem</h2>
+          <div class="govuk-error-summary__body">
+            <ul class="govuk-list govuk-error-summary__list">
+              <li><a href="@(HasError("CannotAnswerReason") ? "#CannotAnswer" : HasError("Items") ? "#census-item-empty" : "#census-question")">@PageError</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    }
+
+    <form method="post" id="census-question" novalidate>
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="all" value="@(Model.ShowAll ? "true" : "false")" />
+
+      @if (Model.Kind == CensusTaskKind.LongText)
+      {
+        <div class="govuk-form-group">
+          <label class="govuk-label govuk-label--m" for="LongText">@Model.NarrativeLabel</label>
+          <textarea class="govuk-textarea" id="LongText" name="LongText" rows="8">@Model.LongText</textarea>
+        </div>
+      }
+      else if (Model.Kind == CensusTaskKind.YesChoice)
+      {
+        <div class="govuk-form-group">
+          <fieldset class="govuk-fieldset">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">@Model.Heading</legend>
+            <div class="govuk-radios" data-module="govuk-radios">
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" id="YesNo-yes" name="YesNo" type="radio" value="yes" data-aria-controls="yes-choice-detail" @(string.Equals(Model.YesNo, "Yes", StringComparison.OrdinalIgnoreCase) ? "checked" : null)>
+                <label class="govuk-label govuk-radios__label" for="YesNo-yes">Yes</label>
+              </div>
+              <div class="govuk-radios__conditional" id="yes-choice-detail">
+                <div class="govuk-form-group">
+                  <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend">Kind of functionality</legend>
+                    <div class="govuk-hint">Select all that apply.</div>
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                      @{
+                        var selectedKinds = Model.ChoiceValues.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                        if (!string.IsNullOrWhiteSpace(Model.ChoiceValue))
+                          selectedKinds.Add(Model.ChoiceValue);
+                      }
+                      @foreach (var opt in Model.ChoiceOptions)
+                      {
+                        <div class="govuk-checkboxes__item">
+                          <input class="govuk-checkboxes__input" id="choice-@opt.Value" name="ChoiceValues" type="checkbox" value="@opt.Value" @(selectedKinds.Contains(opt.Value) ? "checked" : null)>
+                          <label class="govuk-label govuk-checkboxes__label" for="choice-@opt.Value">@opt.Label</label>
+                          @if (!string.IsNullOrWhiteSpace(opt.Hint))
+                          {
+                            <div class="govuk-hint govuk-checkboxes__hint">@opt.Hint</div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </fieldset>
+                </div>
+                <div class="govuk-form-group">
+                  <label class="govuk-label" for="ChoiceNarrative">@Model.NarrativeLabel</label>
+                  <textarea class="govuk-textarea" id="ChoiceNarrative" name="ChoiceNarrative" rows="4">@Model.ChoiceNarrative</textarea>
+                </div>
+              </div>
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" id="YesNo-no" name="YesNo" type="radio" value="no" @(string.Equals(Model.YesNo, "No", StringComparison.OrdinalIgnoreCase) ? "checked" : null)>
+                <label class="govuk-label govuk-radios__label" for="YesNo-no">No</label>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+      }
+      else if (Model.Kind == CensusTaskKind.Form)
+      {
+        foreach (var field in Model.FormFields)
+        {
+          var selected = Model.FormValues.GetValueOrDefault(field.Key);
+          var narrative = Model.FormNarratives.GetValueOrDefault(field.Key);
+          if (field.Kind == CensusFormFieldKind.LongText)
+          {
+            <div class="govuk-form-group">
+              <label class="govuk-label govuk-label--m" for="form-@field.Key">@field.Label</label>
+              @if (!string.IsNullOrWhiteSpace(field.Hint))
+              {
+                <div class="govuk-hint">@field.Hint</div>
+              }
+              <textarea class="govuk-textarea" id="form-@field.Key" name="FormValues[@field.Key]" rows="5">@(selected ?? narrative)</textarea>
+            </div>
+          }
+          else
+          {
+            var revealId = "form-" + field.Key + "-other";
+            <div class="govuk-form-group">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">@field.Label</legend>
+                @if (!string.IsNullOrWhiteSpace(field.Hint))
+                {
+                  <div class="govuk-hint">@field.Hint</div>
+                }
+                <div class="govuk-radios" data-module="govuk-radios">
+                  @foreach (var opt in field.Options)
+                  {
+                    var showOther = !string.IsNullOrWhiteSpace(field.RevealNarrativeFor)
+                        && string.Equals(opt.Value, field.RevealNarrativeFor, StringComparison.OrdinalIgnoreCase);
+                    <div class="govuk-radios__item">
+                      <input class="govuk-radios__input" id="form-@field.Key-@opt.Value" name="FormValues[@field.Key]" type="radio" value="@opt.Value" @(string.Equals(selected, opt.Value, StringComparison.OrdinalIgnoreCase) ? "checked" : null) @if (showOther) { <text>data-aria-controls="@revealId"</text> }>
+                      <label class="govuk-label govuk-radios__label" for="form-@field.Key-@opt.Value">@opt.Label</label>
+                    </div>
+                    if (showOther)
+                    {
+                      <div class="govuk-radios__conditional" id="@revealId">
+                        <div class="govuk-form-group">
+                          <label class="govuk-label" for="form-@field.Key-narrative">@(field.NarrativeLabel ?? "Give details")</label>
+                          <textarea class="govuk-textarea" id="form-@field.Key-narrative" name="FormNarratives[@field.Key]" rows="4">@narrative</textarea>
+                        </div>
+                      </div>
+                    }
+                  }
+                </div>
+              </fieldset>
+            </div>
+          }
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.ItemNoun))
+        {
+          <h2 class="govuk-heading-m">Repository links</h2>
+          <p class="govuk-hint">Add all that apply.</p>
+          @await Html.PartialAsync("~/Views/Modern/Census/_ItemList.cshtml", Model)
+        }
+      }
+      else if (Model.Kind == CensusTaskKind.Lookup)
+      {
+        var selected = Model.SelectedLookupIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(Model.LookupId))
+          selected.Add(Model.LookupId);
+        <div class="govuk-form-group">
+          @if (Model.LookupOptions.Count == 0)
+          {
+            <p class="govuk-body">No options are configured for this question. Ask an administrator to add them, or say you cannot answer this.</p>
+          }
+          else if (Model.LookupControl == CensusLookupControl.Select)
+          {
+            <label class="govuk-label govuk-visually-hidden" for="LookupId">@Model.Heading</label>
+            <select class="govuk-select" id="LookupId" name="LookupId">
+              <option value="">Select an option</option>
+              @foreach (var opt in Model.LookupOptions)
+              {
+                if (string.Equals(Model.LookupId, opt.Value, StringComparison.OrdinalIgnoreCase))
+                {
+                  <option value="@opt.Value" selected>@opt.Label</option>
+                }
+                else
+                {
+                  <option value="@opt.Value">@opt.Label</option>
+                }
+              }
+            </select>
+          }
+          else if (Model.LookupControl == CensusLookupControl.Radio)
+          {
+            <fieldset class="govuk-fieldset">
+              <legend class="govuk-visually-hidden">@Model.Heading</legend>
+              <div class="govuk-radios" data-module="govuk-radios">
+                @foreach (var opt in Model.LookupOptions)
+                {
+                  if (opt.DividerBefore)
+                  {
+                    <div class="govuk-radios__divider">or</div>
+                  }
+                  var hintId = "lookup-hint-" + opt.Value;
+                  <div class="govuk-radios__item">
+                    <input class="govuk-radios__input" id="lookup-@opt.Value" name="LookupId" type="radio" value="@opt.Value" @(string.Equals(Model.LookupId, opt.Value, StringComparison.OrdinalIgnoreCase) ? "checked" : null) @if (!string.IsNullOrWhiteSpace(opt.Hint)) { <text>aria-describedby="@hintId"</text> }>
+                    <label class="govuk-label govuk-radios__label" for="lookup-@opt.Value">@opt.Label</label>
+                    @if (!string.IsNullOrWhiteSpace(opt.Hint))
+                    {
+                      <div id="@hintId" class="govuk-hint govuk-radios__hint">@opt.Hint</div>
+                    }
+                  </div>
+                }
+              </div>
+            </fieldset>
+          }
+          else
+          {
+            <fieldset class="govuk-fieldset">
+              <legend class="govuk-visually-hidden">@Model.Heading</legend>
+              <div class="govuk-hint">Select all that apply.</div>
+              <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                @foreach (var opt in Model.LookupOptions)
+                {
+                  var isChecked = selected.Contains(opt.Value);
+                  var hintId = "lookup-hint-" + opt.Value;
+                  <div class="govuk-checkboxes__item">
+                    <input class="govuk-checkboxes__input" id="lookup-@opt.Value" name="LookupIds" type="checkbox" value="@opt.Value" @(isChecked ? "checked" : null) @if (!string.IsNullOrWhiteSpace(opt.Hint)) { <text>aria-describedby="@hintId"</text> }>
+                    <label class="govuk-label govuk-checkboxes__label" for="lookup-@opt.Value">@opt.Label</label>
+                    @if (!string.IsNullOrWhiteSpace(opt.Hint))
+                    {
+                      <div id="@hintId" class="govuk-hint govuk-checkboxes__hint">@opt.Hint</div>
+                    }
+                  </div>
+                }
+              </div>
+            </fieldset>
+          }
+          @if (!string.IsNullOrWhiteSpace(Model.NarrativeLabel))
+          {
+            <div class="govuk-form-group govuk-!-margin-top-6">
+              <label class="govuk-label govuk-label--m" for="LongText">@Model.NarrativeLabel</label>
+              <div class="govuk-hint">Optional. Add anything that is not covered by the list above.</div>
+              <textarea class="govuk-textarea" id="LongText" name="LongText" rows="5">@Model.LongText</textarea>
+            </div>
+          }
+        </div>
+      }
+      else if (Model.Kind == CensusTaskKind.Contacts)
+      {
+        <p class="govuk-hint">Use Add or Change to choose a person. Empty roles show as Not set.</p>
+        <table class="govuk-table census-contacts-table" id="census-contacts-table">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Role</th>
+              <th scope="col" class="govuk-table__header">Person</th>
+              <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body" id="census-contacts-body">
+            @for (var i = 0; i < Model.Contacts.Count; i++)
+            {
+              var c = Model.Contacts[i];
+              var hasPerson = !string.IsNullOrWhiteSpace(c.DisplayName) || !string.IsNullOrWhiteSpace(c.DisplayEmail);
+              <tr class="govuk-table__row census-contact-row" data-contact-index="@i" data-added="@(c.IsAdded ? "true" : "false")">
+                <td class="govuk-table__cell">
+                  <input type="hidden" name="Contacts[@i].RoleKey" value="@c.RoleKey" />
+                  <input type="hidden" name="Contacts[@i].IsAdded" value="@(c.IsAdded ? "true" : "false")" />
+                  <input type="hidden" name="Contacts[@i].OriginalName" value="@c.OriginalName" />
+                  <input type="hidden" name="Contacts[@i].OriginalEmail" value="@c.OriginalEmail" />
+                  <input type="hidden" class="js-census-contact-role-name" name="Contacts[@i].RoleName" value="@c.RoleName" />
+                  <span class="govuk-!-font-weight-bold js-census-contact-role-label">@(string.IsNullOrWhiteSpace(c.RoleName) ? "Not set" : c.RoleName)</span>
+                  @if (!c.IsAdded && !string.IsNullOrWhiteSpace(c.RoleHint))
+                  {
+                    <div class="govuk-hint govuk-!-margin-bottom-0 census-contact-role-hint">@c.RoleHint</div>
+                  }
+                </td>
+                <td class="govuk-table__cell">
+                  <input type="hidden" class="js-census-contact-user-id" name="Contacts[@i].SelectedUserId" value="@c.SelectedUserId" />
+                  <input type="hidden" class="js-census-contact-name" name="Contacts[@i].SelectedName" value="@c.SelectedName" />
+                  <input type="hidden" class="js-census-contact-email" name="Contacts[@i].SelectedEmail" value="@c.SelectedEmail" />
+                  <p class="govuk-body govuk-!-margin-bottom-0 js-census-contact-name-text">@(hasPerson && !string.IsNullOrWhiteSpace(c.DisplayName) ? c.DisplayName : "Not set")</p>
+                  <p class="govuk-body govuk-!-margin-bottom-0 census-contact-email js-census-contact-email-text">@(hasPerson && !string.IsNullOrWhiteSpace(c.DisplayEmail) ? c.DisplayEmail : "")</p>
+                </td>
+                <td class="govuk-table__cell">
+                  <div class="govuk-button-group census-contact-actions">
+                    <button type="button" class="govuk-button @(hasPerson ? "govuk-button--secondary" : "") js-census-contact-edit" data-add-label="Add" data-change-label="Change">@(hasPerson ? "Change" : "Add")</button>
+                    @if (c.IsAdded)
+                    {
+                      <button type="button" class="govuk-button govuk-button--secondary js-census-contact-remove">Remove</button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <p class="govuk-body">
+          <button type="button" class="govuk-button js-census-contact-add">Add another contact</button>
+        </p>
+      }
+      else if (Model.Kind == CensusTaskKind.Accessibility)
+      {
+        <input type="hidden" name="YesNo" value="@(Model.AccessibilityEnrolled ? "enrolled" : "not-enrolled")" />
+        @if (Model.AccessibilityEnrolled)
+        {
+          <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="census-aiss-complete-title">
+            <div class="govuk-notification-banner__header">
+              <h2 class="govuk-notification-banner__title" id="census-aiss-complete-title">Complete</h2>
+            </div>
+            <div class="govuk-notification-banner__content">
+              <p class="govuk-notification-banner__heading">This product is enrolled in the Accessibility Issues and Statement Service.</p>
+              <p class="govuk-body">@Model.AccessibilityStatusLabel. This question is complete.</p>
+            </div>
+          </div>
+        }
+        else
+        {
+          <div class="govuk-inset-text">
+            <p class="govuk-body govuk-!-margin-bottom-0"><strong>Enrolment:</strong> @Model.AccessibilityStatusLabel</p>
+          </div>
+          <div class="govuk-form-group@(HasError("AccessibilityNotEnrolledReason") ? " govuk-form-group--error" : "")">
+            <label class="govuk-label govuk-label--s" for="AccessibilityNotEnrolledReason">This product is not enrolled into the Accessibility Issues and Statement Service, what is the reason for this?</label>
+            <textarea class="govuk-textarea" id="AccessibilityNotEnrolledReason" name="AccessibilityNotEnrolledReason" rows="5">@Model.AccessibilityNotEnrolledReason</textarea>
+          </div>
+          <p class="govuk-body">
+            <a class="govuk-link" href="@Model.AccessibilityEnrolUrl" rel="noreferrer noopener" target="_blank">Enrol this product in the Accessibility Issues and Statement Service (opens in new tab)</a>
+          </p>
+        }
+      }
+      else
+      {
+        @await Html.PartialAsync("~/Views/Modern/Census/_ItemList.cshtml", Model)
+      }
+
+      @if (Model.Kind != CensusTaskKind.Accessibility)
+      {
+        <div class="govuk-form-group@(HasError("CannotAnswerReason") ? " govuk-form-group--error" : "")">
+          <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+            <div class="govuk-checkboxes__item">
+              <input class="govuk-checkboxes__input" id="CannotAnswer" name="CannotAnswer" type="checkbox" value="true" data-aria-controls="cannot-answer-reason" @(Model.CannotAnswer ? "checked" : null)>
+              <label class="govuk-label govuk-checkboxes__label" for="CannotAnswer">I can't answer this or nothing to provide</label>
+            </div>
+            <div class="govuk-checkboxes__conditional" id="cannot-answer-reason">
+              <div class="govuk-form-group@(HasError("CannotAnswerReason") ? " govuk-form-group--error" : "")">
+                <label class="govuk-label" for="CannotAnswerReason">Why can’t you answer this?</label>
+                @if (HasError("CannotAnswerReason"))
+                {
+                  <p id="cannot-answer-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> Explain why you cannot answer this question.</p>
+                }
+                <textarea class="govuk-textarea" id="CannotAnswerReason" name="CannotAnswerReason" rows="3">@Model.CannotAnswerReason</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (Model.Kind != CensusTaskKind.Accessibility || !Model.AccessibilityEnrolled)
+      {
+        <div class="govuk-button-group">
+          <button type="submit" class="govuk-button" name="Intent" value="save">Save</button>
+          <button type="submit" class="govuk-button" name="Intent" value="complete">Save and continue</button>
+        </div>
+      }
+      @if (!string.IsNullOrWhiteSpace(Model.PreviousTaskKey) || !string.IsNullOrWhiteSpace(Model.NextTaskKey))
+      {
+        <div class="govuk-button-group">
+          @if (!string.IsNullOrWhiteSpace(Model.PreviousTaskKey))
+          {
+            <button type="submit" class="govuk-button govuk-button--secondary" name="Intent" value="previous">Previous question</button>
+          }
+          @if (!string.IsNullOrWhiteSpace(Model.NextTaskKey))
+          {
+            <button type="submit" class="govuk-button govuk-button--secondary" name="Intent" value="next">Next question</button>
+          }
+        </div>
+      }
+      <p class="govuk-body"><a class="govuk-link" href="@Url.Action("TaskList", new { id = Model.ProductId, all = Model.ShowAll })">Back to task list</a></p>
+    </form>
+  </div>
+</div>
+
+@if (Model.Kind == CensusTaskKind.Contacts)
+{
+  <dialog id="census-contact-modal"
+          class="dfe-f-modal govuk-!-margin-0 census-contact-modal"
+          data-module="dfe-f-modal"
+          aria-labelledby="census-contact-modal-title"
+          aria-modal="true"
+          role="dialog">
+    <div class="dfe-f-modal__panel">
+      <header class="dfe-f-modal__header">
+        <h2 id="census-contact-modal-title" class="govuk-heading-m dfe-f-modal__title">Add a person</h2>
+        <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+          <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+        </button>
+      </header>
+      <div class="dfe-f-modal__body">
+        <div class="govuk-form-group" id="census-contact-modal-role-group" hidden>
+          <label class="govuk-label govuk-label--s" for="census-contact-modal-role">Role</label>
+          <input class="govuk-input" id="census-contact-modal-role" type="text">
+        </div>
+        @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new UserPickerViewModel {
+          FieldName = "census-contact-modal-user",
+          HiddenNameFieldName = "census-contact-modal-name",
+          HiddenEmailFieldName = "census-contact-modal-email",
+          IncludeHiddenNameEmailFields = true,
+          Label = "Find a person",
+          Hint = "Search by name or email and choose one person.",
+          DefaultSummaryText = "No person selected.",
+          InputIdSuffix = "modal",
+          UseGovUkStyling = true
+        })
+      </div>
+      <footer class="dfe-f-modal__footer">
+        <button type="button" class="govuk-button" id="census-contact-modal-save">Save</button>
+        <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+      </footer>
+    </div>
+  </dialog>
+}
+
+@if (Model.Kind == CensusTaskKind.ItemList || !string.IsNullOrWhiteSpace(Model.ItemNoun))
+{
+  var addLabel = string.IsNullOrWhiteSpace(Model.AddLabel) ? "Add an item" : Model.AddLabel;
+  var urlField = (Model.TitleLabel ?? "").Contains("URL", StringComparison.OrdinalIgnoreCase);
+  <dialog id="census-item-modal"
+          class="dfe-f-modal govuk-!-margin-0 census-item-modal"
+          data-module="dfe-f-modal"
+          aria-labelledby="census-item-modal-title"
+          aria-modal="true"
+          role="dialog">
+    <div class="dfe-f-modal__panel">
+      <header class="dfe-f-modal__header">
+        <h2 id="census-item-modal-title" class="govuk-heading-m dfe-f-modal__title">@addLabel</h2>
+        <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+          <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+        </button>
+      </header>
+      <div class="dfe-f-modal__body">
+        @if (Model.PickFromRegister)
+        {
+          <div class="govuk-form-group">
+            <fieldset class="govuk-fieldset">
+              <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">@Model.TitleLabel</legend>
+              <div class="govuk-radios" data-module="govuk-radios">
+                <div class="govuk-radios__item">
+                  <input class="govuk-radios__input" id="census-item-listed" name="census-item-listed" type="radio" value="listed" checked data-aria-controls="census-item-listed-panel">
+                  <label class="govuk-label govuk-radios__label" for="census-item-listed">A product or service in the register</label>
+                </div>
+                <div class="govuk-radios__conditional" id="census-item-listed-panel">
+                  <div class="census-search census-item-pick-search" data-module="census-dependency-search">
+                    <label class="govuk-label" for="census-item-modal-search">Search products and services</label>
+                    <div class="govuk-hint">Start typing a name, then choose from the list.</div>
+                    <input class="govuk-input census-search__input" id="census-item-modal-search" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="census-item-search-results">
+                    <ul class="census-search__results" id="census-item-search-results" role="listbox" hidden></ul>
+                  </div>
+                </div>
+                <div class="govuk-radios__item">
+                  <input class="govuk-radios__input" id="census-item-not-listed" name="census-item-listed" type="radio" value="not-listed" data-aria-controls="census-item-not-listed-panel">
+                  <label class="govuk-label govuk-radios__label" for="census-item-not-listed">Not listed - provide details</label>
+                </div>
+                <div class="govuk-radios__conditional" id="census-item-not-listed-panel">
+                  <label class="govuk-label" for="census-item-modal-details">Details</label>
+                  <textarea class="govuk-textarea" id="census-item-modal-details" rows="4"></textarea>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+        }
+        <div class="govuk-form-group@(Model.CaptureUrl ? "" : " govuk-!-margin-bottom-0")" id="census-item-free-text" @(Model.PickFromRegister ? "hidden" : null)>
+          <label class="govuk-label govuk-label--s" for="census-item-modal-text">@Model.TitleLabel</label>
+          @if (urlField)
+          {
+            <input class="govuk-input" id="census-item-modal-text" type="url" spellcheck="false">
+          }
+          else
+          {
+            <textarea class="govuk-textarea" id="census-item-modal-text" rows="5"></textarea>
+          }
+        </div>
+        @if (Model.CaptureUrl)
+        {
+          <div class="govuk-form-group govuk-!-margin-bottom-0">
+            <label class="govuk-label govuk-label--s" for="census-item-modal-url">Link to reference materials</label>
+            <div class="govuk-hint">Optional. Add a URL for guidance, a dashboard, or other material relating to this question.</div>
+            <input class="govuk-input" id="census-item-modal-url" type="url" spellcheck="false">
+          </div>
+        }
+      </div>
+      <footer class="dfe-f-modal__footer">
+        <button type="button" class="govuk-button" id="census-item-modal-save">Save</button>
+        <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+      </footer>
+    </div>
+  </dialog>
+}
+
+@if (Model.Kind == CensusTaskKind.ItemList || Model.Kind == CensusTaskKind.Contacts || !string.IsNullOrWhiteSpace(Model.ItemNoun))
+{
+  var removeNoun = Model.Kind == CensusTaskKind.Contacts
+      ? "person"
+      : (string.IsNullOrWhiteSpace(Model.ItemNoun) ? "item" : Model.ItemNoun);
+  <dialog id="census-remove-modal"
+          class="dfe-f-modal govuk-!-margin-0 census-item-modal"
+          data-module="dfe-f-modal"
+          aria-labelledby="census-remove-modal-title"
+          aria-modal="true"
+          role="dialog">
+    <div class="dfe-f-modal__panel">
+      <header class="dfe-f-modal__header">
+        <h2 id="census-remove-modal-title" class="govuk-heading-m dfe-f-modal__title">Remove this @removeNoun?</h2>
+        <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+          <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+        </button>
+      </header>
+      <div class="dfe-f-modal__body">
+        <p class="govuk-body govuk-!-margin-bottom-0" id="census-remove-modal-text">Are you sure you want to remove this @removeNoun?</p>
+      </div>
+      <footer class="dfe-f-modal__footer">
+        <button type="button" class="govuk-button govuk-button--warning" id="census-remove-modal-confirm">Remove</button>
+        <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+      </footer>
+    </div>
+  </dialog>
+}
+
+@section Scripts {
+  <script src="~/modern/js/census-unsaved.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+  @if (Model.Kind == CensusTaskKind.Contacts)
+  {
+    <script src="~/modern/js/census-contacts.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+  }
+  @if (Model.Kind == CensusTaskKind.ItemList || !string.IsNullOrWhiteSpace(Model.ItemNoun))
+  {
+    <script src="~/modern/js/census-item-list.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+  }
+}
