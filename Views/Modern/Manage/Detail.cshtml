@@ -1,9 +1,11 @@
 @model FipsProductDetailViewModel
+@using Compass.Services.Fips
 @using Compass.ViewModels.Modern
 @{
     ViewData["Title"] = Model.Product.Title + " — FIPS";
     var p = Model.Product;
     var detailTab = Model.ActiveDetailTab;
+    var isCensusManage = FipsCensusManageTabs.IsManageTab(detailTab);
 }
 
 @section Breadcrumbs {
@@ -38,10 +40,10 @@
 <div class="govuk-grid-row">
 <div class="govuk-grid-column-full">
 
-    @if (detailTab == "additional" && Model.AdditionalInformation != null)
+    @if (isCensusManage && Model.AdditionalInformation != null)
     {
-      <div id="d-fips-additional" class="tab-pane on" role="tabpanel">
-        @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductAdditionalInformation.cshtml", Model.AdditionalInformation)
+      <div id="d-fips-register-manage" class="tab-pane on" role="tabpanel">
+        @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductRegisterManage.cshtml", Model)
       </div>
     }
 
@@ -55,7 +57,7 @@
          <h2 class="govuk-summary-card__title">Actions</h2>
        </div>
        <div class="govuk-summary-card__content">
-         <p class="govuk-body">Set this entry to Active when the service census is complete and it should appear in Find information about products and services.</p>
+         <p class="govuk-body">Set this entry to Active when it should appear in Find information about products and services.</p>
          <form method="post" action="@Url.Action("FipsChangeStatus", "ModernManage", new { id = p.Id })">
            @Html.AntiForgeryToken()
            <input type="hidden" name="newStatus" value="@((int)CMDBProductStatus.Active)" />
@@ -74,33 +76,6 @@
        <p class="govuk-body govuk-!-margin-bottom-0">If they are updated by the CMDB team, it can take up to an hour to appear on this page. Changes are regularly synced automatically during working hours, Monday to Friday.</p>
      </div>
    </details>
-   @if (Model.ShowServiceCensusPrompt)
-   {
-     var censusTotal = Model.ServiceCensusSectionCount;
-     var censusDone = Model.ServiceCensusSectionsComplete;
-     var censusPercent = censusTotal <= 0 ? 0 : (int)Math.Round(100.0 * censusDone / censusTotal, MidpointRounding.AwayFromZero);
-     <div class="govuk-summary-card fips-census-prompt govuk-!-margin-bottom-6" role="region" aria-labelledby="fips-service-census-title">
-       <div class="govuk-summary-card__title-wrapper">
-         <h2 class="govuk-summary-card__title" id="fips-service-census-title">Service census</h2>
-       </div>
-       <div class="govuk-summary-card__content fips-census-prompt__content">
-         <p class="govuk-heading-s govuk-!-margin-bottom-2">Complete the service census for this product.</p>
-         <p class="govuk-body">You are named on this product, so you can help record the remaining service census information.</p>
-         <div class="fips-census-prompt__progress"
-              role="progressbar"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow="@censusPercent"
-              aria-label="Service census @censusPercent percent complete">
-           <div class="fips-census-prompt__track" aria-hidden="true">
-             <span class="fips-census-prompt__fill" style="width: @censusPercent%"></span>
-           </div>
-         </div>
-         <a class="govuk-button govuk-!-margin-bottom-0"
-            href="@Url.Action("FipsProduct", "ModernManage", new { id = p.Id, tab = "additional" })">Continue census</a>
-       </div>
-     </div>
-   }
    @if (p.Status == CMDBProductStatus.New)
    {
      <div class="govuk-notification-banner govuk-!-margin-bottom-6" role="region" aria-labelledby="fips-new-entry-title">
@@ -108,8 +83,8 @@
          <h2 class="govuk-notification-banner__title" id="fips-new-entry-title">Important</h2>
        </div>
        <div class="govuk-notification-banner__content">
-         <p class="govuk-notification-banner__heading">This entry is New. Complete the service census before it is made active.</p>
-         <p class="govuk-body govuk-!-margin-bottom-0">Include whether it should appear in <a class="govuk-notification-banner__link" href="https://find-products-services.education.gov.uk" target="_blank" rel="noopener noreferrer">Find information about products and services</a>. People use that service to see the type of product or service, the channels it is provided through, the user groups who use it, and supporting business information.</p>
+         <p class="govuk-notification-banner__heading">This entry is New. It will not appear in Find information about products and services until it is set to Active.</p>
+         <p class="govuk-body govuk-!-margin-bottom-0">People use that service to see the type of product or service, the channels it is provided through, the user groups who use it, and supporting business information.</p>
        </div>
      </div>
    }
@@ -174,7 +149,7 @@
 </div>
 
 @section Styles {
-@if (detailTab == "additional")
+@if (isCensusManage)
 {
   <link rel="stylesheet" href="~/modern/css/service-schema.css" asp-append-version="true" />
 }
@@ -195,37 +170,16 @@
     background: transparent; border: 0; font: inherit; cursor: pointer;
   }
   .service-line-pick__result-btn:hover, .service-line-pick__result-btn:focus { background: #f3f2f1; outline: 3px solid #fd0; outline-offset: 0; }
-  .fips-census-prompt__content {
-    max-width: none;
-  }
-  .fips-census-prompt__content > .govuk-body,
-  .fips-census-prompt__content > .govuk-heading-s {
-    max-width: none;
-  }
-  .fips-census-prompt__progress {
-    width: 100%;
-    margin: 0 0 1.25rem;
-  }
-  .fips-census-prompt__track {
-    width: 100%;
-    height: 0.75rem;
-    background: #f3f2f1;
-    border: 1px solid #b1b4b6;
-    overflow: hidden;
-  }
-  .fips-census-prompt__fill {
-    display: block;
-    height: 100%;
-    background: #00703c;
-    min-width: 0;
-  }
 </style>
 }
 
 @section Scripts {
   <script src="~/modern/js/service-line-pickers.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
-  @if ((detailTab == "information" && Model.CanEditInformation)
-      || (detailTab == "additional" && Model.AdditionalInformation?.ProductDetails?.CanEditFields == true))
+  @if (isCensusManage)
+  {
+    <script src="~/modern/js/schema-picker.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+  }
+  @if (detailTab == "information" && Model.CanEditInformation)
   {
     <script src="~/modern/js/fips-product-detail-edit-modal.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
   }

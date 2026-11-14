@@ -11,7 +11,7 @@ public partial class ModernAdminController
 {
     private static readonly HashSet<string> LookupEditorPanels = new(StringComparer.OrdinalIgnoreCase)
     {
-        "business-areas", "phases", "directorates", "universal-barriers", "priorities", "rag-defns",
+        "business-areas", "phases", "census-technologies", "census-integrations", "directorates", "universal-barriers", "priorities", "rag-defns",
         "activity-types", "activity-time-types", "activity-time-themes", "work-tagging", "resource-bands", "mission-pillars", "priority-outcomes", "portfolios",
         "risk-tiers", "risk-categories", "issue-categories", "departments",
         "std-categories", "std-subcategories",
@@ -59,6 +59,8 @@ public partial class ModernAdminController
     {
         "business-areas" => "business area",
         "phases" => "delivery phase",
+        "census-technologies" => "census technology",
+        "census-integrations" => "census integration",
         "directorates" => "directorate",
         "universal-barriers" => "universal barrier",
         "priorities" => "priority level",
@@ -137,6 +139,28 @@ public partial class ModernAdminController
                 {
                     Panel = p, EditorKind = AdminLookupEditorKind.Simple, Id = ph.Id, Name = ph.Name, Description = ph.Description,
                     SortOrder = ph.SortOrder, IsActive = ph.IsActive
+                };
+
+            case "census-technologies":
+                if (id is null)
+                    return new AdminLookupEditorViewModel { Panel = p, EditorKind = AdminLookupEditorKind.Simple, SortOrder = 0, IsActive = true };
+                var tech = await _context.CensusTechnologyLookups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+                if (tech == null) return null;
+                return new AdminLookupEditorViewModel
+                {
+                    Panel = p, EditorKind = AdminLookupEditorKind.Simple, Id = tech.Id, Name = tech.Name, Description = tech.Description,
+                    SortOrder = tech.SortOrder, IsActive = tech.IsActive
+                };
+
+            case "census-integrations":
+                if (id is null)
+                    return new AdminLookupEditorViewModel { Panel = p, EditorKind = AdminLookupEditorKind.Simple, SortOrder = 0, IsActive = true };
+                var integ = await _context.CensusIntegrationLookups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+                if (integ == null) return null;
+                return new AdminLookupEditorViewModel
+                {
+                    Panel = p, EditorKind = AdminLookupEditorKind.Simple, Id = integ.Id, Name = integ.Name, Description = integ.Description,
+                    SortOrder = integ.SortOrder, IsActive = integ.IsActive
                 };
 
             case "directorates":

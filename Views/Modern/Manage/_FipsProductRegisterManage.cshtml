@@ -1,0 +1,326 @@
+@using Compass.Services.ServiceSchema
+@using Compass.ViewModels.Modern
+@model FipsProductDetailViewModel
+@{
+  var workspace = Model.AdditionalInformation!;
+  string EmptyEntriesMessage(string? noun = null)
+  {
+    var item = string.IsNullOrWhiteSpace(noun) ? "items" : noun.Trim();
+    return "No " + item + " recorded yet.";
+  }
+  string AddHeading(ServiceSchemaTopicBlock block) =>
+      block.Mode == "yes-choice" && block.Entries.Count > 0
+        ? "Change this answer"
+        : (block.Entries.Count > 0 ? "Add another" : "Add");
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+  <div class="govuk-error-summary" data-module="govuk-error-summary">
+    <div class="govuk-error-summary__body">
+      <p class="govuk-body">@TempData["ErrorMessage"]</p>
+    </div>
+  </div>
+}
+@if (TempData["SuccessMessage"] != null)
+{
+  <div class="govuk-notification-banner govuk-notification-banner--success" role="alert">
+    <div class="govuk-notification-banner__content">
+      <p class="govuk-notification-banner__heading">@TempData["SuccessMessage"]</p>
+    </div>
+  </div>
+}
+
+<h2 class="govuk-heading-l govuk-!-margin-bottom-2">@workspace.AreaName</h2>
+@if (!string.IsNullOrWhiteSpace(workspace.AreaSummary))
+{
+  <p class="govuk-body">@workspace.AreaSummary</p>
+}
+<p class="govuk-body">Update information recorded in the service census. Changes here update the service register.</p>
+
+@foreach (var block in workspace.Topics)
+{
+  <section class="ss-topic govuk-!-margin-bottom-8" id="topic-@block.Key">
+    <h3 class="govuk-heading-m govuk-!-margin-bottom-1">@(string.IsNullOrWhiteSpace(block.NavLabel) ? block.Heading : block.NavLabel)</h3>
+    @if (ServiceSchemaAreas.IsServiceResponsibility(block.Key))
+    {
+      <div class="govuk-inset-text">
+        <p class="govuk-body">These contacts cannot be changed here — they come from the CMDB.</p>
+        <p class="govuk-body">If you need to update these contacts, complete the <a class="govuk-link" href="https://dfe.service-now.com/mydfe?id=sc_cat_item&amp;sys_id=50914e12db58e3403b929334ca96196d&amp;referrer=recent_items" target="_blank" rel="noopener noreferrer">update service offering form</a>.</p>
+        <p class="govuk-body govuk-!-margin-bottom-0">You can add further contacts such as architects, designers and analysts in Additional roles and responsibilities on this workspace.</p>
+      </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(block.Help))
+    {
+      <p class="govuk-body">@block.Help</p>
+    }
+
+    @if (block.Key == "dependency")
+    {
+      var internalDependencies = block.Entries.Where(e => e.LinkedProductId != null).ToList();
+      var externalDependencies = block.Entries.Where(e => e.LinkedProductId == null).ToList();
+      <h4 class="govuk-heading-s">Internal dependencies</h4>
+      @if (internalDependencies.Count == 0)
+      {
+        <p class="govuk-body">@EmptyEntriesMessage("internal dependencies")</p>
+      }
+      else
+      {
+        @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductRegisterManageTable.cshtml", new FipsRegisterManageTableModel
+        {
+          ProductId = workspace.ProductId,
+          TopicKey = block.Key,
+          TitleLabel = "Product",
+          CanRemove = workspace.CanEdit,
+          Entries = internalDependencies
+        })
+      }
+      @if (workspace.CanEdit)
+      {
+        <form method="post" action="@Url.RouteUrl("SaveSchemaEntry", new { id = workspace.ProductId })" class="govuk-!-margin-bottom-6">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="sectionKey" value="@block.Key" />
+          <input type="hidden" name="dependencyScope" value="internal" />
+          <div class="govuk-form-group ss-picker" data-ss-picker data-ss-search="@Url.Action("SchemaPickProducts", "ModernManage", new { exclude = workspace.ProductId })">
+            <label class="govuk-label" for="pick-dependency-internal">Internal dependency</label>
+            <div class="govuk-hint">Search the service register. Enterprise services are included and marked Enterprise.</div>
+            <input class="govuk-input" id="pick-dependency-internal" type="search" autocomplete="off" data-ss-input />
+            <input type="hidden" name="productId" data-ss-id />
+            <ul class="ss-picker-list" data-ss-list hidden></ul>
+          </div>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="narrative-dependency-internal">Why it matters</label>
+            <textarea class="govuk-textarea" id="narrative-dependency-internal" name="narrative" rows="3"></textarea>
+          </div>
+          <button class="govuk-button" type="submit">Save internal dependency</button>
+        </form>
+      }
+      <h4 class="govuk-heading-s">External dependencies</h4>
+      @if (externalDependencies.Count == 0)
+      {
+        <p class="govuk-body">@EmptyEntriesMessage("external dependencies")</p>
+      }
+      else
+      {
+        @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductRegisterManageTable.cshtml", new FipsRegisterManageTableModel
+        {
+          ProductId = workspace.ProductId,
+          TopicKey = block.Key,
+          TitleLabel = "Product or service",
+          CanRemove = workspace.CanEdit,
+          Entries = externalDependencies
+        })
+      }
+      @if (workspace.CanEdit)
+      {
+        <form method="post" action="@Url.RouteUrl("SaveSchemaEntry", new { id = workspace.ProductId })" class="govuk-!-margin-bottom-0">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="sectionKey" value="@block.Key" />
+          <input type="hidden" name="dependencyScope" value="external" />
+          <div class="govuk-form-group ss-picker" data-ss-picker>
+            <label class="govuk-label" for="pick-dependency-external">External dependency</label>
+            <div class="govuk-hint">Type / to see the list, or type a new name to add a product or service outside DfE.</div>
+            <input class="govuk-input" id="pick-dependency-external" type="search" autocomplete="off" data-ss-input />
+            <input type="hidden" name="catalogueItemId" data-ss-id />
+            <input type="hidden" name="createCatalogueName" data-ss-create />
+            <ul class="ss-picker-list" data-ss-list hidden></ul>
+            <script type="application/json" data-ss-options>@Html.Raw(System.Text.Json.JsonSerializer.Serialize(block.Choices.Select(c => new { id = c.Value, name = c.Label })))</script>
+          </div>
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="narrative-dependency-external">Why it matters</label>
+            <textarea class="govuk-textarea" id="narrative-dependency-external" name="narrative" rows="3"></textarea>
+          </div>
+          <button class="govuk-button" type="submit">Save external dependency</button>
+        </form>
+      }
+    }
+    else if (block.Entries.Count == 0)
+    {
+      <p class="govuk-body">
+        @if (ServiceSchemaAreas.IsServiceResponsibility(block.Key))
+        {
+          @:No service offering contacts are named on this product yet.
+        }
+        else
+        {
+          @EmptyEntriesMessage()
+        }
+      </p>
+    }
+    else
+    {
+      @await Html.PartialAsync("~/Views/Modern/Manage/_FipsProductRegisterManageTable.cshtml", new FipsRegisterManageTableModel
+      {
+        ProductId = workspace.ProductId,
+        TopicKey = block.Key,
+        TitleLabel = block.TitleLabel,
+        CanRemove = workspace.CanEdit && block.Entries.Any(e => !e.FromRegister),
+        Entries = block.Entries
+      })
+    }
+
+    @if (workspace.CanEdit && block.Key != "dependency" && !ServiceSchemaAreas.IsServiceResponsibility(block.Key))
+    {
+      <h4 class="govuk-heading-s">@AddHeading(block)</h4>
+      <form method="post" action="@Url.RouteUrl("SaveSchemaEntry", new { id = workspace.ProductId })" class="govuk-!-margin-bottom-0">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="sectionKey" value="@block.Key" />
+        @if (block.Mode == "products")
+        {
+          <div class="govuk-form-group ss-picker" data-ss-picker data-ss-search="@Url.Action("SchemaPickProducts", "ModernManage", new { exclude = workspace.ProductId })">
+            <label class="govuk-label" for="pick-@block.Key">@block.TitleLabel</label>
+            <div class="govuk-hint">Search for another product on the service register.</div>
+            <input class="govuk-input" id="pick-@block.Key" type="search" autocomplete="off" data-ss-input />
+            <input type="hidden" name="productId" data-ss-id />
+            <ul class="ss-picker-list" data-ss-list hidden></ul>
+          </div>
+        }
+        else if (block.Mode == "choice")
+        {
+          <div class="govuk-form-group">
+            <fieldset class="govuk-fieldset">
+              <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">@block.TitleLabel</legend>
+              <div class="govuk-radios" data-module="govuk-radios">
+                @foreach (var choice in block.Choices)
+                {
+                  var choiceId = "choice-" + block.Key + "-" + choice.Value;
+                  <div class="govuk-radios__item">
+                    <input class="govuk-radios__input" id="@choiceId" name="lookupCode" type="radio" value="@choice.Value" />
+                    <label class="govuk-label govuk-radios__label" for="@choiceId">@choice.Label</label>
+                  </div>
+                }
+              </div>
+            </fieldset>
+          </div>
+        }
+        else if (block.Mode == "yes-choice")
+        {
+          var current = block.Entries.FirstOrDefault();
+          var answeredYes = string.Equals(current?.AnswerCode, "yes", StringComparison.OrdinalIgnoreCase);
+          var selectedCategories = new HashSet<string>(
+            (current?.CategoryCode ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            StringComparer.OrdinalIgnoreCase);
+          <div data-enabling>
+            <div class="govuk-form-group">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">@block.TitleLabel</legend>
+                <div class="govuk-radios" data-module="govuk-radios">
+                  <div class="govuk-radios__item">
+                    <input class="govuk-radios__input" id="enabling-yes-@block.Key" name="lookupCode" type="radio" value="yes" @(answeredYes ? "checked" : null) />
+                    <label class="govuk-label govuk-radios__label" for="enabling-yes-@block.Key">Yes</label>
+                  </div>
+                  <div class="govuk-radios__item">
+                    <input class="govuk-radios__input" id="enabling-no-@block.Key" name="lookupCode" type="radio" value="no" @(string.Equals(current?.AnswerCode, "no", StringComparison.OrdinalIgnoreCase) ? "checked" : null) />
+                    <label class="govuk-label govuk-radios__label" for="enabling-no-@block.Key">No</label>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+            <div data-enabling-follow @(answeredYes ? null : "hidden")>
+              <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                  <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">What kind of enabling functionality is it?</legend>
+                  <div class="govuk-hint">Select all that apply.</div>
+                  <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                    @foreach (var choice in block.Choices)
+                    {
+                      var choiceId = "enabling-" + block.Key + "-" + choice.Value;
+                      var hintId = choiceId + "-hint";
+                      <div class="govuk-checkboxes__item">
+                        @if (string.IsNullOrWhiteSpace(choice.Hint))
+                        {
+                          <input class="govuk-checkboxes__input" id="@choiceId" name="secondaryLookupCodes" type="checkbox" value="@choice.Value" @(selectedCategories.Contains(choice.Value) ? "checked" : null) />
+                        }
+                        else
+                        {
+                          <input class="govuk-checkboxes__input" id="@choiceId" name="secondaryLookupCodes" type="checkbox" value="@choice.Value" aria-describedby="@hintId" @(selectedCategories.Contains(choice.Value) ? "checked" : null) />
+                        }
+                        <label class="govuk-label govuk-checkboxes__label" for="@choiceId">@choice.Label</label>
+                        @if (!string.IsNullOrWhiteSpace(choice.Hint))
+                        {
+                          <div id="@hintId" class="govuk-hint govuk-checkboxes__hint">@choice.Hint</div>
+                        }
+                      </div>
+                    }
+                  </div>
+                </fieldset>
+              </div>
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="narrative-@block.Key">@block.NarrativeLabel</label>
+                <div class="govuk-hint">Required if you select Other.</div>
+                <textarea class="govuk-textarea" id="narrative-@block.Key" name="narrative" rows="3">@current?.Narrative</textarea>
+              </div>
+            </div>
+          </div>
+        }
+        else if (block.Mode == "catalogue")
+        {
+          <div class="govuk-form-group ss-picker" data-ss-picker>
+            <label class="govuk-label" for="pick-@block.Key">@block.TitleLabel</label>
+            <input class="govuk-input" id="pick-@block.Key" type="search" autocomplete="off" placeholder="Type / to see the list" data-ss-input />
+            <input type="hidden" name="catalogueItemId" data-ss-id />
+            <input type="hidden" name="createCatalogueName" data-ss-create />
+            <ul class="ss-picker-list" data-ss-list hidden></ul>
+            <script type="application/json" data-ss-options>@Html.Raw(System.Text.Json.JsonSerializer.Serialize(block.Choices.Select(c => new { id = c.Value, name = c.Label })))</script>
+          </div>
+        }
+        else if (block.Mode == "lookup")
+        {
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="lookup-@block.Key">@block.LookupLabel</label>
+            <select class="govuk-select" id="lookup-@block.Key" name="lookupCode">
+              <option value="">Select</option>
+              @foreach (var choice in block.Choices)
+              {
+                <option value="@choice.Value">@choice.Label</option>
+              }
+            </select>
+          </div>
+        }
+        else
+        {
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="title-@block.Key">@block.TitleLabel</label>
+            <input class="govuk-input" id="title-@block.Key" name="title" maxlength="300" />
+          </div>
+        }
+        @if (block.CapturePerson)
+        {
+          @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new Compass.Models.UserPickerViewModel
+          {
+            FieldName = "personUserId",
+            Label = "Person",
+            Hint = "Search by name or email and select someone.",
+            UseGovUkStyling = true,
+            IncludeHiddenNameEmailFields = true,
+            HiddenNameFieldName = "personName",
+            HiddenEmailFieldName = "personEmail",
+            InputIdSuffix = block.Key,
+            DefaultSummaryText = "No-one selected."
+          })
+        }
+        @if (block.Mode != "yes-choice")
+        {
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="narrative-@block.Key">@block.NarrativeLabel</label>
+            <textarea class="govuk-textarea" id="narrative-@block.Key" name="narrative" rows="3"></textarea>
+          </div>
+        }
+        @if (block.CaptureUrl)
+        {
+          <div class="govuk-form-group">
+            <label class="govuk-label" for="url-@block.Key">Reference</label>
+            <div class="govuk-hint">Optionally add a link to guidance, evidence, or other supporting material.</div>
+            <input class="govuk-input" id="url-@block.Key" name="externalUrl" type="text" maxlength="500" />
+          </div>
+        }
+        <button class="govuk-button" type="submit">Save</button>
+      </form>
+    }
+  </section>
+}
+
+@if (!workspace.CanEdit && workspace.Topics.Count > 0)
+{
+  <p class="govuk-body">Only a named contact, someone named in additional responsibilities, or an operations console user can change this information.</p>
+}

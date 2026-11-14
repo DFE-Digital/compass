@@ -77,5 +77,10 @@ public sealed class ModernUiViewLocationExpander : IViewLocationExpander
             yield return "/Views/Modern/ActivityTime/{0}.cshtml";
             yield return "/Views/Modern/Shared/{0}.cshtml";
         }
+        else if (string.Equals(controllerName, "ModernCensus", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "/Views/Modern/Census/{0}.cshtml";
+            yield return "/Views/Modern/Shared/{0}.cshtml";
+        }
     }
 }

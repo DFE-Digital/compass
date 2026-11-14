@@ -1,0 +1,52 @@
+@model List<Compass.ViewModels.Modern.ServiceCensusNavItemViewModel>
+@{
+  var productId = (Guid)ViewBag.CensusProductId;
+  var showAll = ViewBag.CensusShowAll as bool? == true;
+  var current = ViewBag.CensusCurrent as string ?? "";
+  const string navListId = "census-question-nav";
+  var onTaskList = ViewBag.CensusOnTaskList as bool? == true;
+  var taskListHref = Url.Action("TaskList", "ModernCensus", new { id = productId, all = showAll }) ?? "#";
+  string Href(string key) => Url.Action("Question", "ModernCensus", new { id = productId, taskKey = key, all = showAll }) ?? "#";
+}
+<nav class="dfe-f-side-navigation census-question-nav" aria-label="Census questions" data-module="dfe-f-side-navigation">
+  <button type="button" class="dfe-f-side-navigation__toggle" aria-controls="@navListId" aria-expanded="false">Questions</button>
+  <ul id="@navListId" class="dfe-f-side-navigation__list" hidden>
+    <li class="dfe-f-side-navigation__item census-question-nav__all@(onTaskList ? " dfe-f-side-navigation__item--current" : "")">
+      <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state census-question-nav__link"
+         href="@taskListHref"@if (onTaskList) { <text> aria-current="page"</text> }>
+        <span class="dfe-f-side-navigation__link-text">View all tasks</span>
+      </a>
+    </li>
+    @foreach (var group in Model.GroupBy(n => n.GroupName))
+    {
+      <li class="dfe-f-side-navigation__item census-question-nav__group">
+        <span class="govuk-heading-s">@group.Key</span>
+      </li>
+      foreach (var item in group)
+      {
+        var isCurrent = item.Current || string.Equals(item.Key, current, StringComparison.OrdinalIgnoreCase);
+        var dotClass = item.Status switch
+        {
+          "COMPLETE" => "census-status-dot--complete",
+          "IN_PROGRESS" => "census-status-dot--in-progress",
+          _ => "census-status-dot--not-started"
+        };
+        <li class="dfe-f-side-navigation__item census-question-nav__question@(isCurrent ? " dfe-f-side-navigation__item--current" : "")">
+          <a class="dfe-f-side-navigation__link govuk-link govuk-link--no-visited-state census-question-nav__link"
+             href="@Href(item.Key)"@if (isCurrent) { <text> aria-current="page"</text> }>
+            <span class="dfe-f-side-navigation__link-text">@item.Heading</span>
+            <span class="census-status-dot @dotClass" aria-hidden="true">
+              @if (item.Status == "COMPLETE")
+              {
+                <svg class="census-status-dot__tick" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" focusable="false">
+                  <path fill="currentColor" d="M6.7 12.3 2.4 8l1.4-1.4 2.9 2.9 5.5-5.5L14 5.4z"/>
+                </svg>
+              }
+            </span>
+            <span class="govuk-visually-hidden">@item.StatusLabel</span>
+          </a>
+        </li>
+      }
+    }
+  </ul>
+</nav>

@@ -249,6 +249,15 @@ public class ServiceSchemaTopicNav
     public int ItemCount { get; set; }
 }
 
+public class FipsRegisterManageTableModel
+{
+    public Guid ProductId { get; set; }
+    public string TopicKey { get; set; } = "";
+    public string TitleLabel { get; set; } = "Title";
+    public bool CanRemove { get; set; }
+    public List<ServiceSchemaEntryRow> Entries { get; set; } = new();
+}
+
 public class ServiceSchemaTopicBlock
 {
     public string Key { get; set; } = "";

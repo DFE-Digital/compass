@@ -674,6 +674,7 @@ builder.Services.AddHttpClient<Compass.Services.Aiss.IAissSummaryService, Compas
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddHttpClient<Compass.Services.Aiss.IAissProductAccessibilityService, Compass.Services.Aiss.AissProductAccessibilityService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+builder.Services.AddScoped<Compass.Services.Census.IServiceCensusService, Compass.Services.Census.ServiceCensusService>();
 
 builder.Services.AddHttpContextAccessor();
 

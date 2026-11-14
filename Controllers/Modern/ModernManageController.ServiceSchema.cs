@@ -1,6 +1,7 @@
 using Compass.Models;
 using Compass.Models.Fips;
 using Compass.Models.ServiceSchema;
+using Compass.Services.Fips;
 using Compass.Services.ServiceSchema;
 using Compass.ViewModels.Modern;
 using Microsoft.AspNetCore.Mvc;
@@ -69,7 +70,7 @@ public partial class ModernManageController
                 areaKey = legacyArea;
         }
 
-        return RedirectToAction(nameof(FipsProduct), new { id, tab = "additional", section = areaKey, topic });
+        return RedirectToAction(nameof(FipsProduct), new { id, tab = FipsCensusManageTabs.TabForSection(areaKey) });
     }
 
     [HttpPost("service-schema/{id:guid}/entries", Name = "SaveSchemaEntry")]
@@ -641,21 +642,18 @@ public partial class ModernManageController
         if (!string.IsNullOrWhiteSpace(error))
             TempData["ErrorMessage"] = error;
 
-        string? section = sectionKey;
-        string? topic = null;
+        var section = sectionKey;
         if (!areaOnly)
         {
             var layout = await ServiceSchemaLayout.LoadAsync(_context, ct);
             var found = layout.FindTopic(sectionKey);
             if (found != null)
-            {
-                topic = found.Key;
                 section = layout.AreaFor(found.Key)?.Key ?? sectionKey;
-            }
         }
 
-        var url = Url.Action(nameof(FipsProduct), new { id, tab = "additional", section, topic })
-            ?? $"/modern/manage/fips/{id}?tab=additional";
+        var tab = FipsCensusManageTabs.TabForSection(section);
+        var url = Url.Action(nameof(FipsProduct), new { id, tab })
+            ?? $"/modern/manage/fips/{id}?tab={tab}";
         return LocalRedirect(url);
     }
 

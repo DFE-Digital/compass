@@ -1,0 +1,66 @@
+@model Compass.ViewModels.Modern.ServiceCensusSubmitViewModel
+@{
+  ViewBag.CensusProductId = Model.ProductId;
+  ViewBag.CensusShowAll = Model.ShowAll;
+  ViewBag.CensusCurrent = "";
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@(Model.ShowAll ? Url.Action("All") : Url.Action("Index"))">Service census</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("TaskList", new { id = Model.ProductId, all = Model.ShowAll })">@Model.ProductTitle</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Submit</li>
+}
+
+<div class="govuk-grid-row census-task-layout">
+  <div class="govuk-grid-column-one-quarter-from-desktop census-task-layout__nav">
+    @await Html.PartialAsync("~/Views/Modern/Census/_SideNav.cshtml", Model.Nav)
+  </div>
+  <div class="govuk-grid-column-three-quarters-from-desktop">
+    <h1 class="govuk-heading-l">Check and submit</h1>
+    <p class="govuk-body">Submitting copies completed answers onto the service register for <strong>@Model.ProductTitle</strong>. CMDB contacts are not changed.</p>
+    @await Html.PartialAsync("~/Views/Modern/Census/_NamedSubmitters.cshtml", Model.NamedSubmitters)
+
+    @if (Model.Submitted)
+    {
+      <p class="govuk-body">This census has already been submitted.</p>
+    }
+    else if (!Model.CanSubmit)
+    {
+      @if (Model.Incomplete.Count > 0)
+      {
+        <p class="govuk-body">These questions still need to be marked complete:</p>
+        <ul class="govuk-list govuk-list--bullet">
+          @foreach (var item in Model.Incomplete)
+          {
+            <li><a class="govuk-link" href="@Url.Action("Question", new { id = Model.ProductId, taskKey = item.Key, all = Model.ShowAll })">@item.Heading</a> — @item.StatusLabel</li>
+          }
+        </ul>
+      }
+      @if (Model.NamedSubmitters.Count == 0)
+      {
+        <p class="govuk-body">Name people on the contacts page before this census can be submitted.</p>
+      }
+      else if (!Model.UserIsNamedOrAdmin)
+      {
+        <div class="govuk-warning-text">
+          <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+          <strong class="govuk-warning-text__text">
+            <span class="govuk-visually-hidden">Warning</span>
+            You cannot submit because you are not one of the people listed.
+          </strong>
+        </div>
+      }
+    }
+
+    @if (Model.CanSubmit)
+    {
+      <form method="post" action="@Url.Action("SubmitPost", new { id = Model.ProductId, all = Model.ShowAll })">
+        @Html.AntiForgeryToken()
+        <button type="submit" class="govuk-button" data-module="govuk-button">Submit census</button>
+      </form>
+    }
+
+    <p class="govuk-body"><a class="govuk-link" href="@Url.Action("TaskList", new { id = Model.ProductId, all = Model.ShowAll })">Back to task list</a></p>
+  </div>
+</div>
