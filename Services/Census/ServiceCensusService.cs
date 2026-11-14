@@ -154,6 +154,8 @@ public sealed class ServiceCensusService : IServiceCensusService
                     : task.Key == "service-line"
                         ? response.ServiceLineDescription
                         : state?.Answers.OrderBy(a => a.SortOrder).FirstOrDefault()?.Narrative;
+                if (task.Key == "aim" && string.IsNullOrWhiteSpace(vm.LongText))
+                    vm.LongText = FirstNonBlank(product.UserDescription, product.CMDBDescription);
                 break;
             case CensusTaskKind.YesChoice:
                 var yesAnswers = (state?.Answers ?? []).OrderBy(a => a.SortOrder).ToList();
@@ -194,6 +196,12 @@ public sealed class ServiceCensusService : IServiceCensusService
                     if (string.IsNullOrWhiteSpace(key)) continue;
                     if (!formKeys.Contains(key))
                     {
+                        if (string.Equals(key, CensusDefinition.GroupSpanAnswerTitle, StringComparison.OrdinalIgnoreCase)
+                            && !string.IsNullOrWhiteSpace(answer.LookupCode))
+                        {
+                            vm.ChoiceValues.Add(answer.LookupCode);
+                            continue;
+                        }
                         var url = string.IsNullOrWhiteSpace(answer.ExternalUrl) ? key : answer.ExternalUrl;
                         if (!string.IsNullOrWhiteSpace(url))
                             vm.Items.Add(new ServiceCensusAnswerRowViewModel { Title = url, ExternalUrl = url });
@@ -221,6 +229,17 @@ public sealed class ServiceCensusService : IServiceCensusService
                     .ToList();
                 break;
         }
+
+        var named = NamedSubmitters(product, response);
+        var submitted = response.Status == ServiceCensusStatuses.Submitted;
+        var allComplete = CensusDefinition.Tasks.All(t =>
+            StatusOf(response, t.Key) == ServiceCensusStatuses.Complete);
+        var userIsNamed = UserIsNamedSubmitter(named, userEmail);
+        vm.Submitted = submitted;
+        vm.AllComplete = allComplete;
+        vm.UserIsNamedSubmitter = userIsNamed;
+        vm.CanSubmit = userIsNamed && allComplete && !submitted;
+        vm.NamedSubmitters = named;
 
         return vm;
     }
@@ -358,6 +377,84 @@ public sealed class ServiceCensusService : IServiceCensusService
         response.UpdatedAt = DateTime.UtcNow;
         response.UpdatedBy = userEmail;
         await _db.SaveChangesAsync(ct);
+        return (true, null);
+    }
+
+    public async Task<(bool Ok, string? Error)> ReopenAsync(Guid productId, string userEmail, CancellationToken ct)
+    {
+        var product = await LoadProductAsync(productId, ct);
+        if (product == null) return (false, "That product was not found.");
+        var response = await EnsureResponseAsync(product, userEmail, ct);
+        if (response.Status != ServiceCensusStatuses.Submitted)
+            return (true, null);
+
+        response.Status = ServiceCensusStatuses.Draft;
+        response.SubmittedAt = null;
+        response.SubmittedBy = null;
+        response.UpdatedAt = DateTime.UtcNow;
+        response.UpdatedBy = userEmail;
+        await _db.SaveChangesAsync(ct);
+        return (true, null);
+    }
+
+    public async Task<(bool Ok, string? Error)> ResetAsync(Guid productId, string userEmail, CancellationToken ct)
+    {
+        var product = await LoadProductAsync(productId, ct);
+        if (product == null) return (false, "That product was not found.");
+        var response = await EnsureResponseAsync(product, userEmail, ct);
+        if (response.Status != ServiceCensusStatuses.Submitted)
+            return (false, "Only a submitted census can be reset.");
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                var responseId = response.Id;
+                await _db.ServiceCensusAnswers
+                    .Where(a => a.TaskState.ResponseId == responseId)
+                    .ExecuteDeleteAsync(ct);
+                await _db.ServiceCensusTaskStates
+                    .Where(t => t.ResponseId == responseId)
+                    .ExecuteDeleteAsync(ct);
+                await _db.ServiceCensusContactReviews
+                    .Where(r => r.ResponseId == responseId)
+                    .ExecuteDeleteAsync(ct);
+
+                foreach (var task in response.Tasks.ToList())
+                {
+                    foreach (var answer in task.Answers.ToList())
+                        _db.Entry(answer).State = EntityState.Detached;
+                    task.Answers.Clear();
+                    _db.Entry(task).State = EntityState.Detached;
+                    response.Tasks.Remove(task);
+                }
+
+                foreach (var review in response.ContactReviews.ToList())
+                {
+                    _db.Entry(review).State = EntityState.Detached;
+                    response.ContactReviews.Remove(review);
+                }
+
+                response.Status = ServiceCensusStatuses.Draft;
+                response.SubmittedAt = null;
+                response.SubmittedBy = null;
+                response.ServiceDescription = null;
+                response.ServiceLineDescription = null;
+                response.AccessibilityNotEnrolledReason = null;
+                response.UpdatedAt = DateTime.UtcNow;
+                response.UpdatedBy = userEmail;
+                await _db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+            }
+            catch
+            {
+                await tx.RollbackAsync(ct);
+                throw;
+            }
+        });
+
         return (true, null);
     }
 
@@ -657,6 +754,7 @@ public sealed class ServiceCensusService : IServiceCensusService
             CannotAnswerReason = state?.CannotAnswerReason,
             PreviousTaskKey = CensusDefinition.Previous(task.Key)?.Key,
             NextTaskKey = CensusDefinition.Next(task.Key)?.Key,
+            Submitted = response.Status == ServiceCensusStatuses.Submitted,
             Nav = NavFor(response, task.Key)
         };
     }
@@ -992,12 +1090,20 @@ public sealed class ServiceCensusService : IServiceCensusService
         switch (task.Kind)
         {
             case CensusTaskKind.LongText:
-                var text = Trim(request.LongText, 4000);
+                var text = Trim(request.LongText, task.Key == "aim" ? 10000 : 4000);
                 if (task.Key == "service") response.ServiceDescription = text;
                 if (task.Key == "service-line") response.ServiceLineDescription = text;
                 await PersistTaskAnswersAsync(state, string.IsNullOrWhiteSpace(text) ? [] : [
                     new ServiceCensusAnswer { Title = task.Heading, Narrative = text }
                 ], ct);
+                if (task.Key == "aim" && !string.IsNullOrWhiteSpace(text))
+                {
+                    await _db.CMDBProducts
+                        .Where(p => p.Id == response.ProductId)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(p => p.UserDescription, text)
+                            .SetProperty(p => p.UpdatedAt, DateTime.UtcNow), ct);
+                }
                 break;
             case CensusTaskKind.YesChoice:
                 await PersistTaskAnswersAsync(state, BuildYesChoiceAnswers(task, request), ct);
@@ -1064,6 +1170,18 @@ public sealed class ServiceCensusService : IServiceCensusService
                 return field.NarrativeLabel ?? "Explain where you record them.";
             if (field.Kind == CensusFormFieldKind.LongText && string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(narrative))
                 return "Answer: " + field.Label;
+            if (field.Kind == CensusFormFieldKind.Radio
+                && !string.IsNullOrWhiteSpace(field.RevealChoicesFor)
+                && string.Equals(value, field.RevealChoicesFor, StringComparison.OrdinalIgnoreCase))
+            {
+                var allowed = field.RevealChoices.Select(c => c.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var spans = PostedChoiceValues(request)
+                    .Where(v => allowed.Contains(v))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (spans.Count < 2)
+                    return field.RevealChoicesHint ?? "Select at least two groups that this work spans.";
+            }
         }
         return null;
     }
@@ -1093,9 +1211,27 @@ public sealed class ServiceCensusService : IServiceCensusService
                 Narrative = field.Kind == CensusFormFieldKind.LongText
                     || string.Equals(value, field.RevealNarrativeFor, StringComparison.OrdinalIgnoreCase)
                     ? narrative
-                    : null,
+                    : field.Options.FirstOrDefault(o =>
+                        string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase))?.Label,
                 SortOrder = order++
             });
+            if (field.Kind == CensusFormFieldKind.Radio
+                && !string.IsNullOrWhiteSpace(field.RevealChoicesFor)
+                && string.Equals(value, field.RevealChoicesFor, StringComparison.OrdinalIgnoreCase))
+            {
+                var allowed = field.RevealChoices.ToDictionary(c => c.Value, StringComparer.OrdinalIgnoreCase);
+                foreach (var span in PostedChoiceValues(request))
+                {
+                    if (!allowed.TryGetValue(span, out var option)) continue;
+                    answers.Add(new ServiceCensusAnswer
+                    {
+                        Title = CensusDefinition.GroupSpanAnswerTitle,
+                        LookupCode = option.Value,
+                        Narrative = option.Label,
+                        SortOrder = order++
+                    });
+                }
+            }
         }
 
         foreach (var item in items.Where(HasItem))
@@ -1412,7 +1548,9 @@ public sealed class ServiceCensusService : IServiceCensusService
             var answers = (state.Answers ?? []).OrderBy(a => a.SortOrder).ToList();
             if (answers.Count == 0 && task.Kind == CensusTaskKind.LongText)
             {
-                var text = task.Key == "service" ? response.ServiceDescription : response.ServiceLineDescription;
+                var text = task.Key == "service" ? response.ServiceDescription
+                    : task.Key == "service-line" ? response.ServiceLineDescription
+                    : null;
                 if (!string.IsNullOrWhiteSpace(text))
                     answers.Add(new ServiceCensusAnswer { Title = task.Heading, Narrative = text });
             }
@@ -1459,6 +1597,16 @@ public sealed class ServiceCensusService : IServiceCensusService
         var text = value?.Trim();
         if (string.IsNullOrEmpty(text)) return null;
         return text.Length <= max ? text : text[..max];
+    }
+
+    private static string? FirstNonBlank(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                return value.Trim();
+        }
+        return null;
     }
 
     private static List<string> PostedChoiceValues(ServiceCensusSaveRequest request)

@@ -27,6 +27,17 @@
     <p class="govuk-caption-m govuk-!-margin-bottom-1">@Model.GroupName</p>
     <h1 class="govuk-heading-l">@Model.Heading</h1>
     <p class="govuk-body">@Model.Help</p>
+    @if (TempData["SuccessMessage"] != null)
+    {
+      <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="census-question-success-title">
+        <div class="govuk-notification-banner__header">
+          <h2 class="govuk-notification-banner__title" id="census-question-success-title">Success</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+          <p class="govuk-notification-banner__heading">@TempData["SuccessMessage"]</p>
+        </div>
+      </div>
+    }
 
     <div class="govuk-notification-banner" id="census-unsaved" role="region" aria-labelledby="census-unsaved-title" hidden>
       <div class="govuk-notification-banner__header">
@@ -37,7 +48,66 @@
       </div>
     </div>
 
-    @if (HasPageError && !string.IsNullOrWhiteSpace(PageError))
+    @{
+      var submittedLocked = Model.Submitted
+          || string.Equals(PageError, "This census has been submitted and cannot be changed.", StringComparison.OrdinalIgnoreCase);
+      var readyNames = Model.NamedSubmitters
+          .Select(p => (p.Name ?? "").Trim())
+          .Where(name => name.Length > 0)
+          .Distinct(StringComparer.OrdinalIgnoreCase)
+          .ToList();
+    }
+    @if (!submittedLocked && Model.AllComplete)
+    {
+      <div class="govuk-notification-banner@(Model.CanSubmit ? " govuk-notification-banner--success" : "")" role="region" aria-labelledby="census-ready-title">
+        <div class="govuk-notification-banner__header">
+          <h2 class="govuk-notification-banner__title" id="census-ready-title">@(Model.CanSubmit ? "Success" : "Important")</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+          <p class="govuk-notification-banner__heading">All sections are complete. This census can now be submitted.</p>
+          @if (readyNames.Count == 0)
+          {
+            <p class="govuk-body">Name people on the contacts page before it can be submitted.</p>
+          }
+          else
+          {
+            <p class="govuk-body">It can be submitted by any of these people:</p>
+            <ul class="govuk-list">
+              @foreach (var name in readyNames)
+              {
+                <li>@name</li>
+              }
+            </ul>
+          }
+          @if (Model.CanSubmit)
+          {
+            <form method="post" action="@Url.Action("SubmitPost", new { id = Model.ProductId, all = Model.ShowAll })">
+              @Html.AntiForgeryToken()
+              <button type="submit" class="govuk-button govuk-!-margin-bottom-0">Submit census</button>
+            </form>
+          }
+        </div>
+      </div>
+    }
+    @if (submittedLocked)
+    {
+      <div class="govuk-notification-banner" role="region" aria-labelledby="census-submitted-lock-title">
+        <div class="govuk-notification-banner__header">
+          <h2 class="govuk-notification-banner__title" id="census-submitted-lock-title">Important</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+          <p class="govuk-notification-banner__heading">This census has been submitted and cannot be changed.</p>
+          @await Html.PartialAsync("~/Views/Modern/Census/_ReopenCensus.cshtml", new Compass.ViewModels.Modern.ServiceCensusReopenFormModel
+          {
+            ProductId = Model.ProductId,
+            ShowAll = Model.ShowAll,
+            TaskKey = Model.TaskKey,
+            CanAdminReset = Model.CanAdminReset
+          })
+        </div>
+      </div>
+    }
+    else if (HasPageError && !string.IsNullOrWhiteSpace(PageError))
     {
       <div class="govuk-error-summary" data-module="govuk-error-summary" role="alert">
         <div role="alert">
@@ -138,13 +208,28 @@
                   <div class="govuk-hint">@field.Hint</div>
                 }
                 <div class="govuk-radios" data-module="govuk-radios">
+                  @{
+                    var spanRevealId = "form-" + field.Key + "-spans";
+                    var selectedSpans = Model.ChoiceValues.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                  }
                   @foreach (var opt in field.Options)
                   {
+                    if (opt.DividerBefore)
+                    {
+                      <div class="govuk-radios__divider">or</div>
+                    }
                     var showOther = !string.IsNullOrWhiteSpace(field.RevealNarrativeFor)
                         && string.Equals(opt.Value, field.RevealNarrativeFor, StringComparison.OrdinalIgnoreCase);
+                    var showSpans = !string.IsNullOrWhiteSpace(field.RevealChoicesFor)
+                        && string.Equals(opt.Value, field.RevealChoicesFor, StringComparison.OrdinalIgnoreCase);
+                    var hintId = "form-hint-" + field.Key + "-" + opt.Value;
                     <div class="govuk-radios__item">
-                      <input class="govuk-radios__input" id="form-@field.Key-@opt.Value" name="FormValues[@field.Key]" type="radio" value="@opt.Value" @(string.Equals(selected, opt.Value, StringComparison.OrdinalIgnoreCase) ? "checked" : null) @if (showOther) { <text>data-aria-controls="@revealId"</text> }>
+                      <input class="govuk-radios__input" id="form-@field.Key-@opt.Value" name="FormValues[@field.Key]" type="radio" value="@opt.Value" @(string.Equals(selected, opt.Value, StringComparison.OrdinalIgnoreCase) ? "checked" : null) @if (!string.IsNullOrWhiteSpace(opt.Hint)) { <text>aria-describedby="@hintId"</text> } @if (showOther) { <text>data-aria-controls="@revealId"</text> } @if (showSpans) { <text>data-aria-controls="@spanRevealId"</text> }>
                       <label class="govuk-label govuk-radios__label" for="form-@field.Key-@opt.Value">@opt.Label</label>
+                      @if (!string.IsNullOrWhiteSpace(opt.Hint))
+                      {
+                        <div id="@hintId" class="govuk-hint govuk-radios__hint">@opt.Hint</div>
+                      }
                     </div>
                     if (showOther)
                     {
@@ -153,6 +238,32 @@
                           <label class="govuk-label" for="form-@field.Key-narrative">@(field.NarrativeLabel ?? "Give details")</label>
                           <textarea class="govuk-textarea" id="form-@field.Key-narrative" name="FormNarratives[@field.Key]" rows="4">@narrative</textarea>
                         </div>
+                      </div>
+                    }
+                    if (showSpans)
+                    {
+                      <div class="govuk-radios__conditional" id="@spanRevealId">
+                        <fieldset class="govuk-fieldset">
+                          <legend class="govuk-fieldset__legend">@(field.RevealChoicesLegend ?? "Select the groups this work spans")</legend>
+                          @if (!string.IsNullOrWhiteSpace(field.RevealChoicesHint))
+                          {
+                            <div class="govuk-hint">@field.RevealChoicesHint</div>
+                          }
+                          <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                            @foreach (var span in field.RevealChoices)
+                            {
+                              var spanHintId = "form-span-hint-" + span.Value;
+                              <div class="govuk-checkboxes__item">
+                                <input class="govuk-checkboxes__input" id="form-span-@span.Value" name="ChoiceValues" type="checkbox" value="@span.Value" @(selectedSpans.Contains(span.Value) ? "checked" : null) @if (!string.IsNullOrWhiteSpace(span.Hint)) { <text>aria-describedby="@spanHintId"</text> }>
+                                <label class="govuk-label govuk-checkboxes__label" for="form-span-@span.Value">@span.Label</label>
+                                @if (!string.IsNullOrWhiteSpace(span.Hint))
+                                {
+                                  <div id="@spanHintId" class="govuk-hint govuk-checkboxes__hint">@span.Hint</div>
+                                }
+                              </div>
+                            }
+                          </div>
+                        </fieldset>
                       </div>
                     }
                   }

@@ -150,6 +150,7 @@ public sealed class ModernCensusController : Controller
         SetNav(all ? "census-all" : "census-yours");
         var vm = await _census.GetTaskListAsync(id, CurrentUserEmail, all, cancellationToken);
         if (vm == null) return NotFound();
+        vm.CanAdminReset = await UserCanResetCensusAsync();
         ViewData["Title"] = vm.ProductTitle + " — Service census";
         return View("~/Views/Modern/Census/TaskList.cshtml", vm);
     }
@@ -162,6 +163,7 @@ public sealed class ModernCensusController : Controller
         SetNav(all ? "census-all" : "census-yours");
         var vm = await _census.GetQuestionAsync(id, taskKey, CurrentUserEmail, all, cancellationToken);
         if (vm == null) return NotFound();
+        vm.CanAdminReset = await UserCanResetCensusAsync();
         if (vm.PickFromRegister)
             vm.DependencySuggestUrl = Url.Action(nameof(SuggestDependencies), new { exclude = id });
         ViewData["Title"] = vm.Heading + " — " + vm.ProductTitle;
@@ -193,6 +195,7 @@ public sealed class ModernCensusController : Controller
                 ModelState.AddModelError("Items", error ?? "");
             var vm = await _census.GetQuestionAsync(id, taskKey, CurrentUserEmail, all, cancellationToken);
             if (vm == null) return NotFound();
+            vm.CanAdminReset = await UserCanResetCensusAsync();
             ApplyPosted(vm, model);
             if (vm.PickFromRegister)
                 vm.DependencySuggestUrl = Url.Action(nameof(SuggestDependencies), new { exclude = id });
@@ -215,6 +218,7 @@ public sealed class ModernCensusController : Controller
         SetNav(all ? "census-all" : "census-yours");
         var vm = await _census.GetSubmitAsync(id, CurrentUserEmail, all, cancellationToken);
         if (vm == null) return NotFound();
+        vm.CanAdminReset = await UserCanResetCensusAsync();
         ViewData["Title"] = "Submit census — " + vm.ProductTitle;
         return View("~/Views/Modern/Census/Submit.cshtml", vm);
     }
@@ -235,6 +239,48 @@ public sealed class ModernCensusController : Controller
         TempData["SuccessMessage"] = "Census submitted. The service register has been updated.";
         return RedirectToAction(nameof(TaskList), new { id, all });
     }
+
+    [HttpPost("{id:guid}/reopen")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Reopen(Guid id, bool all = false, string? taskKey = null, CancellationToken cancellationToken = default)
+    {
+        var blocked = await RequireRegisterAsync();
+        if (blocked != null) return blocked;
+        var (ok, error) = await _census.ReopenAsync(id, CurrentUserEmail, cancellationToken);
+        if (!ok)
+        {
+            TempData["ErrorMessage"] = error;
+            return RedirectToAction(nameof(TaskList), new { id, all });
+        }
+
+        TempData["SuccessMessage"] = "Census reopened. A named contact must submit it again when the changes are complete.";
+        if (!string.IsNullOrWhiteSpace(taskKey) && CensusDefinition.Find(taskKey) != null)
+            return RedirectToAction(nameof(Question), new { id, taskKey, all });
+        return RedirectToAction(nameof(TaskList), new { id, all });
+    }
+
+    [HttpPost("{id:guid}/reset")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Reset(Guid id, bool all = false, CancellationToken cancellationToken = default)
+    {
+        var blocked = await RequireRegisterAsync();
+        if (blocked != null) return blocked;
+        if (!await UserCanResetCensusAsync())
+            return Forbid();
+
+        var (ok, error) = await _census.ResetAsync(id, CurrentUserEmail, cancellationToken);
+        if (!ok)
+        {
+            TempData["ErrorMessage"] = error;
+            return RedirectToAction(nameof(TaskList), new { id, all });
+        }
+
+        TempData["SuccessMessage"] = "Census reset. All answers have been cleared. A named contact must complete and submit it again.";
+        return RedirectToAction(nameof(TaskList), new { id, all });
+    }
+
+    private Task<bool> UserCanResetCensusAsync() =>
+        _permission.IsOperationConsoleUserAsync(CurrentUserEmail);
 
     private static void BindPostedItems(ServiceCensusSaveRequest model, IFormCollection form)
     {

@@ -21,6 +21,10 @@ public interface IServiceCensusService
 
     Task<(bool Ok, string? Error)> SubmitAsync(Guid productId, string userEmail, CancellationToken ct);
 
+    Task<(bool Ok, string? Error)> ReopenAsync(Guid productId, string userEmail, CancellationToken ct);
+
+    Task<(bool Ok, string? Error)> ResetAsync(Guid productId, string userEmail, CancellationToken ct);
+
     Task<ServiceCensusReportViewModel> GetReportAsync(string? businessArea, CancellationToken ct, bool includeSubmissions = false);
 
     Task<ServiceCensusPromptViewModel?> GetPromptAsync(string userEmail, CancellationToken ct);

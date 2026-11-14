@@ -50,6 +50,7 @@ public sealed class ServiceCensusTaskListViewModel
     public List<ServiceCensusNamedPersonViewModel> NamedSubmitters { get; set; } = [];
     public List<ServiceCensusNavItemViewModel> Nav { get; set; } = [];
     public List<ServiceCensusTaskGroupViewModel> Groups { get; set; } = [];
+    public bool CanAdminReset { get; set; }
 }
 
 public sealed class ServiceCensusTaskGroupViewModel
@@ -122,7 +123,13 @@ public sealed class ServiceCensusQuestionViewModel
     public string AccessibilityEnrolUrl { get; set; } = CensusDefinition.AccessibilityEnrolUrl;
     public string? PreviousTaskKey { get; set; }
     public string? NextTaskKey { get; set; }
+    public bool Submitted { get; set; }
+    public bool AllComplete { get; set; }
+    public bool CanSubmit { get; set; }
+    public bool UserIsNamedSubmitter { get; set; }
+    public List<ServiceCensusNamedPersonViewModel> NamedSubmitters { get; set; } = [];
     public List<ServiceCensusNavItemViewModel> Nav { get; set; } = [];
+    public bool CanAdminReset { get; set; }
 }
 
 public sealed class ServiceCensusAnswerRowViewModel
@@ -173,6 +180,15 @@ public sealed class ServiceCensusSubmitViewModel
     public List<ServiceCensusNamedPersonViewModel> NamedSubmitters { get; set; } = [];
     public List<ServiceCensusTaskSummaryViewModel> Incomplete { get; set; } = [];
     public List<ServiceCensusNavItemViewModel> Nav { get; set; } = [];
+    public bool CanAdminReset { get; set; }
+}
+
+public sealed class ServiceCensusReopenFormModel
+{
+    public Guid ProductId { get; set; }
+    public bool ShowAll { get; set; }
+    public string? TaskKey { get; set; }
+    public bool CanAdminReset { get; set; }
 }
 
 public sealed class ServiceCensusSaveRequest
