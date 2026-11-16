@@ -220,7 +220,6 @@
                 }
                 <div class="govuk-radios" data-module="govuk-radios">
                   @{
-                    var spanRevealId = "form-" + field.Key + "-spans";
                     var selectedSpans = Model.ChoiceValues.ToHashSet(StringComparer.OrdinalIgnoreCase);
                   }
                   @foreach (var opt in field.Options)
@@ -231,11 +230,12 @@
                     }
                     var showOther = !string.IsNullOrWhiteSpace(field.RevealNarrativeFor)
                         && string.Equals(opt.Value, field.RevealNarrativeFor, StringComparison.OrdinalIgnoreCase);
-                    var showSpans = !string.IsNullOrWhiteSpace(field.RevealChoicesFor)
-                        && string.Equals(opt.Value, field.RevealChoicesFor, StringComparison.OrdinalIgnoreCase);
+                    var revealed = field.ConditionalChoices.FirstOrDefault(c =>
+                        string.Equals(c.WhenValue, opt.Value, StringComparison.OrdinalIgnoreCase));
+                    var condRevealId = revealed == null ? null : "form-" + field.Key + "-cond-" + opt.Value;
                     var hintId = "form-hint-" + field.Key + "-" + opt.Value;
                     <div class="govuk-radios__item">
-                      <input class="govuk-radios__input" id="form-@field.Key-@opt.Value" name="FormValues[@field.Key]" type="radio" value="@opt.Value" @(string.Equals(selected, opt.Value, StringComparison.OrdinalIgnoreCase) ? "checked" : null) @if (!string.IsNullOrWhiteSpace(opt.Hint)) { <text>aria-describedby="@hintId"</text> } @if (showOther) { <text>data-aria-controls="@revealId"</text> } @if (showSpans) { <text>data-aria-controls="@spanRevealId"</text> }>
+                      <input class="govuk-radios__input" id="form-@field.Key-@opt.Value" name="FormValues[@field.Key]" type="radio" value="@opt.Value" @(string.Equals(selected, opt.Value, StringComparison.OrdinalIgnoreCase) ? "checked" : null) @if (!string.IsNullOrWhiteSpace(opt.Hint)) { <text>aria-describedby="@hintId"</text> } @if (showOther) { <text>data-aria-controls="@revealId"</text> } @if (condRevealId != null) { <text>data-aria-controls="@condRevealId"</text> }>
                       <label class="govuk-label govuk-radios__label" for="form-@field.Key-@opt.Value">@opt.Label</label>
                       @if (!string.IsNullOrWhiteSpace(opt.Hint))
                       {
@@ -251,22 +251,22 @@
                         </div>
                       </div>
                     }
-                    if (showSpans)
+                    if (revealed != null && condRevealId != null)
                     {
-                      <div class="govuk-radios__conditional" id="@spanRevealId">
+                      <div class="govuk-radios__conditional" id="@condRevealId">
                         <fieldset class="govuk-fieldset">
-                          <legend class="govuk-fieldset__legend">@(field.RevealChoicesLegend ?? "Select the groups this work spans")</legend>
-                          @if (!string.IsNullOrWhiteSpace(field.RevealChoicesHint))
+                          <legend class="govuk-fieldset__legend">@(revealed.Legend ?? "Select all that apply")</legend>
+                          @if (!string.IsNullOrWhiteSpace(revealed.Hint))
                           {
-                            <div class="govuk-hint">@field.RevealChoicesHint</div>
+                            <div class="govuk-hint">@revealed.Hint</div>
                           }
                           <div class="govuk-checkboxes" data-module="govuk-checkboxes">
-                            @foreach (var span in field.RevealChoices)
+                            @foreach (var span in revealed.Choices)
                             {
-                              var spanHintId = "form-span-hint-" + span.Value;
+                              var spanHintId = "form-choice-hint-" + field.Key + "-" + span.Value;
                               <div class="govuk-checkboxes__item">
-                                <input class="govuk-checkboxes__input" id="form-span-@span.Value" name="ChoiceValues" type="checkbox" value="@span.Value" @(selectedSpans.Contains(span.Value) ? "checked" : null) @if (!string.IsNullOrWhiteSpace(span.Hint)) { <text>aria-describedby="@spanHintId"</text> }>
-                                <label class="govuk-label govuk-checkboxes__label" for="form-span-@span.Value">@span.Label</label>
+                                <input class="govuk-checkboxes__input" id="form-choice-@field.Key-@span.Value" name="ChoiceValues" type="checkbox" value="@span.Value" @(selectedSpans.Contains(span.Value) ? "checked" : null) @if (!string.IsNullOrWhiteSpace(span.Hint)) { <text>aria-describedby="@spanHintId"</text> }>
+                                <label class="govuk-label govuk-checkboxes__label" for="form-choice-@field.Key-@span.Value">@span.Label</label>
                                 @if (!string.IsNullOrWhiteSpace(span.Hint))
                                 {
                                   <div id="@spanHintId" class="govuk-hint govuk-checkboxes__hint">@span.Hint</div>

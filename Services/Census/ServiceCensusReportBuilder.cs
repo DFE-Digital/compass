@@ -426,6 +426,18 @@ public static class ServiceCensusReportBuilder
         if (string.Equals(title, "stack-info", StringComparison.OrdinalIgnoreCase))
             return "Tech stack notes";
 
+        foreach (var formField in task.FormFields)
+        {
+            var revealed = formField.ConditionalChoices.FirstOrDefault(c =>
+                string.Equals(c.AnswerTitle, title, StringComparison.OrdinalIgnoreCase));
+            if (revealed != null)
+            {
+                var revealedOption = revealed.Choices.FirstOrDefault(o =>
+                    string.Equals(o.Value, lookupCode, StringComparison.OrdinalIgnoreCase));
+                return (revealed.Legend ?? formField.Label) + ": " + (revealedOption?.Label ?? lookupCode ?? "");
+            }
+        }
+
         var field = task.FormFields.FirstOrDefault(f =>
             string.Equals(f.Key, title, StringComparison.OrdinalIgnoreCase));
         if (field != null)
