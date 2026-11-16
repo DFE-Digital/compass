@@ -196,8 +196,7 @@ public sealed class ServiceCensusService : IServiceCensusService
                     if (string.IsNullOrWhiteSpace(key)) continue;
                     if (!formKeys.Contains(key))
                     {
-                        if (string.Equals(key, CensusDefinition.GroupSpanAnswerTitle, StringComparison.OrdinalIgnoreCase)
-                            && !string.IsNullOrWhiteSpace(answer.LookupCode))
+                        if (IsConditionalChoiceAnswer(task, key) && !string.IsNullOrWhiteSpace(answer.LookupCode))
                         {
                             vm.ChoiceValues.Add(answer.LookupCode);
                             continue;
@@ -1194,17 +1193,20 @@ public sealed class ServiceCensusService : IServiceCensusService
             if ((field.Kind == CensusFormFieldKind.LongText || field.Kind == CensusFormFieldKind.Text)
                 && string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(narrative))
                 return "Answer: " + field.Label;
-            if (field.Kind == CensusFormFieldKind.Radio
-                && !string.IsNullOrWhiteSpace(field.RevealChoicesFor)
-                && string.Equals(value, field.RevealChoicesFor, StringComparison.OrdinalIgnoreCase))
+            if (field.Kind == CensusFormFieldKind.Radio)
             {
-                var allowed = field.RevealChoices.Select(c => c.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var spans = PostedChoiceValues(request)
-                    .Where(v => allowed.Contains(v))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                if (spans.Count < 2)
-                    return field.RevealChoicesHint ?? "Select at least two groups that this work spans.";
+                foreach (var revealed in field.ConditionalChoices)
+                {
+                    if (!string.Equals(value, revealed.WhenValue, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var allowed = revealed.Choices.Select(c => c.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var selected = PostedChoiceValues(request)
+                        .Where(v => allowed.Contains(v))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    if (selected.Count < revealed.Minimum)
+                        return revealed.Hint ?? "Select the options that apply.";
+                }
             }
         }
         return null;
@@ -1239,21 +1241,24 @@ public sealed class ServiceCensusService : IServiceCensusService
                         string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase))?.Label,
                 SortOrder = order++
             });
-            if (field.Kind == CensusFormFieldKind.Radio
-                && !string.IsNullOrWhiteSpace(field.RevealChoicesFor)
-                && string.Equals(value, field.RevealChoicesFor, StringComparison.OrdinalIgnoreCase))
+            if (field.Kind == CensusFormFieldKind.Radio)
             {
-                var allowed = field.RevealChoices.ToDictionary(c => c.Value, StringComparer.OrdinalIgnoreCase);
-                foreach (var span in PostedChoiceValues(request))
+                foreach (var revealed in field.ConditionalChoices)
                 {
-                    if (!allowed.TryGetValue(span, out var option)) continue;
-                    answers.Add(new ServiceCensusAnswer
+                    if (!string.Equals(value, revealed.WhenValue, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var allowed = revealed.Choices.ToDictionary(c => c.Value, StringComparer.OrdinalIgnoreCase);
+                    foreach (var choice in PostedChoiceValues(request))
                     {
-                        Title = CensusDefinition.GroupSpanAnswerTitle,
-                        LookupCode = option.Value,
-                        Narrative = option.Label,
-                        SortOrder = order++
-                    });
+                        if (!allowed.TryGetValue(choice, out var option)) continue;
+                        answers.Add(new ServiceCensusAnswer
+                        {
+                            Title = revealed.AnswerTitle,
+                            LookupCode = option.Value,
+                            Narrative = option.Label,
+                            SortOrder = order++
+                        });
+                    }
                 }
             }
         }
@@ -1947,7 +1952,26 @@ public sealed class ServiceCensusService : IServiceCensusService
             if (!vm.ChoiceValues.Any(v => string.Equals(v, CensusDefinition.GroupFunding, StringComparison.OrdinalIgnoreCase)))
                 vm.ChoiceValues.Add(CensusDefinition.GroupFunding);
         }
+
+        if (task.Key == "group"
+            && string.Equals(vm.FormValues.GetValueOrDefault("group"), CensusDefinition.GroupEnabling, StringComparison.OrdinalIgnoreCase))
+        {
+            var enabling = StateOf(response, CensusDefinition.EnablingProductTaskKey);
+            foreach (var kind in (enabling?.Answers ?? [])
+                .Select(a => a.LookupCode)
+                .Where(code => !string.IsNullOrWhiteSpace(code))
+                .SelectMany(code => code!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)))
+            {
+                if (!vm.ChoiceValues.Any(v => string.Equals(v, kind, StringComparison.OrdinalIgnoreCase)))
+                    vm.ChoiceValues.Add(kind);
+            }
+        }
     }
+
+    private static bool IsConditionalChoiceAnswer(CensusTask task, string title) =>
+        task.FormFields.Any(field =>
+            field.ConditionalChoices.Any(choice =>
+                string.Equals(choice.AnswerTitle, title, StringComparison.OrdinalIgnoreCase)));
 
     private static bool HasFormValue(ServiceCensusQuestionViewModel vm, string key) =>
         vm.FormValues.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value);

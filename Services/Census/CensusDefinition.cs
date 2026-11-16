@@ -84,10 +84,17 @@ public sealed class CensusFormField
     public IReadOnlyList<CensusChoice> Options { get; init; } = [];
     public string? RevealNarrativeFor { get; init; }
     public string? NarrativeLabel { get; init; }
-    public string? RevealChoicesFor { get; init; }
-    public IReadOnlyList<CensusChoice> RevealChoices { get; init; } = [];
-    public string? RevealChoicesLegend { get; init; }
-    public string? RevealChoicesHint { get; init; }
+    public IReadOnlyList<CensusConditionalChoices> ConditionalChoices { get; init; } = [];
+}
+
+public sealed class CensusConditionalChoices
+{
+    public required string WhenValue { get; init; }
+    public required IReadOnlyList<CensusChoice> Choices { get; init; }
+    public string? Legend { get; init; }
+    public string? Hint { get; init; }
+    public int Minimum { get; init; } = 1;
+    public string AnswerTitle { get; init; } = "choice";
 }
 
 public sealed class CensusContactRole
@@ -107,6 +114,8 @@ public static class CensusDefinition
     public const string GroupCrossCutting = "cross-cutting";
     public const string GroupFunding = "funding";
     public const string GroupSpanAnswerTitle = "span";
+    public const string GroupEnablingKindAnswerTitle = "enabling-kind";
+    public const string EnablingProductTaskKey = "enabling-product";
 
     private static readonly IReadOnlyList<CensusChoice> GroupSubgroupOptions =
     [
@@ -128,6 +137,16 @@ public static class CensusDefinition
             Label = "Strategy and Operations: Funding",
             Hint = "Cross-cutting work whose primary outcome is funding, rather than a single policy group."
         }
+    ];
+
+    private static readonly IReadOnlyList<CensusChoice> EnablingFunctionalityOptions =
+    [
+        new() { Value = "governance", Label = "Governance", Hint = "Decisions, oversight, and how work is directed." },
+        new() { Value = "assurance", Label = "Assurance", Hint = "Checks that work meets the expected standard." },
+        new() { Value = "compliance", Label = "Compliance", Hint = "Meeting legal, policy, or security obligations." },
+        new() { Value = "guidance", Label = "Guidance", Hint = "Advice, standards, or instructions for other services." },
+        new() { Value = "case-management", Label = "Case management", Hint = "Handling cases, requests, or workflow." },
+        new() { Value = "other", Label = "Other", Hint = "Something else this product provides for DDT." }
     ];
 
     private static readonly IReadOnlyList<CensusChoice> GroupPrimaryOptions =
@@ -155,14 +174,23 @@ public static class CensusDefinition
             Key = "policy-sro",
             Name = "Policy SRO (SCS1 or above)",
             Hint = "Senior responsible owner in the policy area. This person must be SCS1 or above.",
-            NameAliases = ["policy sro", "policy senior responsible owner", "policy senior responsible officer"]
+            NameAliases = []
         },
         new()
         {
             Key = "ddt-sro",
             Name = "DDT SRO (Deputy Director allowed)",
             Hint = "Senior responsible owner in Digital, Data and Technology. A Deputy Director can hold this role.",
-            NameAliases = ["ddt sro", "digital sro", "ddat sro", "deputy director sro", "dd sro"]
+            NameAliases =
+            [
+                "ddt sro",
+                "digital sro",
+                "ddat sro",
+                "deputy director sro",
+                "dd sro",
+                "senior responsible officer",
+                "senior responsible owner"
+            ]
         },
         new()
         {
@@ -285,7 +313,7 @@ public static class CensusDefinition
             GroupKey = "contacts",
             GroupName = "Contacts",
             Heading = "Contacts",
-            Help = "Review who holds each role. Change or add a person using the user lookup. This records the census answer and does not update the CMDB.",
+            Help = "Review the people who are in defined roles, and provide information where there is no one in a role currently. This information will be updated against the service offering within a few working days.",
             Kind = CensusTaskKind.Contacts,
             RegisterDomainKey = "contact-review"
         },
@@ -316,7 +344,7 @@ public static class CensusDefinition
             GroupKey = "purpose",
             GroupName = "Purpose and value",
             Heading = "Primary contribution",
-            Help = "Which group's outcomes does this product primarily contribute to? A group or subgroup is for work whose primary outcome is delivering or supporting a particular policy or sector outcome. Choose enabling if the primary outcome is improving DfE's corporate capability to operate and deliver. Choose cross-cutting if the work spans more than one group and cannot be attributed to one of them, and then select all relevant groups.",
+            Help = "Which group's outcomes does this product primarily contribute to? A group or subgroup is for work whose primary outcome is delivering or supporting a particular policy or sector outcome. Choose enabling if the primary outcome is improving DfE's corporate capability to operate and deliver, and then select the kind of enabling functionality. Choose cross-cutting if the work spans more than one group and cannot be attributed to one of them, and then select all relevant groups.",
             Kind = CensusTaskKind.Form,
             RegisterDomainKey = "group",
             FormFields =
@@ -325,13 +353,30 @@ public static class CensusDefinition
                 {
                     Key = "group",
                     Label = "Primary contribution",
-                    Hint = "Select one option. Cross-cutting then lets you select every group the work covers, including Strategy and Operations: Funding where that applies.",
+                    Hint = "Select one option. Enabling and cross-cutting then let you add the options that apply.",
                     Kind = CensusFormFieldKind.Radio,
                     Options = GroupPrimaryOptions,
-                    RevealChoicesFor = GroupCrossCutting,
-                    RevealChoices = GroupSpanOptions,
-                    RevealChoicesLegend = "Which groups does this work span?",
-                    RevealChoicesHint = "Select every group this work covers. Choose at least two."
+                    ConditionalChoices =
+                    [
+                        new()
+                        {
+                            WhenValue = GroupEnabling,
+                            Choices = EnablingFunctionalityOptions,
+                            Legend = "What enabling functionality does this product provide into DDT?",
+                            Hint = "Select all that apply.",
+                            Minimum = 1,
+                            AnswerTitle = GroupEnablingKindAnswerTitle
+                        },
+                        new()
+                        {
+                            WhenValue = GroupCrossCutting,
+                            Choices = GroupSpanOptions,
+                            Legend = "Which groups does this work span?",
+                            Hint = "Select every group this work covers. Choose at least two.",
+                            Minimum = 2,
+                            AnswerTitle = GroupSpanAnswerTitle
+                        }
+                    ]
                 }
             ]
         },
@@ -339,28 +384,6 @@ public static class CensusDefinition
             "Strategic objectives",
             "Select the strategic objectives this product supports.",
             CensusLookupSource.StrategicObjective, CensusLookupControl.Checkbox, "strategic-objective"),
-        new()
-        {
-            Key = "enabling-product",
-            GroupKey = "purpose",
-            GroupName = "Purpose and value",
-            Heading = "Does this product provide enabling functionality into DDT?",
-            NavHeading = "Enabling functionality",
-            Help = "If it does, record the kind of functionality and a short description.",
-            TitleLabel = "Answer",
-            NarrativeLabel = "What enabling functionality does it provide?",
-            Kind = CensusTaskKind.YesChoice,
-            RegisterDomainKey = "enabling-product",
-            ChoiceOptions =
-            [
-                new() { Value = "governance", Label = "Governance", Hint = "Decisions, oversight, and how work is directed." },
-                new() { Value = "assurance", Label = "Assurance", Hint = "Checks that work meets the expected standard." },
-                new() { Value = "compliance", Label = "Compliance", Hint = "Meeting legal, policy, or security obligations." },
-                new() { Value = "guidance", Label = "Guidance", Hint = "Advice, standards, or instructions for other services." },
-                new() { Value = "case-management", Label = "Case management", Hint = "Handling cases, requests, or workflow." },
-                new() { Value = "other", Label = "Other", Hint = "Something else this product provides for DDT." }
-            ]
-        },
         Lookup("user-group", "users", "Users and needs",
             "User groups",
             "Select the level 1 user groups this product serves. More detailed subgroups are not needed for the census.",
