@@ -14,6 +14,7 @@ public enum CensusTaskKind
 public enum CensusFormFieldKind
 {
     Radio,
+    Text,
     LongText
 }
 
@@ -104,9 +105,10 @@ public static class CensusDefinition
 
     public const string GroupEnabling = "enabling";
     public const string GroupCrossCutting = "cross-cutting";
+    public const string GroupFunding = "funding";
     public const string GroupSpanAnswerTitle = "span";
 
-    private static readonly IReadOnlyList<CensusChoice> GroupSpanOptions =
+    private static readonly IReadOnlyList<CensusChoice> GroupSubgroupOptions =
     [
         new() { Value = "families-csc", Label = "Families: CSC", Hint = "Children's Social Care." },
         new() { Value = "families-ey", Label = "Families: EY", Hint = "Early Years." },
@@ -114,25 +116,35 @@ public static class CensusDefinition
         new() { Value = "schools-14-16-technical", Label = "Schools: 14-16 Technical" },
         new() { Value = "schools-other", Label = "Schools: Other" },
         new() { Value = "skills", Label = "Skills" },
-        new() { Value = "regions", Label = "Regions" },
-        new() { Value = "funding", Label = "Funding" }
+        new() { Value = "regions", Label = "Regions" }
+    ];
+
+    private static readonly IReadOnlyList<CensusChoice> GroupSpanOptions =
+    [
+        ..GroupSubgroupOptions,
+        new()
+        {
+            Value = GroupFunding,
+            Label = "Strategy and Operations: Funding",
+            Hint = "Cross-cutting work whose primary outcome is funding, rather than a single policy group."
+        }
     ];
 
     private static readonly IReadOnlyList<CensusChoice> GroupPrimaryOptions =
     [
-        ..GroupSpanOptions,
+        ..GroupSubgroupOptions,
         new()
         {
             Value = GroupEnabling,
             Label = "Enabling",
-            Hint = "Work whose primary outcome is improving DfE's corporate capability to operate and deliver.",
+            Hint = "The primary outcome is improving DfE's corporate capability to operate and deliver.",
             DividerBefore = true
         },
         new()
         {
             Value = GroupCrossCutting,
             Label = "Cross-cutting",
-            Hint = "Work whose primary outcome spans multiple DfE policy groups or sectors and cannot be attributed to one group, but is still directed at policy or sector outcomes rather than DfE's internal operation."
+            Hint = "The work spans more than one group and cannot be attributed to one of them."
         }
     ];
 
@@ -142,15 +154,15 @@ public static class CensusDefinition
         {
             Key = "policy-sro",
             Name = "Policy SRO (SCS1 or above)",
-            Hint = "Senior responsible owner in the policy area.",
-            NameAliases = ["policy sro", "policy senior responsible owner"]
+            Hint = "Senior responsible owner in the policy area. This person must be SCS1 or above.",
+            NameAliases = ["policy sro", "policy senior responsible owner", "policy senior responsible officer"]
         },
         new()
         {
             Key = "ddt-sro",
-            Name = "DDT SRO (SCS1 or above)",
-            Hint = "Senior responsible owner in Digital, Data and Technology.",
-            NameAliases = ["ddt sro", "digital sro", "ddat sro", "senior responsible officer", "senior responsible owner", "sro"]
+            Name = "DDT SRO (Deputy Director allowed)",
+            Hint = "Senior responsible owner in Digital, Data and Technology. A Deputy Director can hold this role.",
+            NameAliases = ["ddt sro", "digital sro", "ddat sro", "deputy director sro", "dd sro"]
         },
         new()
         {
@@ -218,14 +230,35 @@ public static class CensusDefinition
 
     public static IReadOnlyList<CensusTask> Tasks { get; } =
     [
-        LongText("service", "context", "Service and service line",
+        Form("service", "context", "Service and service line",
             "Service",
-            "How would you describe the service this product belongs to? A service is a collection of products and activities that are managed within DDT.",
-            "Service description", "service"),
-        LongText("service-line", "context", "Service and service line",
+            "Which service does this product belong to? A service is a collection of products and activities that are managed together within DDT to deliver a common purpose or capability.",
+            "service",
+            new CensusFormField
+            {
+                Key = "name",
+                Label = "Service name",
+                Hint = "Give the name of the service, not a description of what it does.",
+                Kind = CensusFormFieldKind.Text
+            }),
+        Form("service-line", "context", "Service and service line",
             "Service line",
-            "How would you describe the service line this product belongs to? A service line is a collection of products, services, and activities that are owned by a policy area or achieve a policy intent.",
-            "Service line description", "service-line"),
+            "Which service line does this product belong to? A service line is a collection of products, services and activities that are owned by a policy area or achieve a policy intent. Not all of those products, services and activities are digital or data.",
+            "service-line",
+            new CensusFormField
+            {
+                Key = "name",
+                Label = "Service line name",
+                Hint = "Give the name of the service line.",
+                Kind = CensusFormFieldKind.Text
+            },
+            new CensusFormField
+            {
+                Key = "description",
+                Label = "Service line description",
+                Hint = "Describe the policy intent or outcomes this service line exists to achieve. Do not list every product, service or activity.",
+                Kind = CensusFormFieldKind.LongText
+            }),
         Lookup("phase", "context", "Service and service line",
             "Phase",
             "Select the current phase for this product.",
@@ -282,8 +315,8 @@ public static class CensusDefinition
             Key = "group",
             GroupKey = "purpose",
             GroupName = "Purpose and value",
-            Heading = "Group",
-            Help = "Choose the group this product primarily belongs to. A group or subgroup is for work whose primary outcome is delivering or enabling a particular policy or sector outcome. If the work spans more than one group and cannot be attributed to one of them, choose Cross-cutting and then select every group it spans.",
+            Heading = "Primary contribution",
+            Help = "Which group's outcomes does this product primarily contribute to? A group or subgroup is for work whose primary outcome is delivering or supporting a particular policy or sector outcome. Choose enabling if the primary outcome is improving DfE's corporate capability to operate and deliver. Choose cross-cutting if the work spans more than one group and cannot be attributed to one of them, and then select all relevant groups.",
             Kind = CensusTaskKind.Form,
             RegisterDomainKey = "group",
             FormFields =
@@ -291,8 +324,8 @@ public static class CensusDefinition
                 new()
                 {
                     Key = "group",
-                    Label = "Group",
-                    Hint = "Select one option. Cross-cutting then lets you select more than one group.",
+                    Label = "Primary contribution",
+                    Hint = "Select one option. Cross-cutting then lets you select every group the work covers, including Strategy and Operations: Funding where that applies.",
                     Kind = CensusFormFieldKind.Radio,
                     Options = GroupPrimaryOptions,
                     RevealChoicesFor = GroupCrossCutting,
@@ -330,10 +363,10 @@ public static class CensusDefinition
         },
         Lookup("user-group", "users", "Users and needs",
             "User groups",
-            "Select the user groups this product serves.",
+            "Select the level 1 user groups this product serves. More detailed subgroups are not needed for the census.",
             CensusLookupSource.UserGroup, CensusLookupControl.Checkbox, "user-group"),
         Item("user-need", "users", "Users and needs", "User needs",
-            "Add high-level user needs only. We do not need a need for every feature of the product. Add one entry per need.",
+            "Add high-level user needs only. We do not require a need for every feature of the product. Add one entry per need.",
             "user need", "user needs", "user-need"),
         new()
         {
@@ -596,6 +629,21 @@ public static class CensusDefinition
             NarrativeLabel = label,
             Kind = CensusTaskKind.LongText,
             RegisterDomainKey = domain
+        };
+
+    private static CensusTask Form(
+        string key, string groupKey, string groupName, string heading, string help, string domain,
+        params CensusFormField[] fields) =>
+        new()
+        {
+            Key = key,
+            GroupKey = groupKey,
+            GroupName = groupName,
+            Heading = heading,
+            Help = help,
+            Kind = CensusTaskKind.Form,
+            RegisterDomainKey = domain,
+            FormFields = fields
         };
 
     private static CensusTask Item(

@@ -323,7 +323,8 @@ public static class ServiceCensusReportBuilder
                 if (task.Kind == CensusTaskKind.Contacts)
                     continue;
 
-                if (task.Kind == CensusTaskKind.LongText)
+                if (task.Kind == CensusTaskKind.LongText
+                    || (task.Key is "service" or "service-line" && state.Answers.Count == 0))
                 {
                     var text = task.Key == "service" ? response.ServiceDescription
                         : task.Key == "service-line" ? response.ServiceLineDescription
