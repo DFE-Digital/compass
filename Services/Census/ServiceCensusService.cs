@@ -230,6 +230,9 @@ public sealed class ServiceCensusService : IServiceCensusService
                 break;
         }
 
+        if (task.Kind == CensusTaskKind.Form)
+            HydrateNamedFormFields(vm, task, response, state);
+
         var named = NamedSubmitters(product, response);
         var submitted = response.Status == ServiceCensusStatuses.Submitted;
         var allComplete = CensusDefinition.Tasks.All(t =>
@@ -622,12 +625,28 @@ public sealed class ServiceCensusService : IServiceCensusService
             };
             response.Tasks.Add(state);
 
-            if (task.Kind == CensusTaskKind.LongText)
+            if (task.Kind == CensusTaskKind.LongText
+                || ((task.Key == "service" || task.Key == "service-line") && task.Kind == CensusTaskKind.Form))
             {
                 var text = matches[0].Narrative ?? matches[0].Title;
-                if (task.Key == "service") response.ServiceDescription = text;
-                if (task.Key == "service-line") response.ServiceLineDescription = text;
-                state.Answers.Add(new ServiceCensusAnswer { Narrative = text });
+                if (task.Key == "service")
+                {
+                    response.ServiceDescription = text;
+                    state.Answers.Add(new ServiceCensusAnswer { Title = "name", Narrative = text });
+                }
+                else if (task.Key == "service-line")
+                {
+                    var name = matches[0].Title ?? text;
+                    response.ServiceLineDescription = name;
+                    state.Answers.Add(new ServiceCensusAnswer { Title = "name", Narrative = name });
+                    if (!string.IsNullOrWhiteSpace(matches[0].Narrative)
+                        && !string.Equals(matches[0].Narrative, name, StringComparison.Ordinal))
+                        state.Answers.Add(new ServiceCensusAnswer { Title = "description", Narrative = matches[0].Narrative });
+                }
+                else
+                {
+                    state.Answers.Add(new ServiceCensusAnswer { Narrative = text });
+                }
             }
             else if (task.Kind == CensusTaskKind.Accessibility)
             {
@@ -1141,6 +1160,10 @@ public sealed class ServiceCensusService : IServiceCensusService
                             })
                             .ToList();
                 await PersistTaskAnswersAsync(state, BuildFormAnswers(task, request, keptFormItems), ct);
+                if (task.Key == "service")
+                    response.ServiceDescription = Trim(FormValue(request, "name"), 4000);
+                if (task.Key == "service-line")
+                    response.ServiceLineDescription = Trim(FormValue(request, "name"), 4000);
                 break;
             default:
                 if (request.Items.Any(HasItem) || request.ItemListCleared)
@@ -1168,7 +1191,8 @@ public sealed class ServiceCensusService : IServiceCensusService
                 && string.Equals(value, field.RevealNarrativeFor, StringComparison.OrdinalIgnoreCase)
                 && string.IsNullOrWhiteSpace(narrative))
                 return field.NarrativeLabel ?? "Explain where you record them.";
-            if (field.Kind == CensusFormFieldKind.LongText && string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(narrative))
+            if ((field.Kind == CensusFormFieldKind.LongText || field.Kind == CensusFormFieldKind.Text)
+                && string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(narrative))
                 return "Answer: " + field.Label;
             if (field.Kind == CensusFormFieldKind.Radio
                 && !string.IsNullOrWhiteSpace(field.RevealChoicesFor)
@@ -1197,9 +1221,9 @@ public sealed class ServiceCensusService : IServiceCensusService
         {
             var value = Trim(FormValue(request, field.Key), 300);
             var narrative = Trim(FormNarrative(request, field.Key), 10000);
-            if (field.Kind == CensusFormFieldKind.LongText)
+            if (field.Kind == CensusFormFieldKind.LongText || field.Kind == CensusFormFieldKind.Text)
             {
-                narrative = Trim(value ?? narrative, 10000);
+                narrative = Trim(value ?? narrative, field.Kind == CensusFormFieldKind.Text ? 400 : 10000);
                 value = field.Key;
             }
             if (string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(narrative))
@@ -1208,7 +1232,7 @@ public sealed class ServiceCensusService : IServiceCensusService
             {
                 Title = field.Key,
                 LookupCode = field.Kind == CensusFormFieldKind.Radio ? value : null,
-                Narrative = field.Kind == CensusFormFieldKind.LongText
+                Narrative = field.Kind is CensusFormFieldKind.LongText or CensusFormFieldKind.Text
                     || string.Equals(value, field.RevealNarrativeFor, StringComparison.OrdinalIgnoreCase)
                     ? narrative
                     : field.Options.FirstOrDefault(o =>
@@ -1546,7 +1570,7 @@ public sealed class ServiceCensusService : IServiceCensusService
             }
 
             var answers = (state.Answers ?? []).OrderBy(a => a.SortOrder).ToList();
-            if (answers.Count == 0 && task.Kind == CensusTaskKind.LongText)
+            if (answers.Count == 0 && (task.Kind == CensusTaskKind.LongText || task.Key is "service" or "service-line"))
             {
                 var text = task.Key == "service" ? response.ServiceDescription
                     : task.Key == "service-line" ? response.ServiceLineDescription
@@ -1662,6 +1686,9 @@ public sealed class ServiceCensusService : IServiceCensusService
         else
             selected = CurrentProductLookupIds(task.LookupSource, product).Select(id => id.ToString()).ToList();
 
+        if (task.LookupSource == CensusLookupSource.UserGroup)
+            selected = await MapToLevel1UserGroupIdsAsync(selected, ct);
+
         vm.SelectedLookupIds = selected;
         vm.LookupId = selected.FirstOrDefault();
         vm.LongText = (state?.Answers ?? [])
@@ -1731,10 +1758,11 @@ public sealed class ServiceCensusService : IServiceCensusService
                     .ToList();
             case CensusLookupSource.UserGroup:
                 return (await FipsUserGroupUiHelper.LoadActiveTreeAsync(_db, ct))
+                    .Where(x => x.Depth == 0)
                     .Select(x => new CensusChoice
                     {
                         Value = x.Id.ToString(),
-                        Label = AdminFipsUserGroupTreeHelper.FormatIndentedLabel(x.Name, x.Depth),
+                        Label = x.Name,
                         Hint = x.Description
                     })
                     .ToList();
@@ -1864,8 +1892,11 @@ public sealed class ServiceCensusService : IServiceCensusService
                         product.Types.Add(new CMDBProductType { CMDBProductId = product.Id, FipsTypeId = id });
                     break;
                 case CensusLookupSource.UserGroup:
+                    var level1Ids = (await MapToLevel1UserGroupIdsAsync(ids.Select(id => id.ToString()), ct))
+                        .Select(v => int.Parse(v))
+                        .ToArray();
                     _db.CMDBProductUserGroups.RemoveRange(product.UserGroups);
-                    foreach (var id in ids)
+                    foreach (var id in level1Ids)
                         product.UserGroups.Add(new CMDBProductUserGroup { CMDBProductId = product.Id, FipsUserGroupId = id });
                     break;
                 case CensusLookupSource.MissionPillar:
@@ -1885,5 +1916,74 @@ public sealed class ServiceCensusService : IServiceCensusService
         }
 
         product.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static void HydrateNamedFormFields(
+        ServiceCensusQuestionViewModel vm,
+        CensusTask task,
+        ServiceCensusResponse response,
+        ServiceCensusTaskState? state)
+    {
+        if (task.Key is "service" or "service-line")
+        {
+            var stored = task.Key == "service" ? response.ServiceDescription : response.ServiceLineDescription;
+            SetFormValueIfMissing(vm, "name", stored);
+            if (!HasFormValue(vm, "name"))
+            {
+                var leftover = (state?.Answers ?? []).FirstOrDefault(a =>
+                    !string.Equals(a.Title, "name", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(a.Title, "description", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(a.Narrative));
+                if (leftover != null)
+                    vm.FormValues["name"] = leftover.Narrative;
+            }
+            vm.Items.Clear();
+        }
+
+        if (task.Key == "group"
+            && string.Equals(vm.FormValues.GetValueOrDefault("group"), CensusDefinition.GroupFunding, StringComparison.OrdinalIgnoreCase))
+        {
+            vm.FormValues["group"] = CensusDefinition.GroupCrossCutting;
+            if (!vm.ChoiceValues.Any(v => string.Equals(v, CensusDefinition.GroupFunding, StringComparison.OrdinalIgnoreCase)))
+                vm.ChoiceValues.Add(CensusDefinition.GroupFunding);
+        }
+    }
+
+    private static bool HasFormValue(ServiceCensusQuestionViewModel vm, string key) =>
+        vm.FormValues.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value);
+
+    private static void SetFormValueIfMissing(ServiceCensusQuestionViewModel vm, string key, string? value)
+    {
+        if (HasFormValue(vm, key) || string.IsNullOrWhiteSpace(value))
+            return;
+        vm.FormValues[key] = value;
+    }
+
+    private async Task<List<string>> MapToLevel1UserGroupIdsAsync(IEnumerable<string> values, CancellationToken ct)
+    {
+        var requested = values
+            .Select(v => int.TryParse(v, out var id) ? id : 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        if (requested.Count == 0)
+            return [];
+
+        var groups = await _db.FipsUserGroups.AsNoTracking()
+            .Select(g => new { g.Id, g.ParentId })
+            .ToListAsync(ct);
+        var parentById = groups.ToDictionary(g => g.Id, g => g.ParentId);
+        var roots = new HashSet<int>();
+        foreach (var id in requested)
+        {
+            var current = id;
+            var seen = new HashSet<int>();
+            while (parentById.TryGetValue(current, out var parent) && parent.HasValue && seen.Add(current))
+                current = parent.Value;
+            if (parentById.ContainsKey(current))
+                roots.Add(current);
+        }
+
+        return roots.Select(id => id.ToString()).ToList();
     }
 }
