@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Compass.Controllers.Modern;
 
 [Authorize]
+[Route("census")]
 [Route("modern/census")]
 public sealed class ModernCensusController : Controller
 {

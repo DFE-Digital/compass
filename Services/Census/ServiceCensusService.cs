@@ -365,6 +365,8 @@ public sealed class ServiceCensusService : IServiceCensusService
         var response = await EnsureResponseAsync(product, userEmail, ct);
         if (response.Status == ServiceCensusStatuses.Submitted)
             return (false, "This census has already been submitted.");
+        if (await ProductIsAissEnrolledAsync(product, ct))
+            await MarkAccessibilityEnrolledCompleteAsync(response, userEmail, ct);
         var named = NamedSubmitters(product, response);
         if (!UserIsNamedSubmitter(named, userEmail))
             return (false, "Only a person named on the contacts page can submit this census.");
@@ -765,6 +767,8 @@ public sealed class ServiceCensusService : IServiceCensusService
             AddLabel = task.AddLabel,
             EmptyLabel = task.EmptyLabel,
             CaptureUrl = task.CaptureUrl,
+            UrlLabel = task.UrlLabel,
+            UrlHint = task.UrlHint,
             PickFromRegister = task.PickFromRegister,
             FormFields = task.FormFields.ToList(),
             Status = status,
@@ -904,6 +908,17 @@ public sealed class ServiceCensusService : IServiceCensusService
         var state = StateOf(response, "accessibility");
         if (state == null)
         {
+            state = await _db.ServiceCensusTaskStates
+                .Include(t => t.Answers)
+                .FirstOrDefaultAsync(
+                    t => t.ResponseId == response.Id && t.TaskKey == "accessibility",
+                    ct);
+            if (state != null)
+                response.Tasks.Add(state);
+        }
+
+        if (state == null)
+        {
             state = new ServiceCensusTaskState
             {
                 ResponseId = response.Id,
@@ -915,48 +930,26 @@ public sealed class ServiceCensusService : IServiceCensusService
             response.Tasks.Add(state);
             _db.ServiceCensusTaskStates.Add(state);
             state.Answers.Add(new ServiceCensusAnswer { Title = "enrolled" });
-            try
-            {
-                await SaveCensusAsync(ct);
-            }
-            catch
-            {
-                // In-memory status still complete for this request.
-            }
-            return;
+        }
+        else
+        {
+            state.CannotAnswer = false;
+            state.CannotAnswerReason = null;
+            state.Status = ServiceCensusStatuses.Complete;
+            state.UpdatedAt = DateTime.UtcNow;
+            state.UpdatedBy = userEmail;
+            if (state.Answers.Count == 0)
+                state.Answers.Add(new ServiceCensusAnswer { Title = "enrolled" });
         }
 
-        state.CannotAnswer = false;
-        state.CannotAnswerReason = null;
-        state.Status = ServiceCensusStatuses.Complete;
-        state.UpdatedAt = DateTime.UtcNow;
-        state.UpdatedBy = userEmail;
-
+        response.AccessibilityNotEnrolledReason = null;
         try
         {
-            await _db.ServiceCensusTaskStates
-                .Where(t => t.Id == state.Id)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(t => t.Status, ServiceCensusStatuses.Complete)
-                    .SetProperty(t => t.CannotAnswer, false)
-                    .SetProperty(t => t.CannotAnswerReason, (string?)null)
-                    .SetProperty(t => t.UpdatedAt, DateTime.UtcNow)
-                    .SetProperty(t => t.UpdatedBy, userEmail), ct);
-
-            var entry = _db.Entry(state);
-            if (entry.State == EntityState.Modified)
-                entry.State = EntityState.Unchanged;
-
-            if (!await _db.ServiceCensusAnswers.AnyAsync(a => a.TaskStateId == state.Id, ct)
-                && state.Answers.Count == 0)
-            {
-                state.Answers.Add(new ServiceCensusAnswer { Title = "enrolled" });
-                await SaveCensusAsync(ct);
-            }
+            await SaveCensusAsync(ct);
         }
         catch
         {
-            // Status is already complete in memory for the page.
+            // Keep the in-memory complete status for this request even if persist fails.
         }
     }
 

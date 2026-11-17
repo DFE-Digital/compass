@@ -22,4 +22,7 @@ public static class FeatureCodes
 
     /// <summary>Dashboard notification prompting named contacts to complete the service census. Independent of the census itself.</summary>
     public const string ServiceCensusBanner = "service_census_banner";
+
+    /// <summary>Census-backed sections on a service register product (Purpose, Users, Additional contacts, Functionality, Technology, Data, Metrics and KPIs, Evidence).</summary>
+    public const string ShowCensusDataOnRegister = "show_census_data_on_register";
 }

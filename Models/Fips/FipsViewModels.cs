@@ -204,6 +204,9 @@ public class FipsProductDetailViewModel
     /// <summary>Admin feature <see cref="FeatureCodes.ServiceRegisterSchema"/> is on for this user.</summary>
     public bool ShowServiceRegisterSchema { get; set; }
 
+    /// <summary>Admin feature <see cref="FeatureCodes.ShowCensusDataOnRegister"/> is on for this user.</summary>
+    public bool ShowCensusDataOnRegister { get; set; }
+
     /// <summary>Active categorisation groups for the Schema data section, including groups with no selection.</summary>
     public List<FipsCategorisationSummaryLine> SchemaDataLines { get; set; } = new();
 

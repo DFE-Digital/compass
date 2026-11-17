@@ -311,14 +311,16 @@ public partial class ModernManageController : Controller
 
         var schemaEnabled = await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(
             FeatureCodes.ServiceRegisterSchema, User);
+        var censusDataEnabled = await _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(
+            FeatureCodes.ShowCensusDataOnRegister, User);
         var wantsCensusManage = string.Equals(tab, "schema", StringComparison.OrdinalIgnoreCase)
             || string.Equals(tab, "additional", StringComparison.OrdinalIgnoreCase)
             || FipsCensusManageTabs.IsManageTab(tab);
-        if (wantsCensusManage && !schemaEnabled)
+        if (wantsCensusManage && !censusDataEnabled)
             tab = null;
 
         var detailTab = NormalizeFipsDetailTab(tab);
-        if (!schemaEnabled && FipsCensusManageTabs.IsManageTab(detailTab))
+        if (!censusDataEnabled && FipsCensusManageTabs.IsManageTab(detailTab))
             detailTab = "information";
 
         var product = await FipsProductDetailLoader.LoadProductAsync(_context, id, detailTab, ct);
@@ -330,7 +332,7 @@ public partial class ModernManageController : Controller
         var isNamedContact = product.Contacts.Any(c =>
             !string.IsNullOrWhiteSpace(c.UserEmail) &&
             string.Equals(c.UserEmail.Trim(), email, StringComparison.OrdinalIgnoreCase));
-        var isNamedInResponsibilities = schemaEnabled
+        var isNamedInResponsibilities = censusDataEnabled
             && await UserIsNamedInAdditionalResponsibilitiesAsync(id, email, ct);
         var canManage = product.Contacts.Any(c =>
             c.CanManage &&
@@ -352,9 +354,10 @@ public partial class ModernManageController : Controller
             EditMode = false,
             ActiveDetailTab = detailTab,
             ShowServiceRegisterSchema = schemaEnabled,
+            ShowCensusDataOnRegister = censusDataEnabled,
         };
 
-        if (schemaEnabled && FipsCensusManageTabs.IsManageTab(detailTab))
+        if (censusDataEnabled && FipsCensusManageTabs.IsManageTab(detailTab))
         {
             vm.AdditionalInformation = await ServiceSchemaWorkspace.LoadRecordAsync(
                 _context, id, FipsCensusManageTabs.SectionKey(detailTab), null, canEditSchema, ct);
