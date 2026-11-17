@@ -16,7 +16,9 @@
 @await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
   Title = Model.ProductTitle,
   Caption = "Service census",
-  Lede = new HtmlString($"<p class=\"govuk-body govuk-!-margin-bottom-0\">{Model.TasksComplete} of {Model.TaskCount} questions complete.</p>")
+  Lede = new HtmlString(Model.Submitted
+    ? "<p class=\"govuk-body govuk-!-margin-bottom-0\">This census has been submitted. Reopen it if you need to make changes.</p>"
+    : $"<p class=\"govuk-body govuk-!-margin-bottom-0\">{Model.TasksComplete} of {Model.TaskCount} questions complete.</p>")
 })
 
 <div class="govuk-grid-row census-task-layout">
@@ -82,28 +84,31 @@
       </ul>
     }
 
-    <h2 class="govuk-heading-m">Submit</h2>
-    @await Html.PartialAsync("~/Views/Modern/Census/_NamedSubmitters.cshtml", Model.NamedSubmitters)
-    @if (!Model.Submitted && !Model.CanSubmit)
+    @if (!Model.Submitted)
     {
-      <div class="govuk-inset-text">
-        @if (!Model.AllComplete)
-        {
-          <p class="govuk-body@(Model.UserIsNamedSubmitter ? " govuk-!-margin-bottom-0" : "")">You cannot submit until every question is marked complete.</p>
-        }
-        @if (Model.NamedSubmitters.Count == 0)
-        {
-          <p class="govuk-body govuk-!-margin-bottom-0">You cannot submit until people are named on the contacts page.</p>
-        }
-        else if (!Model.UserIsNamedSubmitter)
-        {
-          <p class="govuk-body govuk-!-margin-bottom-0">You cannot submit because you are not one of the people listed.</p>
-        }
-      </div>
-    }
-    else if (Model.CanSubmit)
-    {
-      <a class="govuk-button" href="@Url.Action("Submit", "ModernCensus", new { id = Model.ProductId, all = Model.ShowAll })">Check and submit</a>
+      <h2 class="govuk-heading-m">Submit</h2>
+      @await Html.PartialAsync("~/Views/Modern/Census/_NamedSubmitters.cshtml", Model.NamedSubmitters)
+      @if (!Model.CanSubmit)
+      {
+        <div class="govuk-inset-text">
+          @if (!Model.AllComplete)
+          {
+            <p class="govuk-body@(Model.UserIsNamedSubmitter ? " govuk-!-margin-bottom-0" : "")">You cannot submit until every question is marked complete.</p>
+          }
+          @if (Model.NamedSubmitters.Count == 0)
+          {
+            <p class="govuk-body govuk-!-margin-bottom-0">You cannot submit until people are named on the contacts page.</p>
+          }
+          else if (!Model.UserIsNamedSubmitter)
+          {
+            <p class="govuk-body govuk-!-margin-bottom-0">You cannot submit because you are not one of the people listed.</p>
+          }
+        </div>
+      }
+      else
+      {
+        <a class="govuk-button" href="@Url.Action("Submit", "ModernCensus", new { id = Model.ProductId, all = Model.ShowAll })">Check and submit</a>
+      }
     }
   </div>
 </div>
