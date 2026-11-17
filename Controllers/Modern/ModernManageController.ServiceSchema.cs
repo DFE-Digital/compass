@@ -70,6 +70,9 @@ public partial class ModernManageController
                 areaKey = legacyArea;
         }
 
+        if (!await CensusDataOnRegisterEnabledAsync())
+            return RedirectToAction(nameof(FipsProduct), new { id });
+
         return RedirectToAction(nameof(FipsProduct), new { id, tab = FipsCensusManageTabs.TabForSection(areaKey) });
     }
 
@@ -567,9 +570,12 @@ public partial class ModernManageController
     private Task<bool> SchemaFeatureEnabledAsync() =>
         _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(FeatureCodes.ServiceRegisterSchema, User);
 
+    private Task<bool> CensusDataOnRegisterEnabledAsync() =>
+        _globalFeatureToggle.IsFeatureEnabledForPrincipalAsync(FeatureCodes.ShowCensusDataOnRegister, User);
+
     private async Task<IActionResult?> RequireSchemaEditorAsync(Guid id, string? sectionKey, CancellationToken ct)
     {
-        if (!await SchemaFeatureEnabledAsync())
+        if (!await SchemaFeatureEnabledAsync() || !await CensusDataOnRegisterEnabledAsync())
             return NotFound();
 
         var exists = await _context.CMDBProducts.AnyAsync(p => p.Id == id, ct);

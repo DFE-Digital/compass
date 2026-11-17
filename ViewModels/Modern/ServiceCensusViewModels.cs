@@ -96,6 +96,8 @@ public sealed class ServiceCensusQuestionViewModel
     public string AddLabel { get; set; } = "";
     public string EmptyLabel { get; set; } = "";
     public bool CaptureUrl { get; set; }
+    public string UrlLabel { get; set; } = "Link to reference materials";
+    public string UrlHint { get; set; } = "Optional. Add a URL for guidance, a dashboard, or other material relating to this question.";
     public bool PickFromRegister { get; set; }
     public string? DependencySuggestUrl { get; set; }
     public string Status { get; set; } = "";

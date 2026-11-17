@@ -1773,6 +1773,26 @@ static async Task SeedRbacInitialDataAsync(Compass.Data.CompassDbContext context
         Console.WriteLine("✓ Created feature: Service census notification banner (global toggle)");
     }
 
+    var censusDataOnRegisterFeature = await context.Features
+        .FirstOrDefaultAsync(f => f.Code == Compass.Models.FeatureCodes.ShowCensusDataOnRegister);
+
+    if (censusDataOnRegisterFeature == null)
+    {
+        censusDataOnRegisterFeature = new Compass.Models.Feature
+        {
+            Name = "Show census data on register entries",
+            Code = Compass.Models.FeatureCodes.ShowCensusDataOnRegister,
+            Description = "Census-backed sections on a service register product. Off until the census closes on 12 December 2026.",
+            IsActive = false,
+            AccessMode = Compass.Models.FeatureAccessMode.Off,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        context.Features.Add(censusDataOnRegisterFeature);
+        await context.SaveChangesAsync();
+        Console.WriteLine("✓ Created feature: Show census data on register entries (global toggle, default Off)");
+    }
+
     await Compass.Services.ServiceSchema.ServiceSchemaSeed.EnsureAsync(context);
 
     foreach (Compass.Models.PermissionType permission in Enum.GetValues<Compass.Models.PermissionType>())

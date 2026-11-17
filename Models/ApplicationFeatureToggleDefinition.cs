@@ -59,6 +59,12 @@ public sealed record ApplicationFeatureToggleDefinition(
                 Label: "Service census notification banner",
                 Hint: "Shows the dashboard notification that asks named contacts to complete the service census. Turn this Off to hide the banner without turning the census itself off.",
                 DefaultEnabled: true),
+            new(
+                Code: FeatureCodes.ShowCensusDataOnRegister,
+                Name: "Show census data on register entries",
+                Label: "Show census data on register entries",
+                Hint: "Shows Purpose, Users, Additional contacts, Functionality, Technology, Data, Metrics and KPIs, and Evidence on each service register product. Keep this Off until the census closes on 12 December 2026.",
+                DefaultEnabled: false),
         };
 
     public static HashSet<string> AllowedCodes { get; } =

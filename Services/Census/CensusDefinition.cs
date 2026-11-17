@@ -64,6 +64,8 @@ public sealed class CensusTask
     public string AddLabel { get; init; } = "";
     public string EmptyLabel { get; init; } = "";
     public bool CaptureUrl { get; init; }
+    public string UrlLabel { get; init; } = "Link to reference materials";
+    public string UrlHint { get; init; } = "Optional. Add a URL for guidance, a dashboard, or other material relating to this question.";
     public bool PickFromRegister { get; init; }
     public CensusTaskKind Kind { get; init; } = CensusTaskKind.ItemList;
     public string? RegisterDomainKey { get; init; }
@@ -407,8 +409,11 @@ public static class CensusDefinition
             "Record reusable components this product provides. Add one entry per component.",
             "component", "components", "component"),
         Item("api-provide", "functionality", "Functionality and reuse", "APIs this product provides",
-            "Record APIs this product offers for other services to use. Add one entry per API.",
-            "API", "APIs", "api-provide"),
+            "Record APIs this product offers for other services to use. Add one entry per API. If you have documentation for the API, add a link to it.",
+            "API", "APIs", "api-provide",
+            url: true,
+            urlLabel: "Link to API documentation",
+            urlHint: "Optional. Add a link to the documentation for this API if you have it."),
         new()
         {
             Key = "source-code",
@@ -481,8 +486,11 @@ public static class CensusDefinition
         },
         Item("api-use", "technology", "Technology",
             "What APIs does this product make use of (this is often called consuming an API)",
-            "Add one entry per API this product consumes. Do not include APIs this product provides.",
-            "API", "APIs", "api-use"),
+            "Add one entry per API this product consumes. Do not include APIs this product provides. If you have documentation for the API, add a link to it.",
+            "API", "APIs", "api-use",
+            url: true,
+            urlLabel: "Link to API documentation",
+            urlHint: "Optional. Add a link to the documentation for this API if you have it."),
         new()
         {
             Key = "stack",
@@ -671,7 +679,8 @@ public static class CensusDefinition
 
     private static CensusTask Item(
         string key, string groupKey, string groupName, string heading, string help,
-        string noun, string plural, string domain, bool url = false, bool pickFromRegister = false)
+        string noun, string plural, string domain, bool url = false, bool pickFromRegister = false,
+        string? urlLabel = null, string? urlHint = null)
     {
         var first = noun.Trim().Split(' ')[0];
         var an = first.Equals("API", StringComparison.OrdinalIgnoreCase)
@@ -691,6 +700,8 @@ public static class CensusDefinition
             AddLabel = an ? "Add an " + noun : "Add a " + noun,
             EmptyLabel = "No " + plural + " added",
             CaptureUrl = url,
+            UrlLabel = urlLabel ?? "Link to reference materials",
+            UrlHint = urlHint ?? "Optional. Add a URL for guidance, a dashboard, or other material relating to this question.",
             PickFromRegister = pickFromRegister,
             Kind = CensusTaskKind.ItemList,
             RegisterDomainKey = domain
