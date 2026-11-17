@@ -59,13 +59,15 @@ public sealed class ServiceCensusService : IServiceCensusService
         var responseByProduct = responses
             .GroupBy(r => r.ProductId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.SubmittedAt).First());
+        var submittedFromRegister = await CensusSubmissionDeclarationProductIdsAsync(productIds, ct);
 
         var taskKeys = CensusDefinition.Tasks.Select(t => t.Key).ToList();
         var taskCount = taskKeys.Count;
         var rows = products.Select(p =>
         {
             responseByProduct.TryGetValue(p.Id, out var response);
-            var submitted = IsCensusSubmitted(response?.Status, response?.SubmittedAt);
+            var submitted = IsCensusSubmitted(response?.Status, response?.SubmittedAt)
+                || submittedFromRegister.Contains(p.Id);
             var complete = response == null
                 ? 0
                 : taskKeys.Count(key =>
@@ -119,7 +121,7 @@ public sealed class ServiceCensusService : IServiceCensusService
         var userIsNamed = UserIsNamedSubmitter(named, userEmail);
         var allComplete = CensusDefinition.Tasks.All(t =>
             StatusOf(response, t.Key) == ServiceCensusStatuses.Complete);
-        var submitted = IsCensusSubmitted(response.Status, response.SubmittedAt);
+        var submitted = await EnsureSubmittedStateAsync(response, product.Id, userEmail, ct);
 
         string blocked = SubmitBlockedReason(submitted, allComplete, userIsNamed, named.Count);
 
@@ -247,7 +249,7 @@ public sealed class ServiceCensusService : IServiceCensusService
             HydrateNamedFormFields(vm, task, response, state);
 
         var named = NamedSubmitters(product, response);
-        var submitted = IsCensusSubmitted(response.Status, response.SubmittedAt);
+        var submitted = await EnsureSubmittedStateAsync(response, product.Id, userEmail, ct);
         var allComplete = CensusDefinition.Tasks.All(t =>
             StatusOf(response, t.Key) == ServiceCensusStatuses.Complete);
         var userIsNamed = UserIsNamedSubmitter(named, userEmail);
@@ -269,7 +271,7 @@ public sealed class ServiceCensusService : IServiceCensusService
         if (product == null) return (false, "That product was not found.", null);
 
         var response = await EnsureResponseAsync(product, userEmail, ct);
-        if (IsCensusSubmitted(response.Status, response.SubmittedAt))
+        if (await EnsureSubmittedStateAsync(response, product.Id, userEmail, ct))
             return (false, "This census has been submitted and cannot be changed.", null);
 
         var intent = (request.Intent ?? "save").Trim().ToLowerInvariant();
@@ -353,7 +355,7 @@ public sealed class ServiceCensusService : IServiceCensusService
             .Where(t => StatusOf(response, t.Key) != ServiceCensusStatuses.Complete)
             .Select(t => Summary(t, StatusOf(response, t.Key)))
             .ToList();
-        var submitted = IsCensusSubmitted(response.Status, response.SubmittedAt);
+        var submitted = await EnsureSubmittedStateAsync(response, product.Id, userEmail, ct);
         var allComplete = incomplete.Count == 0;
 
         return new ServiceCensusSubmitViewModel
@@ -377,7 +379,7 @@ public sealed class ServiceCensusService : IServiceCensusService
         var product = await LoadProductAsync(productId, ct);
         if (product == null) return (false, "That product was not found.");
         var response = await EnsureResponseAsync(product, userEmail, ct);
-        if (IsCensusSubmitted(response.Status, response.SubmittedAt))
+        if (await EnsureSubmittedStateAsync(response, product.Id, userEmail, ct))
             return (false, "This census has already been submitted.");
         if (await ProductIsAissEnrolledAsync(product, ct))
             await MarkAccessibilityEnrolledCompleteAsync(response, userEmail, ct);
@@ -387,11 +389,7 @@ public sealed class ServiceCensusService : IServiceCensusService
         if (CensusDefinition.Tasks.Any(t => StatusOf(response, t.Key) != ServiceCensusStatuses.Complete))
             return (false, "Every question must be marked complete before you can submit.");
 
-        response.Status = ServiceCensusStatuses.Submitted;
-        response.SubmittedAt = DateTime.UtcNow;
-        response.SubmittedBy = userEmail;
-        response.UpdatedAt = DateTime.UtcNow;
-        response.UpdatedBy = userEmail;
+        await PersistSubmittedStatusAsync(response, userEmail, ct);
 
         try
         {
@@ -400,7 +398,7 @@ public sealed class ServiceCensusService : IServiceCensusService
         }
         catch
         {
-            await SaveCensusAsync(ct);
+            // Census is already marked submitted; register copy can be retried after reopen.
         }
 
         return (true, null);
@@ -419,6 +417,7 @@ public sealed class ServiceCensusService : IServiceCensusService
         response.SubmittedBy = null;
         response.UpdatedAt = DateTime.UtcNow;
         response.UpdatedBy = userEmail;
+        await ClearCensusSubmissionDeclarationsAsync(product.Id, ct);
         await _db.SaveChangesAsync(ct);
         return (true, null);
     }
@@ -428,7 +427,8 @@ public sealed class ServiceCensusService : IServiceCensusService
         var product = await LoadProductAsync(productId, ct);
         if (product == null) return (false, "That product was not found.");
         var response = await EnsureResponseAsync(product, userEmail, ct);
-        if (response.Status != ServiceCensusStatuses.Submitted)
+        if (!IsCensusSubmitted(response.Status, response.SubmittedAt)
+            && !await HasCensusSubmissionDeclarationAsync(product.Id, ct))
             return (false, "Only a submitted census can be reset.");
 
         var strategy = _db.Database.CreateExecutionStrategy();
@@ -471,6 +471,7 @@ public sealed class ServiceCensusService : IServiceCensusService
                 response.AccessibilityNotEnrolledReason = null;
                 response.UpdatedAt = DateTime.UtcNow;
                 response.UpdatedBy = userEmail;
+                await ClearCensusSubmissionDeclarationsAsync(product.Id, ct);
                 await _db.SaveChangesAsync(ct);
                 await tx.CommitAsync(ct);
             }
@@ -738,6 +739,67 @@ public sealed class ServiceCensusService : IServiceCensusService
     private static bool IsCensusSubmitted(string? status, DateTime? submittedAt) =>
         submittedAt.HasValue
         || string.Equals((status ?? "").Trim(), ServiceCensusStatuses.Submitted, StringComparison.OrdinalIgnoreCase);
+
+    private async Task PersistSubmittedStatusAsync(
+        ServiceCensusResponse response, string userEmail, CancellationToken ct)
+    {
+        var at = DateTime.UtcNow;
+        response.Status = ServiceCensusStatuses.Submitted;
+        response.SubmittedAt = at;
+        response.SubmittedBy = userEmail;
+        response.UpdatedAt = at;
+        response.UpdatedBy = userEmail;
+
+        var updated = await _db.ServiceCensusResponses
+            .Where(r => r.Id == response.Id)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.Status, ServiceCensusStatuses.Submitted)
+                .SetProperty(r => r.SubmittedAt, at)
+                .SetProperty(r => r.SubmittedBy, userEmail)
+                .SetProperty(r => r.UpdatedAt, at)
+                .SetProperty(r => r.UpdatedBy, userEmail), ct);
+
+        if (updated == 0)
+            await SaveCensusAsync(ct);
+    }
+
+    private async Task<HashSet<Guid>> CensusSubmissionDeclarationProductIdsAsync(
+        IReadOnlyCollection<Guid> productIds, CancellationToken ct)
+    {
+        if (productIds.Count == 0)
+            return [];
+
+        var ids = await _db.CensusSectionDeclarations.AsNoTracking()
+            .Where(d => productIds.Contains(d.ProductId)
+                && d.SectionKey.StartsWith("census-")
+                && d.StatusCode == "COMPLETE")
+            .Select(d => d.ProductId)
+            .Distinct()
+            .ToListAsync(ct);
+        return ids.ToHashSet();
+    }
+
+    private async Task<bool> HasCensusSubmissionDeclarationAsync(Guid productId, CancellationToken ct) =>
+        await _db.CensusSectionDeclarations.AsNoTracking()
+            .AnyAsync(d => d.ProductId == productId
+                && d.SectionKey.StartsWith("census-")
+                && d.StatusCode == "COMPLETE", ct);
+
+    private async Task<bool> EnsureSubmittedStateAsync(
+        ServiceCensusResponse response, Guid productId, string userEmail, CancellationToken ct)
+    {
+        if (IsCensusSubmitted(response.Status, response.SubmittedAt))
+            return true;
+        if (!await HasCensusSubmissionDeclarationAsync(productId, ct))
+            return false;
+        await PersistSubmittedStatusAsync(response, userEmail, ct);
+        return true;
+    }
+
+    private async Task ClearCensusSubmissionDeclarationsAsync(Guid productId, CancellationToken ct) =>
+        await _db.CensusSectionDeclarations
+            .Where(d => d.ProductId == productId && d.SectionKey.StartsWith("census-"))
+            .ExecuteDeleteAsync(ct);
 
     private static string StatusOf(ServiceCensusResponse response, string taskKey) =>
         StateOf(response, taskKey)?.Status ?? ServiceCensusStatuses.NotStarted;
@@ -1031,7 +1093,9 @@ public sealed class ServiceCensusService : IServiceCensusService
         foreach (var entry in _db.ChangeTracker.Entries().ToList())
         {
             if (entry.State is EntityState.Deleted or EntityState.Modified
-                && entry.Entity is not ServiceCensusAnswer)
+                && entry.Entity is not ServiceCensusAnswer
+                && entry.Entity is not ServiceCensusResponse
+                && entry.Entity is not ServiceCensusTaskState)
                 entry.State = EntityState.Detached;
         }
 
