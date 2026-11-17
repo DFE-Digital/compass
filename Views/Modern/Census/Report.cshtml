@@ -31,7 +31,7 @@
 @await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
   Caption = "Service census",
   Title = "Census report",
-  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Completion across the register, by business area, with weekly run rate and a 12-week trend. A product in more than one business area is counted in each.</p>"),
+  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Completion across the register, by business area, with weekly run rate of products in progress and submitted. A product in more than one business area is counted in each.</p>"),
   Actions = reportActions
 })
 @if (TempData["ErrorMessage"] != null)
@@ -72,63 +72,37 @@
 </form>
 
 <section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-overall">
-  <h2 id="census-report-overall" class="govuk-heading-m">Overall completion</h2>
-  <div class="dfe-f-card-grid">
-    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
-      <p class="govuk-body-s dfe-f-stat-card__label">Average completion</p>
-      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.OverallPercent%</p>
+  <h2 id="census-report-overall" class="govuk-heading-m">Summary</h2>
+  <div class="census-report-stats">
+    <div class="dfe-f-stat-card">
+      <p class="govuk-body-s dfe-f-stat-card__label">Overall completion</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers">@m.OverallPercent%</p>
     </div>
-    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
-      <p class="govuk-body-s dfe-f-stat-card__label">Products</p>
-      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.ProductCount.ToString("N0")</p>
+    <div class="dfe-f-stat-card">
+      <p class="govuk-body-s dfe-f-stat-card__label">Total</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers">@m.ProductCount.ToString("N0")</p>
     </div>
     <div class="dfe-f-stat-card">
       <p class="govuk-body-s dfe-f-stat-card__label">Not started</p>
-      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.NotStarted.ToString("N0")</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers">@m.NotStarted.ToString("N0")</p>
     </div>
-    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
+    <div class="dfe-f-stat-card">
       <p class="govuk-body-s dfe-f-stat-card__label">In progress</p>
-      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.InProgress.ToString("N0")</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers">@m.InProgress.ToString("N0")</p>
     </div>
-    <div class="dfe-f-stat-card dfe-f-stat-card--tint-green">
+    <div class="dfe-f-stat-card">
       <p class="govuk-body-s dfe-f-stat-card__label">Submitted</p>
-      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.Submitted.ToString("N0")</p>
+      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers">@m.Submitted.ToString("N0")</p>
     </div>
   </div>
 </section>
 
 <section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-runrate">
   <h2 id="census-report-runrate" class="govuk-heading-m">Run rate</h2>
-  <p class="govuk-body">Weekly pace of questions marked complete and products submitted. Trend compares the last 4 weeks with the 4 weeks before that.</p>
-  <div class="dfe-f-card-grid">
-    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
-      <p class="govuk-body-s dfe-f-stat-card__label">Questions completed this week</p>
-      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.TasksCompleteThisWeek.ToString("N0")</p>
-    </div>
-    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
-      <p class="govuk-body-s dfe-f-stat-card__label">Submitted this week</p>
-      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.SubmittedThisWeek.ToString("N0")</p>
-    </div>
-    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
-      <p class="govuk-body-s dfe-f-stat-card__label">4-week average submissions</p>
-      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.AverageWeeklySubmissions.ToString("0.0")</p>
-    </div>
-    <div class="dfe-f-stat-card dfe-f-stat-card--tint-grey">
-      <p class="govuk-body-s dfe-f-stat-card__label">Previous 4-week average</p>
-      <p class="dfe-f-stat-card__value dfe-f-u-tabular-numbers govuk-body-l">@m.PreviousAverageWeeklySubmissions.ToString("0.0")</p>
-    </div>
-  </div>
-  <p class="govuk-body govuk-!-margin-top-3"><strong>@m.RunRateTrendLabel.</strong> @m.WeeksToFinishLabel.</p>
-  <div class="govuk-!-margin-top-4" style="max-width: 48rem; height: 16rem;">
-    <canvas id="census-runrate-chart" aria-label="Weekly questions completed and products submitted"></canvas>
-  </div>
-</section>
-
-<section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-trend">
-  <h2 id="census-report-trend" class="govuk-heading-m">Trend</h2>
-  <p class="govuk-body">Cumulative question completion across the estate, reconstructed from when each question was marked complete, and cumulative product submissions.</p>
-  <div class="govuk-!-margin-top-2" style="max-width: 48rem; height: 16rem;">
-    <canvas id="census-trend-chart" aria-label="12 week census completion trend"></canvas>
+  <p class="govuk-body">Weekly products in progress and products submitted.</p>
+  <p class="govuk-body">@m.WeeksToFinishLabel.</p>
+  <div class="census-report-chart govuk-!-margin-top-4">
+    <canvas id="census-runrate-chart" aria-label="Weekly products in progress and submitted"></canvas>
   </div>
 </section>
 
@@ -267,8 +241,8 @@
           data: {
             labels: labels,
             datasets: [
-              { label: 'Questions completed', data: weeks.map(function (w) { return w.tasksCompleted; }), backgroundColor: '#1d70b8' },
-              { label: 'Products submitted', data: weeks.map(function (w) { return w.productsSubmitted; }), backgroundColor: '#00703c' }
+              { label: 'In progress', data: weeks.map(function (w) { return w.productsInProgress; }), backgroundColor: '#1d70b8' },
+              { label: 'Submitted', data: weeks.map(function (w) { return w.productsSubmitted; }), backgroundColor: '#00703c' }
             ]
           },
           options: {
@@ -276,44 +250,6 @@
             maintainAspectRatio: false,
             plugins: { legend: { position: 'bottom' } },
             scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
-          }
-        });
-      }
-      var trend = document.getElementById('census-trend-chart');
-      if (trend) {
-        new Chart(trend.getContext('2d'), {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [
-              {
-                label: 'Cumulative question completion %',
-                data: weeks.map(function (w) { return w.cumulativePercent; }),
-                borderColor: '#1d70b8',
-                backgroundColor: 'rgba(29, 112, 184, 0.08)',
-                fill: true,
-                tension: 0,
-                yAxisID: 'y'
-              },
-              {
-                label: 'Cumulative submissions',
-                data: weeks.map(function (w) { return w.cumulativeSubmitted; }),
-                borderColor: '#00703c',
-                backgroundColor: 'transparent',
-                fill: false,
-                tension: 0,
-                yAxisID: 'y1'
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } },
-            scales: {
-              y: { beginAtZero: true, max: 100, title: { display: true, text: 'Completion %' } },
-              y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0 }, title: { display: true, text: 'Submissions' } }
-            }
           }
         });
       }

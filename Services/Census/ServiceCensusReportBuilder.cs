@@ -121,7 +121,8 @@ public static class ServiceCensusReportBuilder
     {
         responses.TryGetValue(product.Id, out var response);
         var complete = response?.Tasks.Count(t => t.Status == ServiceCensusStatuses.Complete) ?? 0;
-        var submitted = string.Equals(response?.Status, ServiceCensusStatuses.Submitted, StringComparison.OrdinalIgnoreCase);
+        var submitted = string.Equals(response?.Status, ServiceCensusStatuses.Submitted, StringComparison.OrdinalIgnoreCase)
+            || response?.SubmittedAt != null;
         var percent = taskCount <= 0 ? 0 : (int)Math.Round(100.0 * complete / taskCount, MidpointRounding.AwayFromZero);
         var censusStatus = submitted ? "Submitted"
             : complete >= taskCount && taskCount > 0 ? "Complete"
@@ -219,6 +220,17 @@ public static class ServiceCensusReportBuilder
                 r.SubmittedAt != null && r.SubmittedAt.Value >= start && r.SubmittedAt.Value < end);
             cumulativeSubmitted += submitted;
 
+            var inProgress = scoped.Count(r =>
+            {
+                var submittedByEnd = r.SubmittedAt != null
+                    ? r.SubmittedAt.Value < end
+                    : string.Equals(r.Status, ServiceCensusStatuses.Submitted, StringComparison.OrdinalIgnoreCase);
+                if (submittedByEnd)
+                    return false;
+                return r.Tasks.Any(t =>
+                    t.Status == ServiceCensusStatuses.Complete && t.UpdatedAt < end);
+            });
+
             var completeByEnd = scoped.Sum(r => r.Tasks.Count(t =>
                 t.Status == ServiceCensusStatuses.Complete && t.UpdatedAt < end));
             var denom = totalProducts * Math.Max(taskCount, 1);
@@ -231,6 +243,7 @@ public static class ServiceCensusReportBuilder
                 Label = start.ToString("d MMM"),
                 IsoWeek = $"{ISOWeekYear(start)}-W{ISOWeek(start):00}",
                 TasksCompleted = tasks,
+                ProductsInProgress = inProgress,
                 ProductsSubmitted = submitted,
                 CumulativeSubmitted = cumulativeSubmitted,
                 CumulativePercent = cumulativePercent

@@ -315,6 +315,7 @@ public sealed class ServiceCensusReportWeekPoint
     public string Label { get; set; } = "";
     public string IsoWeek { get; set; } = "";
     public int TasksCompleted { get; set; }
+    public int ProductsInProgress { get; set; }
     public int ProductsSubmitted { get; set; }
     public int CumulativeSubmitted { get; set; }
     public int CumulativePercent { get; set; }

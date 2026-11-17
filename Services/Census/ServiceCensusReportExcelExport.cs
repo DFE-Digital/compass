@@ -28,16 +28,12 @@ public static class ServiceCensusReportExcelExport
         {
             ("Exported", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm") + " UTC"),
             ("Business area filter", string.IsNullOrWhiteSpace(report.BusinessAreaFilter) ? "All business areas" : report.BusinessAreaFilter),
-            ("Products", report.ProductCount.ToString("N0")),
-            ("Average completion", report.OverallPercent + "%"),
+            ("Overall completion", report.OverallPercent + "%"),
+            ("Total", report.ProductCount.ToString("N0")),
             ("Not started", report.NotStarted.ToString("N0")),
             ("In progress", report.InProgress.ToString("N0")),
             ("Submitted", report.Submitted.ToString("N0")),
-            ("Questions completed this week", report.TasksCompleteThisWeek.ToString("N0")),
             ("Products submitted this week", report.SubmittedThisWeek.ToString("N0")),
-            ("Average weekly submissions (4 weeks)", report.AverageWeeklySubmissions.ToString("0.0")),
-            ("Previous 4-week average", report.PreviousAverageWeeklySubmissions.ToString("0.0")),
-            ("Run rate", report.RunRateTrendLabel),
             ("Weeks to finish", report.WeeksToFinishLabel)
         };
         var row = 2;
@@ -154,17 +150,15 @@ public static class ServiceCensusReportExcelExport
 
     private static void WriteWeeks(IXLWorksheet sheet, ServiceCensusReportViewModel report)
     {
-        StyleHeader(sheet, ["Week starting", "ISO week", "Questions completed", "Products submitted", "Cumulative submitted", "Cumulative completion %"]);
+        StyleHeader(sheet, ["Week starting", "ISO week", "In progress", "Submitted", "Cumulative submitted"]);
         var row = 2;
         foreach (var week in report.Weeks)
         {
             sheet.Cell(row, 1).Value = week.Label;
             sheet.Cell(row, 2).Value = week.IsoWeek;
-            sheet.Cell(row, 3).Value = week.TasksCompleted;
+            sheet.Cell(row, 3).Value = week.ProductsInProgress;
             sheet.Cell(row, 4).Value = week.ProductsSubmitted;
             sheet.Cell(row, 5).Value = week.CumulativeSubmitted;
-            sheet.Cell(row, 6).Value = week.CumulativePercent / 100.0;
-            sheet.Cell(row, 6).Style.NumberFormat.Format = "0%";
             row++;
         }
         Finish(sheet);
