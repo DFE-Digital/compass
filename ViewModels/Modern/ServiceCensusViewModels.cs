@@ -7,6 +7,10 @@ public sealed class ServiceCensusProductListViewModel
 {
     public bool ShowAll { get; set; }
     public string? Search { get; set; }
+    public string? ContactFilter { get; set; }
+    public List<string> ContactOptions { get; set; } = [];
+    public List<string> BusinessAreaOptions { get; set; } = [];
+    public List<string> ContactRoles { get; set; } = [];
     public int YourProductCount { get; set; }
     public int AllProductCount { get; set; }
     public List<ServiceCensusProductRowViewModel> Products { get; set; } = [];
@@ -17,6 +21,10 @@ public sealed class ServiceCensusProductRowViewModel
     public Guid Id { get; set; }
     public string Title { get; set; } = "";
     public string Status { get; set; } = "";
+    public string Areas { get; set; } = "";
+    public List<string> AreaNames { get; set; } = [];
+    public List<string> ContactNames { get; set; } = [];
+    public Dictionary<string, string> RoleContacts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public int TasksComplete { get; set; }
     public int TaskCount { get; set; }
     public bool Submitted { get; set; }
@@ -235,6 +243,7 @@ public sealed class ServiceCensusReportViewModel
     public List<ServiceCensusReportAreaRow> BusinessAreas { get; set; } = [];
     public List<ServiceCensusReportSectionRow> Sections { get; set; } = [];
     public List<ServiceCensusReportProductRow> Products { get; set; } = [];
+    public List<string> ContactRoles { get; set; } = [];
     public List<ServiceCensusReportWeekPoint> Weeks { get; set; } = [];
     public List<ServiceCensusReportQuestionRow> Questions { get; set; } = [];
     public List<ServiceCensusReportAnswerRow> SubmissionAnswers { get; set; } = [];
@@ -293,6 +302,7 @@ public sealed class ServiceCensusReportAreaRow
     public int InProgress { get; set; }
     public int QuestionsComplete { get; set; }
     public int Submitted { get; set; }
+    public List<ServiceCensusReportProductRow> Products { get; set; } = [];
 }
 
 public sealed class ServiceCensusReportSectionRow
@@ -314,6 +324,7 @@ public sealed class ServiceCensusReportProductRow
     public int Percent { get; set; }
     public string CensusStatus { get; set; } = "";
     public bool Submitted { get; set; }
+    public Dictionary<string, string> RoleContacts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed class ServiceCensusPromptViewModel
@@ -323,34 +334,13 @@ public sealed class ServiceCensusPromptViewModel
     public string? SingleProductTitle { get; set; }
 }
 
-public sealed class ServiceCensusExploreViewModel
-{
-    public string Dimension { get; set; } = "question";
-    public string? QuestionKey { get; set; }
-    public Guid? ProductId { get; set; }
-    public string? BusinessAreaFilter { get; set; }
-    public bool SubmittedOnly { get; set; } = true;
-    public List<string> BusinessAreaOptions { get; set; } = [];
-    public List<ServiceCensusReportQuestionRow> Questions { get; set; } = [];
-    public List<ServiceCensusReportProductRow> Products { get; set; } = [];
-    public List<ServiceCensusReportAnswerRow> Rows { get; set; } = [];
-    public List<ServiceCensusExploreValueCount> ValueCounts { get; set; } = [];
-    public string? SelectedQuestion { get; set; }
-    public string? SelectedProduct { get; set; }
-}
-
-public sealed class ServiceCensusExploreValueCount
-{
-    public string Value { get; set; } = "";
-    public int ProductCount { get; set; }
-}
-
 public sealed class ServiceCensusReportWeekPoint
 {
     public string Label { get; set; } = "";
     public string IsoWeek { get; set; } = "";
     public int TasksCompleted { get; set; }
     public int ProductsInProgress { get; set; }
+    public int ProductsStarted { get; set; }
     public int ProductsSubmitted { get; set; }
     public int CumulativeSubmitted { get; set; }
     public int CumulativePercent { get; set; }

@@ -17,10 +17,20 @@ public sealed class ServiceSchemaLayout
 
     public IReadOnlyList<ServiceSchemaTopic> Topics { get; }
 
-    public ServiceSchemaArea Find(string? key) =>
-        Areas.FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase))
-        ?? Areas.FirstOrDefault()
-        ?? ServiceSchemaAreas.All[0];
+    public ServiceSchemaArea Find(string? key)
+    {
+        if (!string.IsNullOrWhiteSpace(key)
+            && !string.Equals(key, "overview", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = Areas.FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+                return match;
+        }
+
+        return Areas.FirstOrDefault(a => !string.Equals(a.Key, "overview", StringComparison.OrdinalIgnoreCase))
+            ?? Areas.FirstOrDefault()
+            ?? ServiceSchemaAreas.All.First(a => a.Key != "overview");
+    }
 
     public ServiceSchemaTopic? FindTopic(string? key)
     {
@@ -250,12 +260,20 @@ public sealed class ServiceSchemaLayout
         }
 
         var overviewAreas = await db.ServiceSchemaAreaConfigs
-            .Where(a => a.Key == "overview" && a.Name == "Completion")
+            .Where(a => a.Key == "overview")
             .ToListAsync(ct);
         foreach (var area in overviewAreas)
         {
-            area.Name = "Task summary";
-            changed = true;
+            if (area.IsActive)
+            {
+                area.IsActive = false;
+                changed = true;
+            }
+            if (area.Name is "Completion" or "About")
+            {
+                area.Name = "Task summary";
+                changed = true;
+            }
         }
 
         var areas = await db.ServiceSchemaAreaConfigs

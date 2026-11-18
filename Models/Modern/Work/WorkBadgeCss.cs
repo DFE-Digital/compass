@@ -68,6 +68,23 @@ public static class WorkBadgeCss
     public static string RagCompactBadgeClass(string? ragDisplayName)
         => RagBadgeClass(ragDisplayName);
 
+    /// <summary>Census status as a compact DfE badge: not started grey, in progress blue, submitted or complete green.</summary>
+    public static string CensusStatusBadgeClass(string? status)
+    {
+        const string baseClass = "dfe-f-badge dfe-f-badge--small";
+        var s = (status ?? "").Trim();
+        if (s.Equals("Submitted", StringComparison.OrdinalIgnoreCase)
+            || s.Equals("SUBMITTED", StringComparison.OrdinalIgnoreCase)
+            || s.Equals("Complete", StringComparison.OrdinalIgnoreCase)
+            || s.Equals("Completed", StringComparison.OrdinalIgnoreCase)
+            || s.Equals("COMPLETE", StringComparison.OrdinalIgnoreCase))
+            return baseClass + " dfe-f-badge--green";
+        if (s.Equals("In progress", StringComparison.OrdinalIgnoreCase)
+            || s.Equals("IN_PROGRESS", StringComparison.OrdinalIgnoreCase))
+            return baseClass + " dfe-f-badge--blue";
+        return baseClass + " dfe-f-badge--grey";
+    }
+
     /// <summary>Colour-coded completion % badge for service register reporting tables.</summary>
     public static string ServiceRegisterCompletionBadgeClass(int completionPercent)
     {

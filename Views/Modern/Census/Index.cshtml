@@ -2,110 +2,285 @@
 @using Compass.Models.Modern.Work
 @using Microsoft.AspNetCore.Html
 @{
-  ViewData["Title"] = Model.ShowAll ? "All products" : "Your products";
+  var pageTitle = Model.ShowAll ? "All products" : "Your products";
+  ViewData["Title"] = pageTitle;
+  string[] RolePeople(Compass.ViewModels.Modern.ServiceCensusProductRowViewModel product, string role) =>
+      product.RoleContacts.TryGetValue(role, out var name) && !string.IsNullOrWhiteSpace(name)
+          ? name.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+          : [];
 }
 
 @section Breadcrumbs {
   <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
-  <li class="govuk-breadcrumbs__list-item" aria-current="page">Service census</li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">@pageTitle</li>
 }
 
 @await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
-  Title = "Service census",
-  Caption = Model.ShowAll ? "All products" : "Your products",
+  Caption = "Service census",
+  Title = pageTitle,
   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Complete census information for products on the service register. Anyone signed in can record answers. Final submission must be by a named CMDB contact or an admin, once every question is complete.</p>")
 })
 
-@{
-  var suggestUrl = Url.Action("Suggest", "ModernCensus", new { all = Model.ShowAll }) ?? "";
-}
-<form method="get" class="govuk-!-margin-bottom-6" action="@(Model.ShowAll ? Url.Action("All") : Url.Action("Index"))" role="search">
-  <div class="govuk-form-group govuk-!-margin-bottom-0">
-    <label class="govuk-label" for="census-product-search">Find a product</label>
-    <div class="govuk-hint" id="census-product-search-hint">Start typing a name, then choose a product. Or search to filter the table.</div>
-    <div class="census-search-toolbar">
-      <div class="census-search" data-module="census-product-search" data-suggest-url="@suggestUrl">
-        <input class="govuk-input census-search__input"
-               id="census-product-search"
-               name="q"
-               type="search"
-               value="@Model.Search"
-               autocomplete="off"
-               spellcheck="false"
-               aria-describedby="census-product-search-hint"
-               aria-label="Find a product">
-        <ul class="census-search__results" id="census-product-search-results" role="listbox" hidden></ul>
-      </div>
-      <button type="submit" class="govuk-button" id="census-product-search-submit">Search</button>
-    </div>
-    @if (!string.IsNullOrWhiteSpace(Model.Search))
-    {
-      <p class="govuk-body govuk-!-margin-top-2 govuk-!-margin-bottom-0"><a class="govuk-link" href="@(Model.ShowAll ? Url.Action("All") : Url.Action("Index"))">Clear search</a></p>
-    }
-  </div>
-</form>
-
-@section Scripts {
-  <script src="~/modern/js/census-product-search.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
-}
-
-<p class="govuk-body">@(Model.ShowAll ? Model.AllProductCount : Model.YourProductCount) product@((Model.ShowAll ? Model.AllProductCount : Model.YourProductCount) == 1 ? "" : "s")</p>
-
-@if (Model.Products.Count == 0)
+@if (Model.ShowAll)
 {
-  <p class="govuk-body">@(Model.ShowAll ? "No products match this view." : "You are not a named contact on any active product. Open All products to record census information for the register.")</p>
+  <div class="census-all" data-module="census-all-filter">
+    <aside class="census-all__filters" aria-label="Filter products">
+      <div class="moj-filter">
+        <div class="moj-filter__header">
+          <div class="moj-filter__header-title">
+            <h2 class="govuk-heading-m">Filter</h2>
+          </div>
+        </div>
+        <div class="moj-filter__content">
+          <div class="moj-filter__selected" data-census-selected hidden>
+            <div class="moj-filter__selected-heading">
+              <div class="moj-filter__heading-title">
+                <h2 class="govuk-heading-s">Selected filters</h2>
+              </div>
+              <div class="moj-filter__heading-action">
+                <p><a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("All")" data-census-clear>Clear filters</a></p>
+              </div>
+            </div>
+            <div data-census-selected-tags></div>
+          </div>
+          <div class="moj-filter__options">
+            <div class="govuk-form-group">
+              <label class="govuk-label govuk-label--s" for="census-all-search">Search</label>
+              <input class="govuk-input" id="census-all-search" type="search" value="@Model.Search" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="govuk-form-group">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Submission status</legend>
+                <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                  @foreach (var status in new[] { "Not started", "In progress", "Submitted" })
+                  {
+                    var statusId = "census-status-" + status.Replace(" ", "-").ToLowerInvariant();
+                    <div class="govuk-checkboxes__item">
+                      <input class="govuk-checkboxes__input" id="@statusId" name="status" type="checkbox" value="@status">
+                      <label class="govuk-label govuk-checkboxes__label" for="@statusId">@status</label>
+                    </div>
+                  }
+                </div>
+              </fieldset>
+            </div>
+            <div class="govuk-form-group">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Business area</legend>
+                <div class="govuk-checkboxes govuk-checkboxes--small census-all__scroll" data-module="govuk-checkboxes">
+                  @for (var i = 0; i < Model.BusinessAreaOptions.Count; i++)
+                  {
+                    var area = Model.BusinessAreaOptions[i];
+                    var areaId = "census-area-" + i;
+                    <div class="govuk-checkboxes__item">
+                      <input class="govuk-checkboxes__input" id="@areaId" name="area" type="checkbox" value="@area">
+                      <label class="govuk-label govuk-checkboxes__label" for="@areaId">@area</label>
+                    </div>
+                  }
+                </div>
+              </fieldset>
+            </div>
+            <div class="govuk-form-group">
+              <fieldset class="govuk-fieldset">
+                <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Service offering contacts</legend>
+                <div class="govuk-hint">Products where any selected person is a contact.</div>
+                <div class="govuk-form-group">
+                  <label class="govuk-label govuk-visually-hidden" for="census-people-find">Find a person</label>
+                  <input class="govuk-input" id="census-people-find" type="search" autocomplete="off" spellcheck="false" placeholder="Find a person" data-census-people-find>
+                </div>
+                <p class="govuk-hint" data-people-empty hidden>No matching people.</p>
+                <div class="govuk-checkboxes govuk-checkboxes--small census-all__scroll census-all__scroll--people" data-module="govuk-checkboxes">
+                  @for (var i = 0; i < Model.ContactOptions.Count; i++)
+                  {
+                    var name = Model.ContactOptions[i];
+                    var personId = "census-person-" + i;
+                    <div class="govuk-checkboxes__item" data-people-item data-people-label="@name">
+                      <input class="govuk-checkboxes__input" id="@personId" name="contact" type="checkbox" value="@name">
+                      <label class="govuk-label govuk-checkboxes__label" for="@personId">@name</label>
+                    </div>
+                  }
+                </div>
+              </fieldset>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <div class="census-all__results">
+      <div class="census-all__results-bar">
+        <p class="census-all__count" aria-live="polite" data-census-count>@Model.Products.Count product@(Model.Products.Count == 1 ? "" : "s")</p>
+        <p class="census-all__table-hint">Scroll sideways for contact roles. Product stays in view.</p>
+      </div>
+      <p class="govuk-body-s" data-census-empty hidden>No products match these filters.</p>
+      @if (Model.Products.Count == 0)
+      {
+        <p class="govuk-body">No products match this view.</p>
+      }
+      else
+      {
+        <div data-census-table>
+        <div class="dfe-f-table-wrapper census-all-table-wrap" data-module="dfe-f-table">
+          <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+          <table class="govuk-table dfe-f-table--condensed census-all-table">
+            <caption class="govuk-table__caption govuk-visually-hidden">All products</caption>
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header census-all-table__product" aria-sort="ascending"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+                <th scope="col" class="govuk-table__header census-all-table__area" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+                <th scope="col" class="govuk-table__header census-all-table__status" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+                @foreach (var role in Model.ContactRoles)
+                {
+                  <th scope="col" class="govuk-table__header census-all-table__role" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">@role</button></th>
+                }
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+              @foreach (var row in Model.Products)
+              {
+                var searchHay = string.Join(" ", new[] { row.Title, row.Areas }.Concat(row.ContactNames));
+                <tr class="govuk-table__row"
+                    data-census-row
+                    data-title="@row.Title"
+                    data-status="@row.Status"
+                    data-areas="@string.Join("|", row.AreaNames)"
+                    data-contacts="@string.Join("|", row.ContactNames)"
+                    data-search="@searchHay">
+                  <th scope="row" class="govuk-table__header census-all-table__product">
+                    <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("TaskList", "ModernCensus", new { id = row.Id, all = true })">@row.Title</a>
+                  </th>
+                  <td class="govuk-table__cell census-all-table__area">
+                    @foreach (var area in row.AreaNames)
+                    {
+                      <span class="census-all-table__item">@area</span>
+                    }
+                  </td>
+                  <td class="govuk-table__cell census-all-table__status">
+                    <span class="@WorkBadgeCss.CensusStatusBadgeClass(row.Status)">@row.Status</span>
+                  </td>
+                  @foreach (var role in Model.ContactRoles)
+                  {
+                    var people = RolePeople(row, role);
+                    <td class="govuk-table__cell census-all-table__role">
+                      @if (people.Length == 0)
+                      {
+                        <span class="dfe-t-u-text-muted">—</span>
+                      }
+                      else
+                      {
+                        foreach (var person in people)
+                        {
+                          <span class="census-all-table__item">@person</span>
+                        }
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        </div>
+      }
+    </div>
+  </div>
 }
 else
 {
-  <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
-    <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
-    <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
-      <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">@(Model.ShowAll ? "All products" : "Your products")</caption>
-      <thead class="govuk-table__head">
-        <tr class="govuk-table__row">
-            <th scope="col" class="govuk-table__header" aria-sort="ascending"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
-          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
-          <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Census completion</button></th>
-          <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Action</span></th>
-        </tr>
-      </thead>
-      <tbody class="govuk-table__body">
-        @foreach (var row in Model.Products)
-        {
+  var suggestUrl = Url.Action("Suggest", "ModernCensus", new { all = false }) ?? "";
+  <form method="get" class="govuk-!-margin-bottom-6" action="@Url.Action("Index")" role="search">
+    <div class="govuk-form-group govuk-!-margin-bottom-0">
+      <label class="govuk-label" for="census-product-search">Find a product</label>
+      <div class="govuk-hint" id="census-product-search-hint">Start typing a name, then choose a product. Or search to filter the table.</div>
+      <div class="census-search-toolbar">
+        <div class="census-search" data-module="census-product-search" data-suggest-url="@suggestUrl">
+          <input class="govuk-input census-search__input"
+                 id="census-product-search"
+                 name="q"
+                 type="search"
+                 value="@Model.Search"
+                 autocomplete="off"
+                 spellcheck="false"
+                 aria-describedby="census-product-search-hint"
+                 aria-label="Find a product">
+          <ul class="census-search__results" id="census-product-search-results" role="listbox" hidden></ul>
+        </div>
+        <button type="submit" class="govuk-button" id="census-product-search-submit">Search</button>
+      </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Search))
+    {
+      <p class="govuk-body govuk-!-margin-top-2 govuk-!-margin-bottom-0"><a class="govuk-link" href="@Url.Action("Index")">Clear filters</a></p>
+    }
+  </form>
+
+  <p class="govuk-body">@Model.YourProductCount product@(Model.YourProductCount == 1 ? "" : "s")</p>
+  <p class="govuk-body">If you need help with the service census, use the <a class="govuk-link" href="https://teams.microsoft.com/l/channel/19%3Aba97e647246742a6a65d4a504d9350c4%40thread.tacv2/Census%20help%20and%20support?groupId=ba25d168-d555-4029-9b0d-a9a858992dcd&amp;tenantId=fad277c9-c60a-4da1-b5f3-b3b8b34a82f9" target="_blank" rel="noopener noreferrer">Census help and support Teams channel</a>.</p>
+
+  if (Model.Products.Count == 0)
+  {
+    if (!string.IsNullOrWhiteSpace(Model.Search))
+    {
+      <p class="govuk-body">No products match this search.</p>
+    }
+    else
+    {
+      <div class="govuk-inset-text">
+        <p class="govuk-body">You have no products listed for this census.</p>
+        <p class="govuk-body govuk-!-margin-bottom-0">You may not need to complete this return. A product may have been taken out of scope, for example corporate services or enterprise products such as Microsoft products.</p>
+      </div>
+    }
+  }
+  else
+  {
+    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+        <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Your products</caption>
+        <thead class="govuk-table__head">
           <tr class="govuk-table__row">
-            <td class="govuk-table__cell">
-              <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("TaskList", "ModernCensus", new { id = row.Id, all = Model.ShowAll })">@row.Title</a>
-            </td>
-            <td class="govuk-table__cell">
-              @if (row.Submitted)
-              {
-                <strong class="govuk-tag govuk-tag--green">Submitted</strong>
-              }
-              else if (row.TasksComplete == 0)
-              {
-                <strong class="govuk-tag govuk-tag--grey">Not started</strong>
-              }
-              else
-              {
-                <strong class="govuk-tag govuk-tag--blue">In progress</strong>
-              }
-            </td>
-            <td class="govuk-table__cell">
-              @if (row.Submitted)
-              {
-                <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Submitted</span>
-              }
-              else
-              {
-                <span class="@WorkBadgeCss.ServiceRegisterCompletionBadgeClass(row.Percent)">@row.TasksComplete of @row.TaskCount (@row.Percent%)</span>
-              }
-            </td>
-            <td class="govuk-table__cell">
-              <a class="govuk-link" href="@Url.Action("TaskList", "ModernCensus", new { id = row.Id, all = Model.ShowAll })">@(row.Submitted ? "View" : row.TasksComplete == 0 ? "Start" : "Continue")</a>
-            </td>
+            <th scope="col" class="govuk-table__header" aria-sort="ascending"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Status</button></th>
+            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Census completion</button></th>
+            <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Action</span></th>
           </tr>
-        }
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody class="govuk-table__body">
+          @foreach (var row in Model.Products)
+          {
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("TaskList", "ModernCensus", new { id = row.Id, all = false })">@row.Title</a>
+              </td>
+              <td class="govuk-table__cell">
+                <span class="@WorkBadgeCss.CensusStatusBadgeClass(row.Status)">@row.Status</span>
+              </td>
+              <td class="govuk-table__cell">
+                @if (row.Submitted)
+                {
+                  <span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--green">Submitted</span>
+                }
+                else
+                {
+                  <span class="@WorkBadgeCss.ServiceRegisterCompletionBadgeClass(row.Percent)">@row.TasksComplete of @row.TaskCount (@row.Percent%)</span>
+                }
+              </td>
+              <td class="govuk-table__cell">
+                <a class="govuk-link" href="@Url.Action("TaskList", "ModernCensus", new { id = row.Id, all = false })">@(row.Submitted ? "View" : row.TasksComplete == 0 ? "Start" : "Continue")</a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+}
+
+@section Scripts {
+  @if (Model.ShowAll)
+  {
+    <script src="~/modern/js/census-all-filter.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+  }
+  else
+  {
+    <script src="~/modern/js/census-product-search.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
+  }
 }

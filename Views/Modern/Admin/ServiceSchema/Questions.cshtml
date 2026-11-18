@@ -14,7 +14,7 @@
  @await Html.PartialAsync("_ModernPageHeader", new ModernPageHeaderViewModel {
    Caption = "Administration",
    Title = "Service schema",
-   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Change section titles, the questions people see on a service census record, and the order they appear in.</p>")
+   Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Change section titles, the questions people see on a service census record, and the order they appear in. Expand a section to edit its questions.</p>")
  })
  @await Html.PartialAsync("~/Views/Modern/Admin/ServiceSchema/_Messages.cshtml")
  <div class="govuk-grid-row">
@@ -24,10 +24,35 @@
   <div class="govuk-grid-column-three-quarters">
    <form method="post" action="@Url.Action("SaveQuestionOrder", "ModernAdminServiceSchema")">
     @Html.AntiForgeryToken()
-    @foreach (var area in Model.Areas)
+    @{
+      var schemaAreas = Model.Areas.Where(a => !string.Equals(a.Key, "overview", StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+    <div class="dfe-f-toggle-group ss-schema-tree" data-module="dfe-f-toggle-group" id="ss-schema-sections">
+     <div class="mr-report-view-controls govuk-!-margin-bottom-3" role="toolbar" aria-label="Section controls">
+      <span class="mr-report-view-controls__label govuk-body-s govuk-!-font-weight-bold">Sections</span>
+      <div class="mr-report-view-controls__actions">
+       <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-dfe-toggle-expand-all>Expand all sections</button>
+       <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-dfe-toggle-collapse-all>Collapse all sections</button>
+      </div>
+     </div>
+     <div class="dfe-f-toggle-group__items">
+    @foreach (var area in schemaAreas)
     {
-     <section class="govuk-!-margin-bottom-6" aria-labelledby="area-heading-@area.Key">
-     <h2 class="govuk-heading-m" id="area-heading-@area.Key">@(string.IsNullOrWhiteSpace(area.Name) ? area.Key : area.Name)@(area.IsActive ? "" : " (Hidden)")</h2>
+      var areaTitle = string.IsNullOrWhiteSpace(area.Name) ? area.Key : area.Name;
+      var contentId = "ss-schema-" + area.Key;
+      var openFirst = area.Key == schemaAreas.FirstOrDefault()?.Key;
+     <div class="dfe-f-toggle govuk-!-margin-bottom-3" data-module="dfe-f-toggle">
+      <div class="dfe-f-toggle__title-wrapper">
+       <h2 class="dfe-f-toggle__heading">
+        <button type="button" class="dfe-f-toggle__button" aria-expanded="@(openFirst ? "true" : "false")" aria-controls="@contentId" id="@contentId-button">
+         <span class="dfe-f-toggle__icon" aria-hidden="true"></span>
+         <span class="dfe-f-toggle__title">@areaTitle@(area.IsActive ? "" : " (Hidden)")</span>
+         <span class="mr-toggle-panel__meta"><span class="dfe-f-badge dfe-f-badge--small dfe-f-badge--blue">@area.Questions.Count</span></span>
+        </button>
+       </h2>
+      </div>
+      <div id="@contentId" class="dfe-f-toggle__content"@(openFirst ? null : " hidden")>
+       <div class="dfe-f-toggle__body govuk-body">
      <div class="govuk-form-group">
       <label class="govuk-label" for="area-name-@area.Key">Section title</label>
       <div class="govuk-hint">Shown in the service census navigation and headings. For example, change Ownership to People and contacts.</div>
@@ -87,13 +112,13 @@
        </tbody>
       </table>
      }
-     @if (area.Key != "overview")
-     {
-      <p class="govuk-body"><a class="govuk-link" href="@Url.Action("QuestionCreate", "ModernAdminServiceSchema", new { section = area.Key })">Add a question to @(string.IsNullOrWhiteSpace(area.Name) ? area.Key : area.Name)</a></p>
-     }
-     <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible" />
-     </section>
+      <p class="govuk-body govuk-!-margin-bottom-0"><a class="govuk-link" href="@Url.Action("QuestionCreate", "ModernAdminServiceSchema", new { section = area.Key })">Add a question to @areaTitle</a></p>
+       </div>
+      </div>
+     </div>
     }
+     </div>
+    </div>
     <button class="govuk-button" type="submit">Save changes</button>
    </form>
    @if (Model.NewItems.Count > 0)

@@ -52,11 +52,11 @@ public sealed class ModernCensusController : Controller
 
     [HttpGet("")]
     public Task<IActionResult> Index(string? q, CancellationToken cancellationToken) =>
-        Products(showAll: false, q, cancellationToken);
+        Products(showAll: false, q, null, cancellationToken);
 
     [HttpGet("all")]
-    public Task<IActionResult> All(string? q, CancellationToken cancellationToken) =>
-        Products(showAll: true, q, cancellationToken);
+    public Task<IActionResult> All(string? q, string? contact, CancellationToken cancellationToken) =>
+        Products(showAll: true, q, contact, cancellationToken);
 
     [HttpGet("suggest")]
     public async Task<IActionResult> Suggest(string? q, bool all = false, CancellationToken cancellationToken = default)
@@ -90,6 +90,7 @@ public sealed class ModernCensusController : Controller
     }
 
     [HttpGet("report")]
+    [HttpGet("/ModernCensus/Report")]
     public async Task<IActionResult> Report(string? area, CancellationToken cancellationToken)
     {
         var blocked = await RequireRegisterAsync();
@@ -130,107 +131,16 @@ public sealed class ModernCensusController : Controller
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
-    [HttpGet("report/responses")]
-    public async Task<IActionResult> Responses(
-        string? dim,
-        string? question,
-        Guid? product,
-        string? area,
-        bool? submittedOnly,
-        string? applied,
-        CancellationToken cancellationToken = default)
-    {
-        var blocked = await RequireRegisterAsync();
-        if (blocked != null) return blocked;
-        if (!await CanExportReportAsync())
-        {
-            TempData["ErrorMessage"] = "Only admin and Central Operations users can view submitted census data.";
-            return RedirectToAction(nameof(Report), new { area });
-        }
-
-        SetNav("census-explore");
-        var report = await _census.GetReportAsync(area, cancellationToken, includeSubmissions: true);
-        var dimension = string.Equals(dim, "product", StringComparison.OrdinalIgnoreCase) ? "product" : "question";
-        var submittedOnlyFlag = submittedOnly ?? string.IsNullOrWhiteSpace(applied);
-        var products = submittedOnlyFlag
-            ? report.Products.Where(p => p.Submitted).ToList()
-            : report.Products;
-        if (products.Count == 0)
-            products = report.Products;
-
-        var questionKey = question;
-        if (string.IsNullOrWhiteSpace(questionKey) || CensusDefinition.Find(questionKey) == null)
-            questionKey = CensusDefinition.Tasks.FirstOrDefault()?.Key;
-
-        var productId = product;
-        if (productId == null || products.All(p => p.Id != productId))
-            productId = products.FirstOrDefault()?.Id;
-
-        var answers = report.SubmissionAnswers.AsEnumerable();
-        if (submittedOnlyFlag)
-            answers = answers.Where(a => string.Equals(a.CensusStatus, "Submitted", StringComparison.OrdinalIgnoreCase));
-
-        List<ServiceCensusReportAnswerRow> rows;
-        string? selectedQuestion = null;
-        string? selectedProduct = null;
-        var valueCounts = new List<ServiceCensusExploreValueCount>();
-        if (dimension == "product")
-        {
-            rows = answers
-                .Where(a => a.ProductId == productId)
-                .OrderBy(a => a.Section, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(a => a.Question, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            selectedProduct = products.FirstOrDefault(p => p.Id == productId)?.Title;
-        }
-        else
-        {
-            rows = answers
-                .Where(a => string.Equals(a.QuestionKey, questionKey, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(a => a.Product, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            selectedQuestion = CensusDefinition.Find(questionKey ?? "")?.NavLabel ?? questionKey;
-            valueCounts = rows
-                .Where(a => !string.IsNullOrWhiteSpace(a.Item))
-                .GroupBy(a => a.Item!, StringComparer.OrdinalIgnoreCase)
-                .Select(g => new ServiceCensusExploreValueCount
-                {
-                    Value = g.First().Item ?? g.Key,
-                    ProductCount = g.Select(x => x.ProductId).Distinct().Count()
-                })
-                .OrderByDescending(v => v.ProductCount)
-                .ThenBy(v => v.Value, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-
-        ViewData["Title"] = "Census submitted data";
-        return View("~/Views/Modern/Census/Responses.cshtml", new ServiceCensusExploreViewModel
-        {
-            Dimension = dimension,
-            QuestionKey = questionKey,
-            ProductId = productId,
-            BusinessAreaFilter = report.BusinessAreaFilter,
-            SubmittedOnly = submittedOnlyFlag,
-            BusinessAreaOptions = report.BusinessAreaOptions,
-            Questions = report.Questions,
-            Products = products.OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase).ToList(),
-            Rows = rows,
-            ValueCounts = valueCounts,
-            SelectedQuestion = selectedQuestion,
-            SelectedProduct = selectedProduct
-        });
-    }
-
     private Task<bool> CanExportReportAsync() =>
         _permission.IsOperationConsoleUserAsync(CurrentUserEmail);
 
-    private async Task<IActionResult> Products(bool showAll, string? q, CancellationToken ct)
+    private async Task<IActionResult> Products(bool showAll, string? q, string? contact, CancellationToken ct)
     {
         var blocked = await RequireRegisterAsync();
         if (blocked != null) return blocked;
         SetNav(showAll ? "census-all" : "census-yours");
-        var vm = await _census.ListProductsAsync(CurrentUserEmail, showAll, q, ct);
-        ViewData["Title"] = showAll ? "All products — Service census" : "Your products — Service census";
+        var vm = await _census.ListProductsAsync(CurrentUserEmail, showAll, q, contact, ct);
+        ViewData["Title"] = showAll ? "All products" : "Your products";
         return View("~/Views/Modern/Census/Index.cshtml", vm);
     }
 

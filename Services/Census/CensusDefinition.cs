@@ -181,8 +181,8 @@ public static class CensusDefinition
         new()
         {
             Key = "ddt-sro",
-            Name = "DDT SRO (Deputy Director allowed)",
-            Hint = "Senior responsible owner in Digital, Data and Technology. A Deputy Director can hold this role.",
+            Name = "DDT SRO (SCS1 or above)",
+            Hint = "Senior responsible owner in Digital, Data and Technology. This person must be SCS1 or above.",
             NameAliases =
             [
                 "ddt sro",
@@ -228,6 +228,13 @@ public static class CensusDefinition
             Name = "Information Asset Owner",
             Hint = "Owner of the information assets this product uses or creates.",
             NameAliases = ["information asset owner", "iao"]
+        },
+        new()
+        {
+            Key = "reporting-contact",
+            Name = "Reporting contact",
+            Hint = "Point of contact for operational service commissions or performance reporting requests.",
+            NameAliases = ["reporting contact"]
         }
     ];
 

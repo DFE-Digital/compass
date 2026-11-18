@@ -9,8 +9,6 @@ namespace Compass.Services.Census;
 
 public static class ServiceCensusReportBuilder
 {
-    private const int WeekCount = 12;
-
     public static async Task<ServiceCensusReportViewModel> LoadAsync(
         CompassDbContext db, string? businessArea, CancellationToken ct, bool includeSubmissions = false)
     {
@@ -35,6 +33,7 @@ public static class ServiceCensusReportBuilder
             {
                 ProductId = r.ProductId,
                 Status = r.Status,
+                CreatedAt = r.CreatedAt,
                 SubmittedAt = r.SubmittedAt,
                 Tasks = r.Tasks.Select(t => new TaskSnap
                 {
@@ -46,6 +45,32 @@ public static class ServiceCensusReportBuilder
             .ToListAsync(ct);
 
         var responseByProduct = responses.ToDictionary(r => r.ProductId);
+        var contactRoles = await db.FipsContactRoles.AsNoTracking()
+            .Where(r => r.Active
+                && r.Name != "Reporting contact"
+                && r.Name != "Reporting user")
+            .OrderBy(r => r.DisplayOrder)
+            .ThenBy(r => r.Name)
+            .Select(r => r.Name)
+            .ToListAsync(ct);
+        var productIds = products.Select(p => p.Id).ToList();
+        var contactRows = await db.CMDBProductContacts.AsNoTracking()
+            .Where(c => productIds.Contains(c.CMDBProductId))
+            .Select(c => new { c.CMDBProductId, Role = c.FipsContactRole.Name, c.UserName })
+            .ToListAsync(ct);
+        var contactsByProduct = contactRows
+            .GroupBy(c => c.CMDBProductId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.GroupBy(c => c.Role, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        r => r.Key,
+                        r => string.Join(", ", r
+                            .Select(x => (x.UserName ?? "").Trim())
+                            .Where(n => n.Length > 0)
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)),
+                        StringComparer.OrdinalIgnoreCase));
         var areaFilter = string.IsNullOrWhiteSpace(businessArea) ? null : businessArea.Trim();
         var areaOptions = products
             .SelectMany(p => p.Areas.Count == 0 ? new List<string> { "No business area" } : p.Areas)
@@ -54,25 +79,22 @@ public static class ServiceCensusReportBuilder
             .ToList();
 
         var scoped = Filter(products, areaFilter);
-        var rows = scoped.Select(p => ToProduct(p, responseByProduct, taskCount)).ToList();
+        var rows = scoped.Select(p => ToProduct(p, responseByProduct, taskCount, contactsByProduct)).ToList();
         var overallPercent = rows.Count == 0 ? 0 : (int)Math.Round(rows.Average(r => r.Percent), MidpointRounding.AwayFromZero);
-        var weeks = BuildWeeks(scoped, responseByProduct, taskCount);
+        var weeks = BuildDays(scoped, responseByProduct, taskCount);
 
-        var thisWeek = weeks.LastOrDefault();
-        var last4 = weeks.TakeLast(4).ToList();
-        var prev4 = weeks.Count > 4 ? weeks.Take(weeks.Count - 4).TakeLast(4).ToList() : [];
-        var avgSub = last4.Count == 0 ? 0 : (decimal)last4.Average(w => w.ProductsSubmitted);
-        var prevAvg = prev4.Count == 0 ? 0 : (decimal)prev4.Average(w => w.ProductsSubmitted);
+        var todayUk = UkDate(DateTime.UtcNow);
+        var elapsed = weeks.Where(d => ParseDay(d.IsoWeek) <= todayUk).ToList();
+        var todayPoint = elapsed.LastOrDefault();
+        var avgSub = elapsed.Count == 0 ? 0 : (decimal)elapsed.Average(d => d.ProductsSubmitted);
         var remaining = rows.Count(r => !r.Submitted);
-        var weeksToFinish = avgSub <= 0
+        var daysToFinish = avgSub <= 0
             ? "Not enough submissions yet to estimate"
             : remaining == 0
                 ? "All products submitted"
-                : $"{Math.Ceiling(remaining / avgSub):0} week{(Math.Ceiling(remaining / avgSub) == 1 ? "" : "s")} at the current 4-week rate";
+                : $"{Math.Ceiling(remaining / avgSub):0} day{(Math.Ceiling(remaining / avgSub) == 1 ? "" : "s")} at the current daily rate";
 
-        var trend = avgSub > prevAvg + 0.1m ? "Up on the previous 4 weeks"
-            : avgSub < prevAvg - 0.1m ? "Down on the previous 4 weeks"
-            : "Steady against the previous 4 weeks";
+        var trend = "Daily run rate from 16 to 27 November 2026";
 
         var report = new ServiceCensusReportViewModel
         {
@@ -85,13 +107,14 @@ public static class ServiceCensusReportBuilder
             InProgress = rows.Count(r => r.CensusStatus == "In progress"),
             QuestionsComplete = rows.Count(r => r.CensusStatus is "Complete" or "Submitted"),
             Submitted = rows.Count(r => r.Submitted),
-            TasksCompleteThisWeek = thisWeek?.TasksCompleted ?? 0,
-            SubmittedThisWeek = thisWeek?.ProductsSubmitted ?? 0,
+            TasksCompleteThisWeek = todayPoint?.TasksCompleted ?? 0,
+            SubmittedThisWeek = todayPoint?.ProductsSubmitted ?? 0,
             AverageWeeklySubmissions = Math.Round(avgSub, 1),
-            PreviousAverageWeeklySubmissions = Math.Round(prevAvg, 1),
+            PreviousAverageWeeklySubmissions = 0,
             RunRateTrendLabel = trend,
-            WeeksToFinishLabel = weeksToFinish,
-            BusinessAreas = AreaRows(scoped, responseByProduct, taskCount),
+            WeeksToFinishLabel = daysToFinish,
+            BusinessAreas = AreaRows(scoped, responseByProduct, taskCount, contactsByProduct),
+            ContactRoles = contactRoles,
             Sections = SectionRows(scoped, responseByProduct, groups),
             Questions = QuestionRows(rows, responseByProduct),
             Products = rows
@@ -140,7 +163,10 @@ public static class ServiceCensusReportBuilder
     }
 
     private static ServiceCensusReportProductRow ToProduct(
-        ProductSnap product, Dictionary<Guid, ResponseSnap> responses, int taskCount)
+        ProductSnap product,
+        Dictionary<Guid, ResponseSnap> responses,
+        int taskCount,
+        Dictionary<Guid, Dictionary<string, string>> contactsByProduct)
     {
         responses.TryGetValue(product.Id, out var response);
         var submitted = IsSubmitted(response);
@@ -150,6 +176,7 @@ public static class ServiceCensusReportBuilder
             : complete >= taskCount && taskCount > 0 ? "Complete"
             : complete > 0 ? "In progress"
             : "Not started";
+        contactsByProduct.TryGetValue(product.Id, out var roleContacts);
         return new ServiceCensusReportProductRow
         {
             Id = product.Id,
@@ -160,12 +187,16 @@ public static class ServiceCensusReportBuilder
             TaskCount = taskCount,
             Percent = percent,
             CensusStatus = censusStatus,
-            Submitted = submitted
+            Submitted = submitted,
+            RoleContacts = roleContacts ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
     }
 
     private static List<ServiceCensusReportAreaRow> AreaRows(
-        List<ProductSnap> products, Dictionary<Guid, ResponseSnap> responses, int taskCount)
+        List<ProductSnap> products,
+        Dictionary<Guid, ResponseSnap> responses,
+        int taskCount,
+        Dictionary<Guid, Dictionary<string, string>> contactsByProduct)
     {
         var names = products
             .SelectMany(p => p.Areas.Count == 0 ? new List<string> { "No business area" } : p.Areas)
@@ -174,7 +205,7 @@ public static class ServiceCensusReportBuilder
             .Select(name =>
             {
                 var inArea = Filter(products, name);
-                var rows = inArea.Select(p => ToProduct(p, responses, taskCount)).ToList();
+                var rows = inArea.Select(p => ToProduct(p, responses, taskCount, contactsByProduct)).ToList();
                 return new ServiceCensusReportAreaRow
                 {
                     Name = name,
@@ -183,7 +214,11 @@ public static class ServiceCensusReportBuilder
                     NotStarted = rows.Count(r => r.CensusStatus == "Not started"),
                     InProgress = rows.Count(r => r.CensusStatus == "In progress"),
                     QuestionsComplete = rows.Count(r => r.CensusStatus is "Complete" or "Submitted"),
-                    Submitted = rows.Count(r => r.Submitted)
+                    Submitted = rows.Count(r => r.Submitted),
+                    Products = rows
+                        .OrderBy(r => r.Percent)
+                        .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+                        .ToList()
                 };
             })
             .OrderBy(r => r.AveragePercent)
@@ -241,13 +276,14 @@ public static class ServiceCensusReportBuilder
         }).ToList();
     }
 
-    private static List<ServiceCensusReportWeekPoint> BuildWeeks(
+    private static readonly DateTime CampaignStart = new(2026, 11, 16);
+    private static readonly DateTime CampaignEnd = new(2026, 11, 27);
+
+    private static List<ServiceCensusReportWeekPoint> BuildDays(
         List<ProductSnap> products, Dictionary<Guid, ResponseSnap> responses, int taskCount)
     {
-        var today = DateTime.UtcNow.Date;
-        var currentStart = WeekStart(today);
-        var starts = Enumerable.Range(0, WeekCount)
-            .Select(i => currentStart.AddDays(-7 * (WeekCount - 1 - i)))
+        var days = Enumerable.Range(0, (CampaignEnd - CampaignStart).Days + 1)
+            .Select(i => CampaignStart.AddDays(i))
             .ToList();
         var productIds = products.Select(p => p.Id).ToHashSet();
         var scoped = responses.Values.Where(r => productIds.Contains(r.ProductId)).ToList();
@@ -255,29 +291,28 @@ public static class ServiceCensusReportBuilder
         var cumulativeSubmitted = 0;
         var points = new List<ServiceCensusReportWeekPoint>();
 
-        foreach (var start in starts)
+        foreach (var day in days)
         {
-            var end = start.AddDays(7);
             var tasks = scoped.SelectMany(r => r.Tasks)
                 .Count(t => t.Status == ServiceCensusStatuses.Complete
-                    && t.UpdatedAt >= start && t.UpdatedAt < end);
+                    && UkDate(t.UpdatedAt) == day);
+            var started = scoped.Count(r => StartedOn(r) == day);
             var submitted = scoped.Count(r =>
-                r.SubmittedAt != null && r.SubmittedAt.Value >= start && r.SubmittedAt.Value < end);
+                r.SubmittedAt != null && UkDate(r.SubmittedAt) == day);
             cumulativeSubmitted += submitted;
 
             var inProgress = scoped.Count(r =>
             {
-                var submittedByEnd = r.SubmittedAt != null
-                    ? r.SubmittedAt.Value < end
-                    : string.Equals(r.Status, ServiceCensusStatuses.Submitted, StringComparison.OrdinalIgnoreCase);
-                if (submittedByEnd)
+                var startedBy = StartedOn(r);
+                if (startedBy == DateTime.MinValue || startedBy > day)
                     return false;
-                return r.Tasks.Any(t =>
-                    t.Status == ServiceCensusStatuses.Complete && t.UpdatedAt < end);
+                if (r.SubmittedAt == null)
+                    return !string.Equals(r.Status, ServiceCensusStatuses.Submitted, StringComparison.OrdinalIgnoreCase);
+                return UkDate(r.SubmittedAt) > day;
             });
 
             var completeByEnd = scoped.Sum(r => r.Tasks.Count(t =>
-                t.Status == ServiceCensusStatuses.Complete && t.UpdatedAt < end));
+                t.Status == ServiceCensusStatuses.Complete && UkDate(t.UpdatedAt) <= day));
             var denom = totalProducts * Math.Max(taskCount, 1);
             var cumulativePercent = denom == 0
                 ? 0
@@ -285,10 +320,11 @@ public static class ServiceCensusReportBuilder
 
             points.Add(new ServiceCensusReportWeekPoint
             {
-                Label = start.ToString("d MMM"),
-                IsoWeek = $"{ISOWeekYear(start)}-W{ISOWeek(start):00}",
+                Label = day.ToString("d MMM"),
+                IsoWeek = day.ToString("yyyy-MM-dd"),
                 TasksCompleted = tasks,
                 ProductsInProgress = inProgress,
+                ProductsStarted = started,
                 ProductsSubmitted = submitted,
                 CumulativeSubmitted = cumulativeSubmitted,
                 CumulativePercent = cumulativePercent
@@ -298,18 +334,46 @@ public static class ServiceCensusReportBuilder
         return points;
     }
 
-    private static DateTime WeekStart(DateTime date)
+    private static DateTime StartedOn(ResponseSnap response)
     {
-        var d = date.Date;
-        var offset = ((int)d.DayOfWeek + 6) % 7;
-        return d.AddDays(-offset);
+        var candidates = new List<DateTime> { response.CreatedAt };
+        candidates.AddRange(response.Tasks
+            .Where(t => t.Status != ServiceCensusStatuses.NotStarted)
+            .Select(t => t.UpdatedAt));
+        var first = candidates
+            .Select(d => UkDate(d))
+            .Where(d => d > DateTime.MinValue)
+            .DefaultIfEmpty(DateTime.MinValue)
+            .Min();
+        return first;
     }
 
-    private static int ISOWeek(DateTime date) =>
-        System.Globalization.ISOWeek.GetWeekOfYear(date);
+    private static DateTime ParseDay(string iso) =>
+        DateTime.TryParse(iso, out var day) ? day.Date : DateTime.MinValue;
 
-    private static int ISOWeekYear(DateTime date) =>
-        System.Globalization.ISOWeek.GetYear(date);
+    private static readonly TimeZoneInfo UkZone = ResolveUkZone();
+
+    private static TimeZoneInfo ResolveUkZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Europe/London");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time");
+        }
+    }
+
+    private static DateTime UkDate(DateTime? value)
+    {
+        if (value == null || value.Value == default)
+            return DateTime.MinValue;
+        var utc = value.Value.Kind == DateTimeKind.Utc
+            ? value.Value
+            : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
+        return TimeZoneInfo.ConvertTimeFromUtc(utc, UkZone).Date;
+    }
 
     private static async Task AddSubmissionRowsAsync(
         CompassDbContext db, ServiceCensusReportViewModel report, CancellationToken ct)
@@ -580,6 +644,7 @@ public static class ServiceCensusReportBuilder
     {
         public Guid ProductId { get; set; }
         public string Status { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
         public DateTime? SubmittedAt { get; set; }
         public List<TaskSnap> Tasks { get; set; } = [];
     }

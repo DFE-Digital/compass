@@ -13,7 +13,7 @@ public static class ServiceCensusReportExcelExport
         WriteQuestionSheets(workbook, report);
         WriteProducts(workbook.Worksheets.Add("Products"), report);
         WriteAreas(workbook.Worksheets.Add("Business areas"), report);
-        WriteWeeks(workbook.Worksheets.Add("Weekly"), report);
+        WriteWeeks(workbook.Worksheets.Add("Daily"), report);
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
@@ -32,8 +32,8 @@ public static class ServiceCensusReportExcelExport
             ("Not started", report.NotStarted.ToString("N0")),
             ("In progress", report.InProgress.ToString("N0")),
             ("Submitted", report.Submitted.ToString("N0")),
-            ("Products submitted this week", report.SubmittedThisWeek.ToString("N0")),
-            ("Weeks to finish", report.WeeksToFinishLabel)
+            ("Products submitted today", report.SubmittedThisWeek.ToString("N0")),
+            ("Time to finish", report.WeeksToFinishLabel)
         };
         var row = 2;
         foreach (var (label, value) in rows)
@@ -162,15 +162,16 @@ public static class ServiceCensusReportExcelExport
 
     private static void WriteWeeks(IXLWorksheet sheet, ServiceCensusReportViewModel report)
     {
-        StyleHeader(sheet, ["Week starting", "ISO week", "In progress", "Submitted", "Cumulative submitted"]);
+        StyleHeader(sheet, ["Day", "Date", "Total in progress", "Started", "Submitted", "Cumulative submitted"]);
         var row = 2;
         foreach (var week in report.Weeks)
         {
             sheet.Cell(row, 1).Value = week.Label;
             sheet.Cell(row, 2).Value = week.IsoWeek;
             sheet.Cell(row, 3).Value = week.ProductsInProgress;
-            sheet.Cell(row, 4).Value = week.ProductsSubmitted;
-            sheet.Cell(row, 5).Value = week.CumulativeSubmitted;
+            sheet.Cell(row, 4).Value = week.ProductsStarted;
+            sheet.Cell(row, 5).Value = week.ProductsSubmitted;
+            sheet.Cell(row, 6).Value = week.CumulativeSubmitted;
             row++;
         }
         Finish(sheet);
