@@ -5,7 +5,7 @@ namespace Compass.Services.Census;
 public interface IServiceCensusService
 {
     Task<ServiceCensusProductListViewModel> ListProductsAsync(
-        string userEmail, bool showAll, string? search, CancellationToken ct);
+        string userEmail, bool showAll, string? search, string? contact, CancellationToken ct);
 
     Task<ServiceCensusTaskListViewModel?> GetTaskListAsync(
         Guid productId, string userEmail, bool showAll, CancellationToken ct);

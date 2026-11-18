@@ -520,7 +520,7 @@ public static class ServiceSchemaWorkspace
             TopicCount = 1,
             Topics = []
         };
-        var nav = layout.Areas.Select(item =>
+        var nav = layout.Areas.Where(item => item.Key != "overview").Select(item =>
         {
             var topicTotal = item.Topics.Count;
             var topicNav = item.Topics.Select(topic =>
@@ -562,15 +562,8 @@ public static class ServiceSchemaWorkspace
                 Topics = topicNav
             };
         }).ToList();
-        var overviewIndex = nav.FindIndex(n => string.Equals(n.Key, "overview", StringComparison.OrdinalIgnoreCase));
-        if (overviewIndex >= 0)
-        {
-            nav[overviewIndex].Name = "Task summary";
-            nav.Insert(overviewIndex + 1, productDetailsNav);
-        }
-        else
-            nav.Insert(0, productDetailsNav);
-        var scored = nav.Where(n => n.Key != "overview").ToList();
+        nav.Insert(0, productDetailsNav);
+        var scored = nav.ToList();
         var addressed = scored.Count(n => n.State == "recorded");
         var names = product.Areas.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var dq = (product.HasPhase ? 1 : 0) + (product.TypeCount > 0 ? 1 : 0) + (names.Count > 0 ? 1 : 0)
@@ -603,7 +596,6 @@ public static class ServiceSchemaWorkspace
             ActiveTopic = activeIsAudit || activeIsProductDetails ? "" : (requested?.Key ?? ""),
             AreaName = activeIsAudit ? "Audit"
                 : activeIsProductDetails ? productDetailsNav.Name
-                : string.Equals(area!.Key, "overview", StringComparison.OrdinalIgnoreCase) ? "Task summary"
                 : area!.Name,
             AreaGroup = activeIsAudit ? "Audit"
                 : activeIsProductDetails ? productDetailsNav.Group

@@ -7,7 +7,9 @@
   var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
   var weekJson = JsonSerializer.Serialize(m.Weeks, jsonOpts);
   string Tone(int percent) => percent == 0 ? "empty" : percent < 25 ? "low" : percent < 60 ? "mid" : "ok";
-  string AreaHref(string? area) => Url.Action("Report", "ModernCensus", new { area }) ?? "#";
+  string ReportHref(string? area) => Url.Action("Report", "ModernCensus", new { area }) ?? Url.Content("~/modern/census/report");
+  string RoleName(Compass.ViewModels.Modern.ServiceCensusReportProductRow product, string role) =>
+      product.RoleContacts.TryGetValue(role, out var name) && !string.IsNullOrWhiteSpace(name) ? name : "—";
 }
 
 @section Styles {
@@ -34,9 +36,10 @@
 @await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
   Caption = "Service census",
   Title = "Census report",
-  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Completion across the register, by business area, with weekly run rate of products in progress and submitted. A product in more than one business area is counted in each.</p>"),
+  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Completion across the register, by business area, with daily run rate of products in progress, started and submitted. A product in more than one business area is counted in each.</p>"),
   Actions = reportActions
 })
+<div class="census-report">
 @if (TempData["ErrorMessage"] != null)
 {
   <div class="govuk-error-summary" data-module="govuk-error-summary">
@@ -69,7 +72,7 @@
     </div>
     @if (!string.IsNullOrWhiteSpace(m.BusinessAreaFilter))
     {
-      <p class="govuk-body govuk-!-margin-top-2 govuk-!-margin-bottom-0"><a class="govuk-link" href="@AreaHref(null)">Clear filter</a></p>
+      <p class="govuk-body govuk-!-margin-top-2 govuk-!-margin-bottom-0"><a class="govuk-link" href="@ReportHref(null)">Clear filter</a></p>
     }
   </div>
 </form>
@@ -102,14 +105,14 @@
 
 <section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-runrate">
   <h2 id="census-report-runrate" class="govuk-heading-m">Run rate</h2>
-  <p class="govuk-body">Weekly products in progress and products submitted.</p>
+  <p class="govuk-body">Day by day from 16 to 27 November 2026. The line is the total still in progress. The bars are products started that day and products submitted that day.</p>
   <p class="govuk-body">@m.WeeksToFinishLabel.</p>
   <div class="census-report-chart govuk-!-margin-top-4">
-    <canvas id="census-runrate-chart" aria-label="Weekly products in progress and submitted"></canvas>
+    <canvas id="census-runrate-chart" aria-label="Daily products in progress, started and submitted"></canvas>
   </div>
 </section>
 
-<section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-areas">
+<section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-areas" id="census-report-areas-block" data-module="census-report-areas">
   <h2 id="census-report-areas" class="govuk-heading-m">Completion by business area</h2>
   @if (m.BusinessAreas.Count == 0)
   {
@@ -119,13 +122,13 @@
   {
     <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
       <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
-      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
+      <table class="govuk-table dfe-f-table--condensed census-report-areas-table">
         <caption class="govuk-table__caption govuk-visually-hidden">Completion by business area</caption>
         <thead class="govuk-table__head">
           <tr class="govuk-table__row">
             <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Completion</button></th>
             <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Products</button></th>
-            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Coverage</button></th>
             <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Not started</button></th>
             <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">In progress</button></th>
             <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Complete</button></th>
@@ -133,19 +136,16 @@
           </tr>
         </thead>
         <tbody class="govuk-table__body">
-          @foreach (var ba in m.BusinessAreas)
+          @for (var i = 0; i < m.BusinessAreas.Count; i++)
           {
-            <tr class="govuk-table__row ss-row @Tone(ba.AveragePercent)">
+            var ba = m.BusinessAreas[i];
+            var panelId = "census-area-" + i;
+            <tr class="govuk-table__row">
               <th scope="row" class="govuk-table__header">
-                <a class="govuk-link govuk-link--no-visited-state" href="@AreaHref(ba.Name)">@ba.Name</a>
+                <a class="govuk-link govuk-link--no-visited-state" href="#@panelId" data-census-area-link aria-controls="@panelId">@ba.Name</a>
               </th>
+              <td class="govuk-table__cell govuk-table__cell--numeric">@ba.AveragePercent%</td>
               <td class="govuk-table__cell govuk-table__cell--numeric">@ba.ProductCount.ToString("N0")</td>
-              <td class="govuk-table__cell">
-                <div class="ss-coverage">
-                  <div class="ss-bar" aria-hidden="true"><span style="width: @ba.AveragePercent%"></span></div>
-                  <span>@ba.AveragePercent%</span>
-                </div>
-              </td>
               <td class="govuk-table__cell govuk-table__cell--numeric">@ba.NotStarted.ToString("N0")</td>
               <td class="govuk-table__cell govuk-table__cell--numeric">@ba.InProgress.ToString("N0")</td>
               <td class="govuk-table__cell govuk-table__cell--numeric">@ba.QuestionsComplete.ToString("N0")</td>
@@ -155,6 +155,65 @@
         </tbody>
       </table>
     </div>
+    <p class="govuk-hint" data-census-area-hint>Select a business area to see its products.</p>
+    @for (var i = 0; i < m.BusinessAreas.Count; i++)
+    {
+      var ba = m.BusinessAreas[i];
+      var panelId = "census-area-" + i;
+      <div class="census-report-area-panel" id="@panelId" data-census-area-panel hidden>
+        <h3 class="govuk-heading-s">@ba.Name</h3>
+        @if (ba.Products.Count == 0)
+        {
+          <p class="govuk-body">No products in this business area.</p>
+        }
+        else
+        {
+          <div class="dfe-f-table-wrapper">
+            <table class="govuk-table dfe-f-table--condensed census-product-table govuk-!-margin-bottom-0">
+              <caption class="govuk-table__caption govuk-visually-hidden">Products in @ba.Name</caption>
+              <colgroup>
+                <col class="census-product-table__col-product" />
+                <col class="census-product-table__col-census" />
+                <col class="census-product-table__col-completion" />
+                @foreach (var role in m.ContactRoles)
+                {
+                  <col class="census-product-table__col-role" />
+                }
+              </colgroup>
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header">Product</th>
+                  <th scope="col" class="govuk-table__header">Census</th>
+                  <th scope="col" class="govuk-table__header govuk-table__header--numeric">Completion</th>
+                  @foreach (var role in m.ContactRoles)
+                  {
+                    <th scope="col" class="govuk-table__header">@role</th>
+                  }
+                </tr>
+              </thead>
+              <tbody class="govuk-table__body">
+                @foreach (var product in ba.Products)
+                {
+                  <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">
+                      <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("TaskList", "ModernCensus", new { id = product.Id, all = true })">@product.Title</a>
+                    </td>
+                    <td class="govuk-table__cell">
+                      <span class="@WorkBadgeCss.CensusStatusBadgeClass(product.CensusStatus)">@product.CensusStatus</span>
+                    </td>
+                    <td class="govuk-table__cell govuk-table__cell--numeric">@product.TasksComplete/@product.TaskCount (@product.Percent%)</td>
+                    @foreach (var role in m.ContactRoles)
+                    {
+                      <td class="govuk-table__cell">@RoleName(product, role)</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
   }
 </section>
 
@@ -190,72 +249,174 @@
   </div>
 </section>
 
-<section class="govuk-!-margin-bottom-6" aria-labelledby="census-report-products">
-  <h2 id="census-report-products" class="govuk-heading-m">All products</h2>
-  @if (m.Products.Count == 0)
+@{
+  var productGroups = new (string Id, string Title, List<Compass.ViewModels.Modern.ServiceCensusReportProductRow> Rows)[]
   {
-    <p class="govuk-body">No products in this view.</p>
-  }
-  else
-  {
-    <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
-      <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
-      <table class="govuk-table govuk-table--small-text-until-tablet dfe-f-table--condensed">
-        <caption class="govuk-table__caption govuk-visually-hidden">Census completion for all products</caption>
-        <thead class="govuk-table__head">
-          <tr class="govuk-table__row">
-            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
-            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
-            <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Census</button></th>
-            <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Completion</button></th>
-          </tr>
-        </thead>
-        <tbody class="govuk-table__body">
-          @foreach (var row in m.Products)
-          {
+    ("census-report-inprogress", "In progress", m.Products.Where(r => r.CensusStatus == "In progress").ToList()),
+    ("census-report-notstarted", "Not started", m.Products.Where(r => r.CensusStatus == "Not started").ToList()),
+    ("census-report-complete", "Complete", m.Products.Where(r => r.CensusStatus is "Complete" or "Submitted").ToList())
+  };
+}
+@foreach (var group in productGroups)
+{
+  <section class="govuk-!-margin-bottom-6" aria-labelledby="@group.Id">
+    <h2 id="@group.Id" class="govuk-heading-m">@group.Title (@group.Rows.Count.ToString("N0"))</h2>
+    @if (group.Rows.Count == 0)
+    {
+      <p class="govuk-body">No products in this view.</p>
+    }
+    else
+    {
+      <div class="dfe-f-table-wrapper" data-module="dfe-f-table">
+        <div class="govuk-visually-hidden" aria-live="polite" data-dfe-table-sort-live></div>
+        <table class="govuk-table dfe-f-table--condensed census-product-table">
+          <caption class="govuk-table__caption govuk-visually-hidden">@group.Title products</caption>
+          <colgroup>
+            <col class="census-product-table__col-product" />
+            <col class="census-product-table__col-area" />
+            <col class="census-product-table__col-census" />
+            <col class="census-product-table__col-completion" />
+            @foreach (var role in m.ContactRoles)
+            {
+              <col class="census-product-table__col-role" />
+            }
+          </colgroup>
+          <thead class="govuk-table__head">
             <tr class="govuk-table__row">
-              <td class="govuk-table__cell">
-                <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("TaskList", "ModernCensus", new { id = row.Id, all = true })">@row.Title</a>
-              </td>
-              <td class="govuk-table__cell">@row.Areas</td>
-              <td class="govuk-table__cell">
-                <span class="@WorkBadgeCss.ServiceRegisterCompletionBadgeClass(row.Percent)">@row.CensusStatus</span>
-              </td>
-              <td class="govuk-table__cell govuk-table__cell--numeric">@row.TasksComplete of @row.TaskCount (@row.Percent%)</td>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Product</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Business area</button></th>
+              <th scope="col" class="govuk-table__header" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Census</button></th>
+              <th scope="col" class="govuk-table__header govuk-table__header--numeric" aria-sort="none"><button type="button" class="dfe-f-table-sort-button">Completion</button></th>
+              @foreach (var role in m.ContactRoles)
+              {
+                <th scope="col" class="govuk-table__header">@role</th>
+              }
             </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  }
-</section>
+          </thead>
+          <tbody class="govuk-table__body">
+            @foreach (var row in group.Rows)
+            {
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">
+                  <a class="govuk-link govuk-link--no-visited-state" href="@Url.Action("TaskList", "ModernCensus", new { id = row.Id, all = true })">@row.Title</a>
+                </td>
+                <td class="govuk-table__cell">@row.Areas</td>
+                <td class="govuk-table__cell">
+                  <span class="@WorkBadgeCss.CensusStatusBadgeClass(row.CensusStatus)">@row.CensusStatus</span>
+                </td>
+                <td class="govuk-table__cell govuk-table__cell--numeric">@row.TasksComplete/@row.TaskCount (@row.Percent%)</td>
+                @foreach (var role in m.ContactRoles)
+                {
+                  <td class="govuk-table__cell">@RoleName(row, role)</td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+}
+</div>
 
 @section Scripts {
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="@Context.Items["Nonce"]"></script>
   <script nonce="@Context.Items["Nonce"]">
     (function () {
       var weeks = @Html.Raw(weekJson);
-      if (!weeks.length || typeof Chart === 'undefined') return;
-      var labels = weeks.map(function (w) { return w.label; });
-      var runrate = document.getElementById('census-runrate-chart');
-      if (runrate) {
-        new Chart(runrate.getContext('2d'), {
-          type: 'bar',
-          data: {
-            labels: labels,
-            datasets: [
-              { label: 'In progress', data: weeks.map(function (w) { return w.productsInProgress; }), backgroundColor: '#1d70b8' },
-              { label: 'Submitted', data: weeks.map(function (w) { return w.productsSubmitted; }), backgroundColor: '#00703c' }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } },
-            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
-          }
-        });
+      if (weeks.length && typeof Chart !== 'undefined') {
+        var labels = weeks.map(function (w) { return w.label; });
+        var runrate = document.getElementById('census-runrate-chart');
+        if (runrate) {
+          new Chart(runrate.getContext('2d'), {
+            type: 'bar',
+            data: {
+              labels: labels,
+              datasets: [
+                {
+                  type: 'line',
+                  label: 'Total in progress',
+                  data: weeks.map(function (w) { return w.productsInProgress; }),
+                  borderColor: '#1d70b8',
+                  backgroundColor: '#1d70b8',
+                  yAxisID: 'y1',
+                  tension: 0.2,
+                  pointRadius: 3,
+                  borderWidth: 2,
+                  order: 0
+                },
+                {
+                  type: 'bar',
+                  label: 'Started today',
+                  data: weeks.map(function (w) { return w.productsStarted; }),
+                  backgroundColor: '#5694ca',
+                  yAxisID: 'y',
+                  order: 1
+                },
+                {
+                  type: 'bar',
+                  label: 'Submitted today',
+                  data: weeks.map(function (w) { return w.productsSubmitted; }),
+                  backgroundColor: '#00703c',
+                  yAxisID: 'y',
+                  order: 2
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom' } },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: { precision: 0 },
+                  title: { display: true, text: 'Started / submitted' }
+                },
+                y1: {
+                  beginAtZero: true,
+                  position: 'right',
+                  grid: { drawOnChartArea: false },
+                  ticks: { precision: 0 },
+                  title: { display: true, text: 'Total in progress' }
+                }
+              }
+            }
+          });
+        }
       }
+    })();
+    (function () {
+      var root = document.querySelector("[data-module='census-report-areas']");
+      if (!root) return;
+      var links = root.querySelectorAll("[data-census-area-link]");
+      var panels = root.querySelectorAll("[data-census-area-panel]");
+      var hint = root.querySelector("[data-census-area-hint]");
+      function show(id) {
+        panels.forEach(function (panel) {
+          panel.hidden = panel.id !== id;
+        });
+        links.forEach(function (link) {
+          var match = link.getAttribute("href") === "#" + id;
+          if (match) link.setAttribute("aria-current", "true");
+          else link.removeAttribute("aria-current");
+          var row = link.closest("tr");
+          if (row) row.classList.toggle("census-report-areas__row--selected", match);
+        });
+        if (hint) hint.hidden = true;
+      }
+      links.forEach(function (link) {
+        link.addEventListener("click", function (e) {
+          var id = (link.getAttribute("href") || "").replace("#", "");
+          if (!id) return;
+          e.preventDefault();
+          show(id);
+          var panel = document.getElementById(id);
+          if (panel) panel.scrollIntoView({ block: "nearest" });
+        });
+      });
+      var hash = (window.location.hash || "").replace("#", "");
+      if (/^census-area-\d+$/.test(hash) && root.querySelector("#" + hash)) show(hash);
     })();
   </script>
 }

@@ -52,11 +52,11 @@ public sealed class ModernCensusController : Controller
 
     [HttpGet("")]
     public Task<IActionResult> Index(string? q, CancellationToken cancellationToken) =>
-        Products(showAll: false, q, cancellationToken);
+        Products(showAll: false, q, null, cancellationToken);
 
     [HttpGet("all")]
-    public Task<IActionResult> All(string? q, CancellationToken cancellationToken) =>
-        Products(showAll: true, q, cancellationToken);
+    public Task<IActionResult> All(string? q, string? contact, CancellationToken cancellationToken) =>
+        Products(showAll: true, q, contact, cancellationToken);
 
     [HttpGet("suggest")]
     public async Task<IActionResult> Suggest(string? q, bool all = false, CancellationToken cancellationToken = default)
@@ -90,6 +90,7 @@ public sealed class ModernCensusController : Controller
     }
 
     [HttpGet("report")]
+    [HttpGet("/ModernCensus/Report")]
     public async Task<IActionResult> Report(string? area, CancellationToken cancellationToken)
     {
         var blocked = await RequireRegisterAsync();
@@ -224,13 +225,13 @@ public sealed class ModernCensusController : Controller
     private Task<bool> CanExportReportAsync() =>
         _permission.IsOperationConsoleUserAsync(CurrentUserEmail);
 
-    private async Task<IActionResult> Products(bool showAll, string? q, CancellationToken ct)
+    private async Task<IActionResult> Products(bool showAll, string? q, string? contact, CancellationToken ct)
     {
         var blocked = await RequireRegisterAsync();
         if (blocked != null) return blocked;
         SetNav(showAll ? "census-all" : "census-yours");
-        var vm = await _census.ListProductsAsync(CurrentUserEmail, showAll, q, ct);
-        ViewData["Title"] = showAll ? "All products — Service census" : "Your products — Service census";
+        var vm = await _census.ListProductsAsync(CurrentUserEmail, showAll, q, contact, ct);
+        ViewData["Title"] = showAll ? "All products" : "Your products";
         return View("~/Views/Modern/Census/Index.cshtml", vm);
     }
 

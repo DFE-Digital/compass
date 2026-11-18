@@ -522,7 +522,8 @@ public class ModernAdminServiceSchemaController : Controller
                 area.Summary = Trim(summary, 4000) ?? "";
             if (areaHelpPanel != null && areaHelpPanel.TryGetValue(area.Key, out var helpPanel))
                 area.HelpPanel = Trim(helpPanel, 20000);
-            area.IsActive = shown.Contains(area.Key);
+            area.IsActive = !string.Equals(area.Key, "overview", StringComparison.OrdinalIgnoreCase)
+                && shown.Contains(area.Key);
         }
 
         if (questionOrder != null)
@@ -748,6 +749,7 @@ public class ModernAdminServiceSchemaController : Controller
 
     private async Task<List<ServiceSchemaChoice>> AreaChoicesAsync(CancellationToken ct) =>
         await _db.ServiceSchemaAreaConfigs.AsNoTracking()
+            .Where(a => a.Key != "overview")
             .OrderBy(a => a.SortOrder).ThenBy(a => a.Name)
             .Select(a => new ServiceSchemaChoice { Value = a.Key, Label = a.Name })
             .ToListAsync(ct);

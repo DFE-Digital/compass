@@ -30,7 +30,7 @@ public sealed class ServiceCensusService : IServiceCensusService
     }
 
     public async Task<ServiceCensusProductListViewModel> ListProductsAsync(
-        string userEmail, bool showAll, string? search, CancellationToken ct)
+        string userEmail, bool showAll, string? search, string? contact, CancellationToken ct)
     {
         var products = await VisibleProductsQuery()
             .Select(p => new
@@ -38,6 +38,10 @@ public sealed class ServiceCensusService : IServiceCensusService
                 p.Id,
                 p.Title,
                 p.Status,
+                Areas = p.BusinessAreas
+                    .Where(b => b.FipsBusinessArea != null && b.FipsBusinessArea.Name != "")
+                    .Select(b => b.FipsBusinessArea.Name)
+                    .ToList(),
                 IsNamed = p.Contacts.Any(c =>
                     c.UserEmail != null && c.UserEmail != "" && c.UserEmail.ToLower() == userEmail.ToLower())
             })
@@ -72,6 +76,12 @@ public sealed class ServiceCensusService : IServiceCensusService
                 ? 0
                 : taskKeys.Count(key =>
                     response.CompleteKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase)));
+            var areaNames = (p.Areas ?? [])
+                .Select(a => a.Trim())
+                .Where(a => a.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(a => a, StringComparer.OrdinalIgnoreCase)
+                .ToList();
             return new ServiceCensusProductRowViewModel
             {
                 Id = p.Id,
@@ -81,6 +91,8 @@ public sealed class ServiceCensusService : IServiceCensusService
                     : complete == 0
                         ? "Not started"
                         : "In progress",
+                AreaNames = areaNames.Count == 0 ? ["No business area"] : areaNames,
+                Areas = areaNames.Count == 0 ? "No business area" : string.Join(", ", areaNames),
                 TasksComplete = submitted ? taskCount : complete,
                 TaskCount = taskCount,
                 Submitted = submitted,
@@ -90,8 +102,64 @@ public sealed class ServiceCensusService : IServiceCensusService
         }).ToList();
 
         var needle = (search ?? "").Trim();
-        if (!string.IsNullOrEmpty(needle))
+        if (!showAll && !string.IsNullOrEmpty(needle))
             rows = rows.Where(r => r.Title.Contains(needle, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        var contactRoles = await _db.FipsContactRoles.AsNoTracking()
+            .Where(r => r.Active && r.Name != "Reporting user")
+            .OrderBy(r => r.DisplayOrder)
+            .ThenBy(r => r.Name)
+            .Select(r => r.Name)
+            .ToListAsync(ct);
+        var offeringContacts = await _db.CMDBProductContacts.AsNoTracking()
+            .Where(c => productIds.Contains(c.CMDBProductId))
+            .Select(c => new { c.CMDBProductId, Role = c.FipsContactRole.Name, c.UserName, c.UserEmail })
+            .ToListAsync(ct);
+        var contactsByProduct = offeringContacts
+            .GroupBy(c => c.CMDBProductId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.GroupBy(c => c.Role, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        r => r.Key,
+                        r => string.Join(", ", r
+                            .Select(x => (x.UserName ?? "").Trim())
+                            .Where(n => n.Length > 0)
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)),
+                        StringComparer.OrdinalIgnoreCase));
+        foreach (var row in rows)
+        {
+            if (!contactsByProduct.TryGetValue(row.Id, out var roles)) continue;
+            row.RoleContacts = roles;
+            row.ContactNames = roles.Values
+                .SelectMany(names => names.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        var contactOptions = offeringContacts
+            .Select(c => (c.UserName ?? "").Trim())
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var areaOptions = rows
+            .SelectMany(r => r.AreaNames)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var contactNeedle = (contact ?? "").Trim();
+        if (!showAll && !string.IsNullOrEmpty(contactNeedle))
+        {
+            var matchingIds = offeringContacts
+                .Where(c =>
+                    string.Equals((c.UserName ?? "").Trim(), contactNeedle, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals((c.UserEmail ?? "").Trim(), contactNeedle, StringComparison.OrdinalIgnoreCase))
+                .Select(c => c.CMDBProductId)
+                .ToHashSet();
+            rows = rows.Where(r => matchingIds.Contains(r.Id)).ToList();
+        }
 
         var yours = rows.Where(r => r.UserIsNamedContact).ToList();
         var shown = showAll ? rows : yours;
@@ -100,6 +168,10 @@ public sealed class ServiceCensusService : IServiceCensusService
         {
             ShowAll = showAll,
             Search = search,
+            ContactFilter = string.IsNullOrEmpty(contactNeedle) ? null : contactNeedle,
+            ContactOptions = contactOptions,
+            BusinessAreaOptions = areaOptions,
+            ContactRoles = contactRoles,
             YourProductCount = yours.Count,
             AllProductCount = rows.Count,
             Products = shown
@@ -493,7 +565,7 @@ public sealed class ServiceCensusService : IServiceCensusService
         string userEmail, bool showAll, string? search, int limit, CancellationToken ct)
     {
         var take = Math.Clamp(limit, 1, 25);
-        var list = await ListProductsAsync(userEmail, showAll, search, ct);
+        var list = await ListProductsAsync(userEmail, showAll, search, null, ct);
         var needle = (search ?? "").Trim();
         IEnumerable<ServiceCensusProductRowViewModel> ranked = list.Products;
         if (!string.IsNullOrEmpty(needle))

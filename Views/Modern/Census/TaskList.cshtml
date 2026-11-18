@@ -63,52 +63,73 @@
       </div>
     }
 
+    <div class="census-task-list">
     @foreach (var group in Model.Groups)
     {
-      <h2 class="govuk-heading-m">@group.Name</h2>
-      <ul class="govuk-task-list">
-        @foreach (var task in group.Tasks)
-        {
-          var statusId = "census-task-" + task.Key + "-status";
-          var hintId = "census-task-" + task.Key + "-hint";
-          <li class="govuk-task-list__item govuk-task-list__item--with-link">
-            <div class="govuk-task-list__name-and-hint">
-              <a class="govuk-link govuk-task-list__link govuk-link--no-visited-state" href="@Url.Action("Question", "ModernCensus", new { id = Model.ProductId, taskKey = task.Key, all = Model.ShowAll })" aria-describedby="@hintId @statusId">@task.Heading</a>
-              <div id="@hintId" class="govuk-task-list__hint">@task.Help</div>
-            </div>
-            <div class="govuk-task-list__status" id="@statusId">
-              @await Html.PartialAsync("~/Views/Modern/Census/_StatusTag.cshtml", task.Status)
-            </div>
-          </li>
-        }
-      </ul>
+      var completeCount = group.Tasks.Count(t =>
+          string.Equals(t.Status, "COMPLETE", StringComparison.OrdinalIgnoreCase)
+          || string.Equals(t.Status, "Submitted", StringComparison.OrdinalIgnoreCase));
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">@group.Name</h2>
+          <p class="govuk-body-s govuk-!-margin-bottom-0">@completeCount of @group.Tasks.Count complete</p>
+        </div>
+        <div class="govuk-summary-card__content">
+          <ul class="govuk-task-list">
+            @foreach (var task in group.Tasks)
+            {
+              var statusId = "census-task-" + task.Key + "-status";
+              var hintId = "census-task-" + task.Key + "-hint";
+              <li class="govuk-task-list__item govuk-task-list__item--with-link">
+                <div class="govuk-task-list__name-and-hint">
+                  <a class="govuk-link govuk-task-list__link govuk-link--no-visited-state" href="@Url.Action("Question", "ModernCensus", new { id = Model.ProductId, taskKey = task.Key, all = Model.ShowAll })" aria-describedby="@(string.IsNullOrWhiteSpace(task.Help) ? statusId : hintId + " " + statusId)">@task.Heading</a>
+                  @if (!string.IsNullOrWhiteSpace(task.Help))
+                  {
+                    <div id="@hintId" class="govuk-task-list__hint">@task.Help</div>
+                  }
+                </div>
+                <div class="govuk-task-list__status" id="@statusId">
+                  @await Html.PartialAsync("~/Views/Modern/Census/_StatusTag.cshtml", task.Status)
+                </div>
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
     }
 
     @if (!Model.Submitted)
     {
-      <h2 class="govuk-heading-m">Submit</h2>
-      @await Html.PartialAsync("~/Views/Modern/Census/_NamedSubmitters.cshtml", Model.NamedSubmitters)
-      @if (!Model.CanSubmit)
-      {
-        <div class="govuk-inset-text">
-          @if (!Model.AllComplete)
+      <div class="govuk-summary-card">
+        <div class="govuk-summary-card__title-wrapper">
+          <h2 class="govuk-summary-card__title">Submit</h2>
+        </div>
+        <div class="govuk-summary-card__content">
+          @await Html.PartialAsync("~/Views/Modern/Census/_NamedSubmitters.cshtml", Model.NamedSubmitters)
+          @if (!Model.CanSubmit)
           {
-            <p class="govuk-body@(Model.UserIsNamedSubmitter ? " govuk-!-margin-bottom-0" : "")">You cannot submit until every question is marked complete.</p>
+            <div class="govuk-inset-text govuk-!-margin-bottom-0">
+              @if (!Model.AllComplete)
+              {
+                <p class="govuk-body@(Model.UserIsNamedSubmitter ? " govuk-!-margin-bottom-0" : "")">You cannot submit until every question is marked complete.</p>
+              }
+              @if (Model.NamedSubmitters.Count == 0)
+              {
+                <p class="govuk-body govuk-!-margin-bottom-0">You cannot submit until people are named on the contacts page.</p>
+              }
+              else if (!Model.UserIsNamedSubmitter)
+              {
+                <p class="govuk-body govuk-!-margin-bottom-0">You cannot submit because you are not one of the people listed.</p>
+              }
+            </div>
           }
-          @if (Model.NamedSubmitters.Count == 0)
+          else
           {
-            <p class="govuk-body govuk-!-margin-bottom-0">You cannot submit until people are named on the contacts page.</p>
-          }
-          else if (!Model.UserIsNamedSubmitter)
-          {
-            <p class="govuk-body govuk-!-margin-bottom-0">You cannot submit because you are not one of the people listed.</p>
+            <a class="govuk-button govuk-!-margin-bottom-0" href="@Url.Action("Submit", "ModernCensus", new { id = Model.ProductId, all = Model.ShowAll })">Check and submit</a>
           }
         </div>
-      }
-      else
-      {
-        <a class="govuk-button" href="@Url.Action("Submit", "ModernCensus", new { id = Model.ProductId, all = Model.ShowAll })">Check and submit</a>
-      }
+      </div>
     }
+    </div>
   </div>
 </div>
