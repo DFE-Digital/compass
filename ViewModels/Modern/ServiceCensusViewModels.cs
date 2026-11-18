@@ -236,6 +236,7 @@ public sealed class ServiceCensusReportViewModel
     public List<ServiceCensusReportSectionRow> Sections { get; set; } = [];
     public List<ServiceCensusReportProductRow> Products { get; set; } = [];
     public List<ServiceCensusReportWeekPoint> Weeks { get; set; } = [];
+    public List<ServiceCensusReportQuestionRow> Questions { get; set; } = [];
     public List<ServiceCensusReportAnswerRow> SubmissionAnswers { get; set; } = [];
     public List<ServiceCensusReportContactRow> SubmissionContacts { get; set; } = [];
 
@@ -243,14 +244,26 @@ public sealed class ServiceCensusReportViewModel
     public bool CanExport { get; set; }
 }
 
+public sealed class ServiceCensusReportQuestionRow
+{
+    public string Key { get; set; } = "";
+    public string Section { get; set; } = "";
+    public string Question { get; set; } = "";
+    public int CompleteProducts { get; set; }
+    public int ProductCount { get; set; }
+    public int AveragePercent { get; set; }
+}
+
 public sealed class ServiceCensusReportAnswerRow
 {
+    public Guid ProductId { get; set; }
     public string Product { get; set; } = "";
     public string Areas { get; set; } = "";
     public string CensusStatus { get; set; } = "";
     public DateTime? SubmittedAt { get; set; }
     public string? SubmittedBy { get; set; }
     public string Section { get; set; } = "";
+    public string QuestionKey { get; set; } = "";
     public string Question { get; set; } = "";
     public string QuestionStatus { get; set; } = "";
     public bool CannotAnswer { get; set; }
@@ -308,6 +321,28 @@ public sealed class ServiceCensusPromptViewModel
     public int OutstandingCount { get; set; }
     public Guid? SingleProductId { get; set; }
     public string? SingleProductTitle { get; set; }
+}
+
+public sealed class ServiceCensusExploreViewModel
+{
+    public string Dimension { get; set; } = "question";
+    public string? QuestionKey { get; set; }
+    public Guid? ProductId { get; set; }
+    public string? BusinessAreaFilter { get; set; }
+    public bool SubmittedOnly { get; set; } = true;
+    public List<string> BusinessAreaOptions { get; set; } = [];
+    public List<ServiceCensusReportQuestionRow> Questions { get; set; } = [];
+    public List<ServiceCensusReportProductRow> Products { get; set; } = [];
+    public List<ServiceCensusReportAnswerRow> Rows { get; set; } = [];
+    public List<ServiceCensusExploreValueCount> ValueCounts { get; set; } = [];
+    public string? SelectedQuestion { get; set; }
+    public string? SelectedProduct { get; set; }
+}
+
+public sealed class ServiceCensusExploreValueCount
+{
+    public string Value { get; set; } = "";
+    public int ProductCount { get; set; }
 }
 
 public sealed class ServiceCensusReportWeekPoint
