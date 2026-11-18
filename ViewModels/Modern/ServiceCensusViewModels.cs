@@ -334,6 +334,28 @@ public sealed class ServiceCensusPromptViewModel
     public string? SingleProductTitle { get; set; }
 }
 
+public sealed class ServiceCensusExploreViewModel
+{
+    public string Dimension { get; set; } = "question";
+    public string? QuestionKey { get; set; }
+    public Guid? ProductId { get; set; }
+    public string? BusinessAreaFilter { get; set; }
+    public bool SubmittedOnly { get; set; } = true;
+    public List<string> BusinessAreaOptions { get; set; } = [];
+    public List<ServiceCensusReportQuestionRow> Questions { get; set; } = [];
+    public List<ServiceCensusReportProductRow> Products { get; set; } = [];
+    public List<ServiceCensusReportAnswerRow> Rows { get; set; } = [];
+    public List<ServiceCensusExploreValueCount> ValueCounts { get; set; } = [];
+    public string? SelectedQuestion { get; set; }
+    public string? SelectedProduct { get; set; }
+}
+
+public sealed class ServiceCensusExploreValueCount
+{
+    public string Value { get; set; } = "";
+    public int ProductCount { get; set; }
+}
+
 public sealed class ServiceCensusReportWeekPoint
 {
     public string Label { get; set; } = "";
