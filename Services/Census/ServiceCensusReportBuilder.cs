@@ -336,16 +336,12 @@ public static class ServiceCensusReportBuilder
 
     private static DateTime StartedOn(ResponseSnap response)
     {
-        var candidates = new List<DateTime> { response.CreatedAt };
-        candidates.AddRange(response.Tasks
-            .Where(t => t.Status != ServiceCensusStatuses.NotStarted)
-            .Select(t => t.UpdatedAt));
-        var first = candidates
-            .Select(d => UkDate(d))
+        return response.Tasks
+            .Where(t => t.Status == ServiceCensusStatuses.Complete)
+            .Select(t => UkDate(t.UpdatedAt))
             .Where(d => d > DateTime.MinValue)
             .DefaultIfEmpty(DateTime.MinValue)
             .Min();
-        return first;
     }
 
     private static DateTime ParseDay(string iso) =>
