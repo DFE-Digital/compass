@@ -8,12 +8,11 @@ public static class ServiceCensusReportExcelExport
     public static byte[] BuildWorkbook(ServiceCensusReportViewModel report)
     {
         using var workbook = new XLWorkbook();
-        WriteSummary(workbook.Worksheets.Add("Summary"), report);
+        WriteOverview(workbook.Worksheets.Add("Overview"), report);
+        WriteQuestions(workbook.Worksheets.Add("Questions"), report);
+        WriteQuestionSheets(workbook, report);
         WriteProducts(workbook.Worksheets.Add("Products"), report);
-        WriteAnswers(workbook.Worksheets.Add("Answers"), report);
-        WriteContacts(workbook.Worksheets.Add("Contacts"), report);
         WriteAreas(workbook.Worksheets.Add("Business areas"), report);
-        WriteSections(workbook.Worksheets.Add("Sections"), report);
         WriteWeeks(workbook.Worksheets.Add("Weekly"), report);
 
         using var stream = new MemoryStream();
@@ -21,23 +20,19 @@ public static class ServiceCensusReportExcelExport
         return stream.ToArray();
     }
 
-    private static void WriteSummary(IXLWorksheet sheet, ServiceCensusReportViewModel report)
+    private static void WriteOverview(IXLWorksheet sheet, ServiceCensusReportViewModel report)
     {
         StyleHeader(sheet, ["Field", "Value"]);
         var rows = new (string Label, string Value)[]
         {
             ("Exported", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm") + " UTC"),
             ("Business area filter", string.IsNullOrWhiteSpace(report.BusinessAreaFilter) ? "All business areas" : report.BusinessAreaFilter),
-            ("Products", report.ProductCount.ToString("N0")),
-            ("Average completion", report.OverallPercent + "%"),
+            ("Overall completion", report.OverallPercent + "%"),
+            ("Total", report.ProductCount.ToString("N0")),
             ("Not started", report.NotStarted.ToString("N0")),
             ("In progress", report.InProgress.ToString("N0")),
             ("Submitted", report.Submitted.ToString("N0")),
-            ("Questions completed this week", report.TasksCompleteThisWeek.ToString("N0")),
             ("Products submitted this week", report.SubmittedThisWeek.ToString("N0")),
-            ("Average weekly submissions (4 weeks)", report.AverageWeeklySubmissions.ToString("0.0")),
-            ("Previous 4-week average", report.PreviousAverageWeeklySubmissions.ToString("0.0")),
-            ("Run rate", report.RunRateTrendLabel),
             ("Weeks to finish", report.WeeksToFinishLabel)
         };
         var row = 2;
@@ -48,6 +43,85 @@ public static class ServiceCensusReportExcelExport
             row++;
         }
         Finish(sheet);
+    }
+
+    private static void WriteQuestions(IXLWorksheet sheet, ServiceCensusReportViewModel report)
+    {
+        StyleHeader(sheet, ["Question", "Section", "Products complete", "Products", "Completion %"]);
+        var row = 2;
+        foreach (var question in report.Questions)
+        {
+            sheet.Cell(row, 1).Value = question.Question;
+            sheet.Cell(row, 2).Value = question.Section;
+            sheet.Cell(row, 3).Value = question.CompleteProducts;
+            sheet.Cell(row, 4).Value = question.ProductCount;
+            sheet.Cell(row, 5).Value = question.AveragePercent / 100.0;
+            sheet.Cell(row, 5).Style.NumberFormat.Format = "0%";
+            row++;
+        }
+        Finish(sheet);
+    }
+
+    private static void WriteQuestionSheets(XLWorkbook workbook, ServiceCensusReportViewModel report)
+    {
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Overview", "Questions", "Products", "Business areas", "Weekly"
+        };
+        var index = 1;
+        foreach (var question in CensusDefinition.Tasks)
+        {
+            var sheet = workbook.Worksheets.Add(UniqueSheetName($"{index:00} {question.NavLabel}", used));
+            var answers = report.SubmissionAnswers
+                .Where(a => string.Equals(a.QuestionKey, question.Key, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            StyleHeader(sheet, [
+                "Product", "Business area", "Census", "Submitted at (UTC)", "Submitted by",
+                "Question status", "Cannot answer", "Cannot answer reason",
+                "Answer", "Details", "Reference"
+            ]);
+            var row = 2;
+            foreach (var answer in answers)
+            {
+                sheet.Cell(row, 1).Value = answer.Product;
+                sheet.Cell(row, 2).Value = answer.Areas;
+                sheet.Cell(row, 3).Value = answer.CensusStatus;
+                if (answer.SubmittedAt is DateTime submitted)
+                {
+                    sheet.Cell(row, 4).Value = submitted;
+                    sheet.Cell(row, 4).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+                }
+                sheet.Cell(row, 5).Value = answer.SubmittedBy ?? "";
+                sheet.Cell(row, 6).Value = answer.QuestionStatus;
+                sheet.Cell(row, 7).Value = answer.CannotAnswer ? "Yes" : "No";
+                sheet.Cell(row, 8).Value = answer.CannotAnswerReason ?? "";
+                sheet.Cell(row, 9).Value = answer.Item ?? "";
+                sheet.Cell(row, 10).Value = answer.Details ?? "";
+                sheet.Cell(row, 11).Value = answer.Reference ?? "";
+                row++;
+            }
+            Finish(sheet, wrapColumn: 10);
+            index++;
+        }
+    }
+
+    private static string UniqueSheetName(string name, HashSet<string> used)
+    {
+        var clean = new string(name.Select(c => ":\\/?*[]".Contains(c) ? ' ' : c).ToArray()).Trim();
+        if (string.IsNullOrWhiteSpace(clean))
+            clean = "Question";
+        if (clean.Length > 31)
+            clean = clean[..31].Trim();
+        var candidate = clean;
+        var i = 2;
+        while (!used.Add(candidate))
+        {
+            var suffix = $" ({i})";
+            var max = Math.Max(1, 31 - suffix.Length);
+            candidate = (clean.Length > max ? clean[..max].Trim() : clean) + suffix;
+            i++;
+        }
+        return candidate;
     }
 
     private static void WriteProducts(IXLWorksheet sheet, ServiceCensusReportViewModel report)
@@ -63,56 +137,6 @@ public static class ServiceCensusReportExcelExport
             sheet.Cell(row, 5).Value = product.TaskCount;
             sheet.Cell(row, 6).Value = product.Percent / 100.0;
             sheet.Cell(row, 6).Style.NumberFormat.Format = "0%";
-            row++;
-        }
-        Finish(sheet);
-    }
-
-    private static void WriteAnswers(IXLWorksheet sheet, ServiceCensusReportViewModel report)
-    {
-        StyleHeader(sheet, [
-            "Product", "Business area", "Census", "Submitted at (UTC)", "Submitted by",
-            "Section", "Question", "Question status", "Cannot answer", "Cannot answer reason",
-            "Answer", "Details", "Reference"
-        ]);
-        var row = 2;
-        foreach (var answer in report.SubmissionAnswers)
-        {
-            sheet.Cell(row, 1).Value = answer.Product;
-            sheet.Cell(row, 2).Value = answer.Areas;
-            sheet.Cell(row, 3).Value = answer.CensusStatus;
-            if (answer.SubmittedAt is DateTime submitted)
-            {
-                sheet.Cell(row, 4).Value = submitted;
-                sheet.Cell(row, 4).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
-            }
-            sheet.Cell(row, 5).Value = answer.SubmittedBy ?? "";
-            sheet.Cell(row, 6).Value = answer.Section;
-            sheet.Cell(row, 7).Value = answer.Question;
-            sheet.Cell(row, 8).Value = answer.QuestionStatus;
-            sheet.Cell(row, 9).Value = answer.CannotAnswer ? "Yes" : "No";
-            sheet.Cell(row, 10).Value = answer.CannotAnswerReason ?? "";
-            sheet.Cell(row, 11).Value = answer.Item ?? "";
-            sheet.Cell(row, 12).Value = answer.Details ?? "";
-            sheet.Cell(row, 13).Value = answer.Reference ?? "";
-            row++;
-        }
-        Finish(sheet, wrapColumn: 12);
-    }
-
-    private static void WriteContacts(IXLWorksheet sheet, ServiceCensusReportViewModel report)
-    {
-        StyleHeader(sheet, ["Product", "Business area", "Census", "Role", "Name", "Email", "Change"]);
-        var row = 2;
-        foreach (var contact in report.SubmissionContacts)
-        {
-            sheet.Cell(row, 1).Value = contact.Product;
-            sheet.Cell(row, 2).Value = contact.Areas;
-            sheet.Cell(row, 3).Value = contact.CensusStatus;
-            sheet.Cell(row, 4).Value = contact.Role;
-            sheet.Cell(row, 5).Value = contact.Name ?? "";
-            sheet.Cell(row, 6).Value = contact.Email ?? "";
-            sheet.Cell(row, 7).Value = contact.Change;
             row++;
         }
         Finish(sheet);
@@ -136,35 +160,17 @@ public static class ServiceCensusReportExcelExport
         Finish(sheet);
     }
 
-    private static void WriteSections(IXLWorksheet sheet, ServiceCensusReportViewModel report)
-    {
-        StyleHeader(sheet, ["Section", "Average completion %", "Products complete", "Products"]);
-        var row = 2;
-        foreach (var section in report.Sections)
-        {
-            sheet.Cell(row, 1).Value = section.Name;
-            sheet.Cell(row, 2).Value = section.AveragePercent / 100.0;
-            sheet.Cell(row, 2).Style.NumberFormat.Format = "0%";
-            sheet.Cell(row, 3).Value = section.CompleteProducts;
-            sheet.Cell(row, 4).Value = section.ProductCount;
-            row++;
-        }
-        Finish(sheet);
-    }
-
     private static void WriteWeeks(IXLWorksheet sheet, ServiceCensusReportViewModel report)
     {
-        StyleHeader(sheet, ["Week starting", "ISO week", "Questions completed", "Products submitted", "Cumulative submitted", "Cumulative completion %"]);
+        StyleHeader(sheet, ["Week starting", "ISO week", "In progress", "Submitted", "Cumulative submitted"]);
         var row = 2;
         foreach (var week in report.Weeks)
         {
             sheet.Cell(row, 1).Value = week.Label;
             sheet.Cell(row, 2).Value = week.IsoWeek;
-            sheet.Cell(row, 3).Value = week.TasksCompleted;
+            sheet.Cell(row, 3).Value = week.ProductsInProgress;
             sheet.Cell(row, 4).Value = week.ProductsSubmitted;
             sheet.Cell(row, 5).Value = week.CumulativeSubmitted;
-            sheet.Cell(row, 6).Value = week.CumulativePercent / 100.0;
-            sheet.Cell(row, 6).Style.NumberFormat.Format = "0%";
             row++;
         }
         Finish(sheet);

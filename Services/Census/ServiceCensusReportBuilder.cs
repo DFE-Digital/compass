@@ -93,6 +93,7 @@ public static class ServiceCensusReportBuilder
             WeeksToFinishLabel = weeksToFinish,
             BusinessAreas = AreaRows(scoped, responseByProduct, taskCount),
             Sections = SectionRows(scoped, responseByProduct, groups),
+            Questions = QuestionRows(rows, responseByProduct),
             Products = rows
                 .OrderBy(r => r.Percent)
                 .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
@@ -116,12 +117,34 @@ public static class ServiceCensusReportBuilder
             .ToList();
     }
 
+    private static bool IsSubmitted(ResponseSnap? response) =>
+        string.Equals(response?.Status, ServiceCensusStatuses.Submitted, StringComparison.OrdinalIgnoreCase)
+        || response?.SubmittedAt != null;
+
+    private static bool TaskIsComplete(ResponseSnap? response, string key, bool submitted)
+    {
+        if (submitted)
+            return true;
+        return response?.Tasks.Any(t =>
+            string.Equals(t.Key, key, StringComparison.OrdinalIgnoreCase)
+            && t.Status == ServiceCensusStatuses.Complete) == true;
+    }
+
+    private static int CompleteTaskCount(ResponseSnap? response, int taskCount)
+    {
+        if (taskCount <= 0)
+            return 0;
+        if (IsSubmitted(response))
+            return taskCount;
+        return CensusDefinition.Tasks.Count(t => TaskIsComplete(response, t.Key, false));
+    }
+
     private static ServiceCensusReportProductRow ToProduct(
         ProductSnap product, Dictionary<Guid, ResponseSnap> responses, int taskCount)
     {
         responses.TryGetValue(product.Id, out var response);
-        var complete = response?.Tasks.Count(t => t.Status == ServiceCensusStatuses.Complete) ?? 0;
-        var submitted = string.Equals(response?.Status, ServiceCensusStatuses.Submitted, StringComparison.OrdinalIgnoreCase);
+        var submitted = IsSubmitted(response);
+        var complete = CompleteTaskCount(response, taskCount);
         var percent = taskCount <= 0 ? 0 : (int)Math.Round(100.0 * complete / taskCount, MidpointRounding.AwayFromZero);
         var censusStatus = submitted ? "Submitted"
             : complete >= taskCount && taskCount > 0 ? "Complete"
@@ -178,10 +201,8 @@ public static class ServiceCensusReportBuilder
             var percents = products.Select(p =>
             {
                 responses.TryGetValue(p.Id, out var response);
-                var complete = group.Keys.Count(key =>
-                    response?.Tasks.Any(t =>
-                        string.Equals(t.Key, key, StringComparison.OrdinalIgnoreCase)
-                        && t.Status == ServiceCensusStatuses.Complete) == true);
+                var submitted = IsSubmitted(response);
+                var complete = group.Keys.Count(key => TaskIsComplete(response, key, submitted));
                 return group.Keys.Count == 0 ? 0 : 100.0 * complete / group.Keys.Count;
             }).ToList();
             var completeProducts = percents.Count(p => p >= 100);
@@ -191,6 +212,31 @@ public static class ServiceCensusReportBuilder
                 AveragePercent = percents.Count == 0 ? 0 : (int)Math.Round(percents.Average(), MidpointRounding.AwayFromZero),
                 CompleteProducts = completeProducts,
                 ProductCount = products.Count
+            };
+        }).ToList();
+    }
+
+    private static List<ServiceCensusReportQuestionRow> QuestionRows(
+        List<ServiceCensusReportProductRow> products,
+        Dictionary<Guid, ResponseSnap> responses)
+    {
+        return CensusDefinition.Tasks.Select(task =>
+        {
+            var complete = products.Count(p =>
+            {
+                responses.TryGetValue(p.Id, out var response);
+                return TaskIsComplete(response, task.Key, p.Submitted);
+            });
+            return new ServiceCensusReportQuestionRow
+            {
+                Key = task.Key,
+                Section = task.GroupName,
+                Question = task.NavLabel,
+                CompleteProducts = complete,
+                ProductCount = products.Count,
+                AveragePercent = products.Count == 0
+                    ? 0
+                    : (int)Math.Round(100.0 * complete / products.Count, MidpointRounding.AwayFromZero)
             };
         }).ToList();
     }
@@ -219,6 +265,17 @@ public static class ServiceCensusReportBuilder
                 r.SubmittedAt != null && r.SubmittedAt.Value >= start && r.SubmittedAt.Value < end);
             cumulativeSubmitted += submitted;
 
+            var inProgress = scoped.Count(r =>
+            {
+                var submittedByEnd = r.SubmittedAt != null
+                    ? r.SubmittedAt.Value < end
+                    : string.Equals(r.Status, ServiceCensusStatuses.Submitted, StringComparison.OrdinalIgnoreCase);
+                if (submittedByEnd)
+                    return false;
+                return r.Tasks.Any(t =>
+                    t.Status == ServiceCensusStatuses.Complete && t.UpdatedAt < end);
+            });
+
             var completeByEnd = scoped.Sum(r => r.Tasks.Count(t =>
                 t.Status == ServiceCensusStatuses.Complete && t.UpdatedAt < end));
             var denom = totalProducts * Math.Max(taskCount, 1);
@@ -231,6 +288,7 @@ public static class ServiceCensusReportBuilder
                 Label = start.ToString("d MMM"),
                 IsoWeek = $"{ISOWeekYear(start)}-W{ISOWeek(start):00}",
                 TasksCompleted = tasks,
+                ProductsInProgress = inProgress,
                 ProductsSubmitted = submitted,
                 CumulativeSubmitted = cumulativeSubmitted,
                 CumulativePercent = cumulativePercent
@@ -281,10 +339,11 @@ public static class ServiceCensusReportBuilder
             {
                 taskByKey.TryGetValue(task.Key, out var state);
                 var questionStatus = state == null
-                    ? "Not started"
+                    ? (product.Submitted ? "Complete" : "Not started")
                     : state.CannotAnswer
                         ? "Cannot answer"
                         : string.Equals(state.Status, ServiceCensusStatuses.Complete, StringComparison.OrdinalIgnoreCase)
+                            || product.Submitted
                             ? "Complete"
                             : "In progress";
 
@@ -292,12 +351,14 @@ public static class ServiceCensusReportBuilder
                 {
                     answers.Add(new ServiceCensusReportAnswerRow
                     {
+                        ProductId = product.Id,
                         Product = product.Title,
                         Areas = product.Areas,
                         CensusStatus = product.CensusStatus,
                         SubmittedAt = response.SubmittedAt,
                         SubmittedBy = response.SubmittedBy,
                         Section = task.GroupName,
+                        QuestionKey = task.Key,
                         Question = task.NavLabel,
                         QuestionStatus = questionStatus,
                         CannotAnswer = state?.CannotAnswer == true,
@@ -306,6 +367,27 @@ public static class ServiceCensusReportBuilder
                         Details = details,
                         Reference = reference
                     });
+                }
+
+                if (task.Kind == CensusTaskKind.Contacts)
+                {
+                    if (response.ContactReviews.Count == 0)
+                    {
+                        AddAnswer(null, null, null);
+                        continue;
+                    }
+
+                    foreach (var review in response.ContactReviews)
+                    {
+                        var role = CensusDefinition.ContactRoles.FirstOrDefault(r =>
+                            string.Equals(r.Key, review.RoleKey, StringComparison.OrdinalIgnoreCase));
+                        var added = role == null;
+                        AddAnswer(
+                            role?.Name ?? review.IncorrectReason ?? review.RoleKey,
+                            string.Join(" · ", new[] { review.CmdbName, review.CmdbEmail }.Where(v => !string.IsNullOrWhiteSpace(v))),
+                            added ? "Added" : review.IsIncorrect ? "Changed" : "Confirmed");
+                    }
+                    continue;
                 }
 
                 if (state == null)
@@ -319,9 +401,6 @@ public static class ServiceCensusReportBuilder
                     AddAnswer(null, state.CannotAnswerReason, null);
                     continue;
                 }
-
-                if (task.Kind == CensusTaskKind.Contacts)
-                    continue;
 
                 if (task.Kind == CensusTaskKind.LongText
                     || (task.Key is "service" or "service-line" && state.Answers.Count == 0))
@@ -369,6 +448,25 @@ public static class ServiceCensusReportBuilder
                     Name = review.CmdbName,
                     Email = review.CmdbEmail,
                     Change = added ? "Added" : review.IsIncorrect ? "Changed" : "Confirmed"
+                });
+            }
+        }
+
+        var answeredProductIds = responses.Select(r => r.ProductId).ToHashSet();
+        foreach (var product in report.Products.Where(p => !answeredProductIds.Contains(p.Id)))
+        {
+            foreach (var task in CensusDefinition.Tasks)
+            {
+                answers.Add(new ServiceCensusReportAnswerRow
+                {
+                    ProductId = product.Id,
+                    Product = product.Title,
+                    Areas = product.Areas,
+                    CensusStatus = product.CensusStatus,
+                    Section = task.GroupName,
+                    QuestionKey = task.Key,
+                    Question = task.NavLabel,
+                    QuestionStatus = product.Submitted ? "Complete" : "Not started"
                 });
             }
         }
