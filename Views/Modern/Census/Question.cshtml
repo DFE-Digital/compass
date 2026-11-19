@@ -10,6 +10,21 @@
   bool HasPageError = !ViewData.ModelState.IsValid;
   string? PageError = ViewData.ModelState[""]?.Errors.FirstOrDefault()?.ErrorMessage
       ?? ViewData.ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+  var longTextMax = string.Equals(Model.TaskKey, "aim", StringComparison.OrdinalIgnoreCase) ? 10000 : 4000;
+  Compass.ViewModels.Modern.GovUkCharacterCountTextareaViewModel CountField(
+      string id, string name, string label, string? value, int max, int rows = 5, string? hint = null, string labelClass = "govuk-label govuk-label--m") =>
+    new()
+    {
+      FieldId = id,
+      Name = name,
+      Label = label,
+      Hint = hint,
+      ModelStateKey = id,
+      Value = value,
+      MaxLength = max,
+      Rows = rows,
+      LabelClass = labelClass
+    };
 }
 
 @section Breadcrumbs {
@@ -19,14 +34,22 @@
   <li class="govuk-breadcrumbs__list-item" aria-current="page">@Model.Heading</li>
 }
 
+@await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+  Caption = "Service census",
+  Title = Model.ProductTitle
+})
+
 <div class="govuk-grid-row census-task-layout">
   <div class="govuk-grid-column-one-quarter-from-desktop census-task-layout__nav">
     @await Html.PartialAsync("~/Views/Modern/Census/_SideNav.cshtml", Model.Nav)
   </div>
   <div class="govuk-grid-column-three-quarters-from-desktop">
     <p class="govuk-caption-m govuk-!-margin-bottom-1">@Model.GroupName</p>
-    <h1 class="govuk-heading-l">@Model.Heading</h1>
-    <p class="govuk-body">@Model.Help</p>
+    <h2 class="govuk-heading-l">@Model.Heading</h2>
+    @foreach (var para in (Model.Help ?? "").Split(["\n\n", "\r\n\r\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+      <p class="govuk-body">@para</p>
+    }
     @if (TempData["SuccessMessage"] != null)
     {
       <div class="govuk-notification-banner govuk-notification-banner--success" role="region" aria-labelledby="census-question-success-title">
@@ -65,7 +88,7 @@
         </div>
         <div class="govuk-notification-banner__content">
           <p class="govuk-notification-banner__heading">All sections are complete. This census can now be submitted.</p>
-          @if (readyNames.Count == 0)
+          @if (readyNames.Count == 0 && !Model.CanSubmit)
           {
             <p class="govuk-body">Name people on the contacts page before it can be submitted.</p>
           }
@@ -127,10 +150,7 @@
 
       @if (Model.Kind == CensusTaskKind.LongText)
       {
-        <div class="govuk-form-group">
-          <label class="govuk-label govuk-label--m" for="LongText">@Model.NarrativeLabel</label>
-          <textarea class="govuk-textarea" id="LongText" name="LongText" rows="8">@Model.LongText</textarea>
-        </div>
+        @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", CountField("LongText", "LongText", Model.NarrativeLabel, Model.LongText, longTextMax, 8))
       }
       else if (Model.Kind == CensusTaskKind.YesChoice)
       {
@@ -167,10 +187,7 @@
                     </div>
                   </fieldset>
                 </div>
-                <div class="govuk-form-group">
-                  <label class="govuk-label" for="ChoiceNarrative">@Model.NarrativeLabel</label>
-                  <textarea class="govuk-textarea" id="ChoiceNarrative" name="ChoiceNarrative" rows="4">@Model.ChoiceNarrative</textarea>
-                </div>
+                @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", CountField("ChoiceNarrative", "ChoiceNarrative", Model.NarrativeLabel, Model.ChoiceNarrative, 10000, 4, labelClass: "govuk-label"))
               </div>
               <div class="govuk-radios__item">
                 <input class="govuk-radios__input" id="YesNo-no" name="YesNo" type="radio" value="no" @(string.Equals(Model.YesNo, "No", StringComparison.OrdinalIgnoreCase) ? "checked" : null)>
@@ -182,30 +199,49 @@
       }
       else if (Model.Kind == CensusTaskKind.Form)
       {
+        @if (!string.IsNullOrWhiteSpace(Model.RegisterProductUrl))
+        {
+          <div class="govuk-inset-text">
+            <p class="govuk-body">The register currently has this URL:</p>
+            @{
+              var registerUrl = Model.RegisterProductUrl.Trim();
+              var registerUrlIsHttp = registerUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                  || registerUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+            }
+            <p class="govuk-body govuk-!-margin-bottom-0">
+              @if (registerUrlIsHttp)
+              {
+                <a class="govuk-link" href="@registerUrl" rel="noopener noreferrer">@registerUrl</a>
+              }
+              else
+              {
+                @registerUrl
+              }
+            </p>
+          </div>
+        }
         foreach (var field in Model.FormFields)
         {
           var selected = Model.FormValues.GetValueOrDefault(field.Key);
           var narrative = Model.FormNarratives.GetValueOrDefault(field.Key);
           if (field.Kind == CensusFormFieldKind.LongText)
           {
-            <div class="govuk-form-group">
-              <label class="govuk-label govuk-label--m" for="form-@field.Key">@field.Label</label>
-              @if (!string.IsNullOrWhiteSpace(field.Hint))
-              {
-                <div class="govuk-hint">@field.Hint</div>
-              }
-              <textarea class="govuk-textarea" id="form-@field.Key" name="FormValues[@field.Key]" rows="5">@(selected ?? narrative)</textarea>
-            </div>
+            @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", CountField("form-" + field.Key, "FormValues[" + field.Key + "]", field.Label, selected ?? narrative, 10000, 5, field.Hint))
           }
           else if (field.Kind == CensusFormFieldKind.Text)
           {
-            <div class="govuk-form-group">
-              <label class="govuk-label govuk-label--m" for="form-@field.Key">@field.Label</label>
-              @if (!string.IsNullOrWhiteSpace(field.Hint))
-              {
-                <div class="govuk-hint">@field.Hint</div>
-              }
-              <input class="govuk-input" id="form-@field.Key" name="FormValues[@field.Key]" type="text" spellcheck="false" value="@(selected ?? narrative)">
+            var textId = "form-" + field.Key;
+            var textInfoId = textId + "-info";
+            <div class="govuk-character-count" data-module="govuk-character-count" data-maxlength="400">
+              <div class="govuk-form-group">
+                <label class="govuk-label govuk-label--m" for="@textId">@field.Label</label>
+                @if (!string.IsNullOrWhiteSpace(field.Hint))
+                {
+                  <div class="govuk-hint">@field.Hint</div>
+                }
+                <input class="govuk-input govuk-js-character-count" id="@textId" name="FormValues[@field.Key]" type="text" spellcheck="false" maxlength="400" aria-describedby="@textInfoId" value="@(selected ?? narrative)">
+              </div>
+              <div id="@textInfoId" class="govuk-hint govuk-character-count__message">You can enter up to 400 characters</div>
             </div>
           }
           else
@@ -244,11 +280,24 @@
                     </div>
                     if (showOther)
                     {
+                      var revealMax = field.RevealAsSingleLine ? 2000 : 10000;
+                      var revealFieldId = "form-" + field.Key + "-narrative";
+                      var revealInfoId = revealFieldId + "-info";
                       <div class="govuk-radios__conditional" id="@revealId">
-                        <div class="govuk-form-group">
-                          <label class="govuk-label" for="form-@field.Key-narrative">@(field.NarrativeLabel ?? "Give details")</label>
-                          <textarea class="govuk-textarea" id="form-@field.Key-narrative" name="FormNarratives[@field.Key]" rows="4">@narrative</textarea>
-                        </div>
+                        @if (field.RevealAsSingleLine)
+                        {
+                          <div class="govuk-character-count" data-module="govuk-character-count" data-maxlength="@revealMax">
+                            <div class="govuk-form-group">
+                              <label class="govuk-label" for="@revealFieldId">@(field.NarrativeLabel ?? "Give details")</label>
+                              <input class="govuk-input govuk-js-character-count" id="@revealFieldId" name="FormNarratives[@field.Key]" type="text" spellcheck="false" autocomplete="url" maxlength="@revealMax" aria-describedby="@revealInfoId" value="@narrative">
+                            </div>
+                            <div id="@revealInfoId" class="govuk-hint govuk-character-count__message">You can enter up to @revealMax characters</div>
+                          </div>
+                        }
+                        else
+                        {
+                          @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", CountField(revealFieldId, "FormNarratives[" + field.Key + "]", field.NarrativeLabel ?? "Give details", narrative, revealMax, 4, labelClass: "govuk-label"))
+                        }
                       </div>
                     }
                     if (revealed != null && condRevealId != null)
@@ -366,10 +415,8 @@
           }
           @if (!string.IsNullOrWhiteSpace(Model.NarrativeLabel))
           {
-            <div class="govuk-form-group govuk-!-margin-top-6">
-              <label class="govuk-label govuk-label--m" for="LongText">@Model.NarrativeLabel</label>
-              <div class="govuk-hint">Optional. Add anything that is not covered by the list above.</div>
-              <textarea class="govuk-textarea" id="LongText" name="LongText" rows="5">@Model.LongText</textarea>
+            <div class="govuk-!-margin-top-6">
+              @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", CountField("LongText", "LongText", Model.NarrativeLabel, Model.LongText, 10000, 5, "Optional. Add anything that is not covered by the list above."))
             </div>
           }
         </div>
@@ -451,10 +498,7 @@
           <div class="govuk-inset-text">
             <p class="govuk-body govuk-!-margin-bottom-0"><strong>Enrolment:</strong> @Model.AccessibilityStatusLabel</p>
           </div>
-          <div class="govuk-form-group@(HasError("AccessibilityNotEnrolledReason") ? " govuk-form-group--error" : "")">
-            <label class="govuk-label govuk-label--s" for="AccessibilityNotEnrolledReason">This product is not enrolled into the Accessibility Issues and Statement Service, what is the reason for this?</label>
-            <textarea class="govuk-textarea" id="AccessibilityNotEnrolledReason" name="AccessibilityNotEnrolledReason" rows="5">@Model.AccessibilityNotEnrolledReason</textarea>
-          </div>
+          @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", CountField("AccessibilityNotEnrolledReason", "AccessibilityNotEnrolledReason", "This product is not enrolled into the Accessibility Issues and Statement Service, what is the reason for this?", Model.AccessibilityNotEnrolledReason, 4000, 5, labelClass: "govuk-label govuk-label--s"))
           <p class="govuk-body">
             <a class="govuk-link" href="@Model.AccessibilityEnrolUrl" rel="noreferrer noopener" target="_blank">Enrol this product in the Accessibility Issues and Statement Service (opens in new tab)</a>
           </p>
@@ -474,14 +518,7 @@
               <label class="govuk-label govuk-checkboxes__label" for="CannotAnswer">I can't answer this or nothing to provide</label>
             </div>
             <div class="govuk-checkboxes__conditional" id="cannot-answer-reason">
-              <div class="govuk-form-group@(HasError("CannotAnswerReason") ? " govuk-form-group--error" : "")">
-                <label class="govuk-label" for="CannotAnswerReason">Why can’t you answer this?</label>
-                @if (HasError("CannotAnswerReason"))
-                {
-                  <p id="cannot-answer-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> Explain why you cannot answer this question.</p>
-                }
-                <textarea class="govuk-textarea" id="CannotAnswerReason" name="CannotAnswerReason" rows="3">@Model.CannotAnswerReason</textarea>
-              </div>
+              @await Html.PartialAsync("~/Views/Modern/Shared/_GovUkCharacterCountTextarea.cshtml", CountField("CannotAnswerReason", "CannotAnswerReason", "Why can’t you answer this?", Model.CannotAnswerReason, 4000, 3, labelClass: "govuk-label"))
             </div>
           </div>
         </div>
@@ -542,9 +579,12 @@
         </button>
       </header>
       <div class="dfe-f-modal__body">
-        <div class="govuk-form-group" id="census-contact-modal-role-group" hidden>
-          <label class="govuk-label govuk-label--s" for="census-contact-modal-role">Role</label>
-          <input class="govuk-input" id="census-contact-modal-role" type="text">
+        <div class="govuk-character-count" id="census-contact-modal-role-group" hidden data-module="govuk-character-count" data-maxlength="200">
+          <div class="govuk-form-group">
+            <label class="govuk-label govuk-label--s" for="census-contact-modal-role">Role</label>
+            <input class="govuk-input govuk-js-character-count" id="census-contact-modal-role" type="text" maxlength="200" aria-describedby="census-contact-modal-role-info">
+          </div>
+          <div id="census-contact-modal-role-info" class="govuk-hint govuk-character-count__message">You can enter up to 200 characters</div>
         </div>
         @await Html.PartialAsync("~/Views/Modern/Shared/_UserPicker.cshtml", new UserPickerViewModel {
           FieldName = "census-contact-modal-user",
@@ -607,30 +647,49 @@
                   <label class="govuk-label govuk-radios__label" for="census-item-not-listed">Not listed - provide details</label>
                 </div>
                 <div class="govuk-radios__conditional" id="census-item-not-listed-panel">
-                  <label class="govuk-label" for="census-item-modal-details">Details</label>
-                  <textarea class="govuk-textarea" id="census-item-modal-details" rows="4"></textarea>
+                  <div class="govuk-character-count" data-module="govuk-character-count" data-maxlength="300">
+                    <div class="govuk-form-group">
+                      <label class="govuk-label" for="census-item-modal-details">Details</label>
+                      <textarea class="govuk-textarea govuk-js-character-count" id="census-item-modal-details" rows="4" maxlength="300" aria-describedby="census-item-modal-details-info"></textarea>
+                    </div>
+                    <div id="census-item-modal-details-info" class="govuk-hint govuk-character-count__message">You can enter up to 300 characters</div>
+                  </div>
                 </div>
               </div>
             </fieldset>
           </div>
         }
         <div class="govuk-form-group@(Model.CaptureUrl ? "" : " govuk-!-margin-bottom-0")" id="census-item-free-text" @(Model.PickFromRegister ? "hidden" : null)>
-          <label class="govuk-label govuk-label--s" for="census-item-modal-text">@Model.TitleLabel</label>
           @if (urlField)
           {
-            <input class="govuk-input" id="census-item-modal-text" type="url" spellcheck="false">
+            <div class="govuk-character-count" data-module="govuk-character-count" data-maxlength="500">
+              <div class="govuk-form-group">
+                <label class="govuk-label govuk-label--s" for="census-item-modal-text">@Model.TitleLabel</label>
+                <input class="govuk-input govuk-js-character-count" id="census-item-modal-text" type="url" spellcheck="false" maxlength="500" aria-describedby="census-item-modal-text-info">
+              </div>
+              <div id="census-item-modal-text-info" class="govuk-hint govuk-character-count__message">You can enter up to 500 characters</div>
+            </div>
           }
           else
           {
-            <textarea class="govuk-textarea" id="census-item-modal-text" rows="5"></textarea>
+            <div class="govuk-character-count" data-module="govuk-character-count" data-maxlength="300">
+              <div class="govuk-form-group">
+                <label class="govuk-label govuk-label--s" for="census-item-modal-text">@Model.TitleLabel</label>
+                <textarea class="govuk-textarea govuk-js-character-count" id="census-item-modal-text" rows="5" maxlength="300" aria-describedby="census-item-modal-text-info"></textarea>
+              </div>
+              <div id="census-item-modal-text-info" class="govuk-hint govuk-character-count__message">You can enter up to 300 characters</div>
+            </div>
           }
         </div>
         @if (Model.CaptureUrl)
         {
-          <div class="govuk-form-group govuk-!-margin-bottom-0">
-            <label class="govuk-label govuk-label--s" for="census-item-modal-url">@(string.IsNullOrWhiteSpace(Model.UrlLabel) ? "Link to reference materials" : Model.UrlLabel)</label>
-            <div class="govuk-hint">@(string.IsNullOrWhiteSpace(Model.UrlHint) ? "Optional. Add a URL for guidance, a dashboard, or other material relating to this question." : Model.UrlHint)</div>
-            <input class="govuk-input" id="census-item-modal-url" type="url" spellcheck="false">
+          <div class="govuk-character-count govuk-!-margin-bottom-0" data-module="govuk-character-count" data-maxlength="500">
+            <div class="govuk-form-group govuk-!-margin-bottom-0">
+              <label class="govuk-label govuk-label--s" for="census-item-modal-url">@(string.IsNullOrWhiteSpace(Model.UrlLabel) ? "Link to reference materials" : Model.UrlLabel)</label>
+              <div class="govuk-hint">@(string.IsNullOrWhiteSpace(Model.UrlHint) ? "Optional. Add a URL for guidance, a dashboard, or other material relating to this question." : Model.UrlHint)</div>
+              <input class="govuk-input govuk-js-character-count" id="census-item-modal-url" type="url" spellcheck="false" maxlength="500" aria-describedby="census-item-modal-url-info">
+            </div>
+            <div id="census-item-modal-url-info" class="govuk-hint govuk-character-count__message">You can enter up to 500 characters</div>
           </div>
         }
       </div>
@@ -672,6 +731,7 @@
 }
 
 @section Scripts {
+  <script src="~/modern/js/census-character-count.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
   <script src="~/modern/js/census-unsaved.js" asp-append-version="true" nonce="@(Context.Items["Nonce"]?.ToString() ?? "")"></script>
   @if (Model.Kind == CensusTaskKind.Contacts)
   {

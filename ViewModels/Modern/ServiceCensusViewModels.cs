@@ -49,6 +49,7 @@ public sealed class ServiceCensusTaskListViewModel
     public bool CanSubmit { get; set; }
     public bool AllComplete { get; set; }
     public bool UserIsNamedSubmitter { get; set; }
+    public bool UserIsNamedOrAdmin { get; set; }
     public bool Submitted { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public string? SubmittedBy { get; set; }
@@ -123,6 +124,7 @@ public sealed class ServiceCensusQuestionViewModel
     public List<CensusFormField> FormFields { get; set; } = [];
     public Dictionary<string, string> FormValues { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> FormNarratives { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public string? RegisterProductUrl { get; set; }
     public List<ServiceCensusAnswerRowViewModel> Items { get; set; } = [];
     public List<ServiceCensusContactRowViewModel> Contacts { get; set; } = [];
     public bool AccessibilityEnrolled { get; set; }

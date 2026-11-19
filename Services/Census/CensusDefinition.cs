@@ -86,6 +86,7 @@ public sealed class CensusFormField
     public IReadOnlyList<CensusChoice> Options { get; init; } = [];
     public string? RevealNarrativeFor { get; init; }
     public string? NarrativeLabel { get; init; }
+    public bool RevealAsSingleLine { get; init; }
     public IReadOnlyList<CensusConditionalChoices> ConditionalChoices { get; init; } = [];
 }
 
@@ -269,7 +270,7 @@ public static class CensusDefinition
     [
         Form("service", "context", "Service and service line",
             "Service",
-            "Which service does this product belong to? A service is a collection of products and activities that are managed together within DDT to deliver a common purpose or capability.",
+            "Name the service this product sits in. A service is a collection of products and activities managed together in DDT for a common purpose.\n\nAsk the product or service owner if you are not sure of the name.",
             "service",
             new CensusFormField
             {
@@ -280,7 +281,7 @@ public static class CensusDefinition
             }),
         Form("service-line", "context", "Service and service line",
             "Service line",
-            "Which service line does this product belong to? A service line is a collection of products, services and activities that are owned by a policy area or achieve a policy intent. Not all of those products, services and activities are digital or data.",
+            "Name the service line and describe its policy intent. A service line can include digital and non-digital work owned by a policy area. Do not list every product, service or activity.",
             "service-line",
             new CensusFormField
             {
@@ -296,25 +297,53 @@ public static class CensusDefinition
                 Hint = "Describe the policy intent or outcomes this service line exists to achieve. Do not list every product, service or activity.",
                 Kind = CensusFormFieldKind.LongText
             }),
+        new()
+        {
+            Key = "product-url",
+            GroupKey = "context",
+            GroupName = "Service and service line",
+            Heading = "Product URL",
+            Help = "Check the URL people use to access this product. If the register already has a URL, confirm it is still correct or change it. If the product is not accessed via a URL, say so.",
+            Kind = CensusTaskKind.Form,
+            RegisterDomainKey = "product-url",
+            FormFields =
+            [
+                new()
+                {
+                    Key = "access",
+                    Label = "Is this product accessed via a URL?",
+                    Hint = "Include https:// if you add or change a URL.",
+                    Kind = CensusFormFieldKind.Radio,
+                    RevealNarrativeFor = "has-url",
+                    NarrativeLabel = "Product URL",
+                    RevealAsSingleLine = true,
+                    Options =
+                    [
+                        new() { Value = "has-url", Label = "Yes, this product is accessed via a URL" },
+                        new() { Value = "no-url", Label = "This product is not accessed via a URL" }
+                    ]
+                }
+            ]
+        },
         Lookup("phase", "context", "Service and service line",
             "Phase",
-            "Select the current phase for this product.",
+            "Select the current delivery phase, for example discovery, beta or live.",
             CensusLookupSource.Phase, CensusLookupControl.Radio, "phase"),
         Lookup("business-area", "context", "Service and service line",
             "Business area",
-            "Select the business area this product belongs to.",
+            "Select the business area this product belongs to. If it sits in more than one area, choose the primary one.",
             CensusLookupSource.BusinessArea, CensusLookupControl.Radio, "business-area"),
         Lookup("directorate", "context", "Service and service line",
             "Directorate",
-            "Select the directorate this product belongs to.",
+            "Select the directorate this product belongs to. If it sits in more than one, choose the primary one.",
             CensusLookupSource.Directorate, CensusLookupControl.Radio, "directorate"),
         Lookup("type", "context", "Service and service line",
             "Type",
-            "Select all types that apply to this product.",
+            "Select every type that applies, for example a transactional service or management information.",
             CensusLookupSource.Type, CensusLookupControl.Checkbox, "type"),
         Lookup("channel", "context", "Service and service line",
             "Channels",
-            "Select all channels this product uses.",
+            "Select every channel people use to access this product, for example web or API.",
             CensusLookupSource.Channel, CensusLookupControl.Checkbox, "channel"),
         new()
         {
@@ -322,7 +351,7 @@ public static class CensusDefinition
             GroupKey = "contacts",
             GroupName = "Contacts",
             Heading = "Contacts",
-            Help = "Review the people who are in defined roles, and provide information where there is no one in a role currently. This information will be updated against the service offering within a few working days.",
+            Help = "Check each role and name someone where it is empty. We will copy this onto the service offering within a few working days.\n\nAsk the service owner if you are not sure who should be listed.",
             Kind = CensusTaskKind.Contacts,
             RegisterDomainKey = "contact-review"
         },
@@ -333,19 +362,19 @@ public static class CensusDefinition
             GroupName = "Accessibility",
             Heading = "Accessibility issues and statements",
             NavHeading = "Accessibility",
-            Help = "Check whether this product is enrolled in the Accessibility Issues and Statement Service, and record any open issues.",
+            Help = "Check whether this product is enrolled in the Accessibility Issues and Statement Service, and record any open issues.\n\nAn accessibility specialist could help complete this question.",
             Kind = CensusTaskKind.Accessibility,
             RegisterDomainKey = "accessibility"
         },
         LongText("aim", "purpose", "Purpose and value",
             "Aim",
-            "Review the aim for this product. Explain what you are delivering, how it will be used, and what outcome it will enable. Be specific enough that someone unfamiliar with the work can understand its purpose.",
+            "Explain what the purpose or goal of the product is. This should align to the original business case. Anyone unfamiliar with the product should be able to understand its purpose.\n\nA product manager should be able to help with this if you are unsure.",
             "Aim", "aim"),
         Item("outcome", "purpose", "Purpose and value", "Outcomes",
-            "Record the intended change this product contributes to. Add one entry per outcome.",
+            "What are the outcomes this product is designed to provide? Add one outcome per entry.\n\nA business analyst, product manager or policy professional should be able to help complete this section.",
             "outcome", "outcomes", "outcome"),
         Item("benefit", "purpose", "Purpose and value", "Benefits",
-            "Record the expected value of this product. Add one entry per benefit.",
+            "What's the intended business and user value this product provides? Add one benefit per entry. For example, reduce the time to getting access to funds, getting more people into teaching, or increase adoption rates.\n\nA business analyst, product manager or policy professional should be able to help complete this section.",
             "benefit", "benefits", "benefit"),
         new()
         {
@@ -353,7 +382,7 @@ public static class CensusDefinition
             GroupKey = "purpose",
             GroupName = "Purpose and value",
             Heading = "Primary contribution",
-            Help = "Which group's outcomes does this product primarily contribute to? A group or subgroup is for work whose primary outcome is delivering or supporting a particular policy or sector outcome. Choose enabling if the primary outcome is improving DfE's corporate capability to operate and deliver, and then select the kind of enabling functionality. Choose cross-cutting if the work spans more than one group and cannot be attributed to one of them, and then select all relevant groups.",
+            Help = "Choose the group whose outcomes this product mainly supports. Use enabling if the main outcome is improving how DfE operates, then say what kind of enabling functionality it provides. Use cross-cutting if the work spans more than one group and cannot be attributed to one of them.",
             Kind = CensusTaskKind.Form,
             RegisterDomainKey = "group",
             FormFields =
@@ -391,32 +420,33 @@ public static class CensusDefinition
         },
         Lookup("strategic-objective", "purpose", "Purpose and value",
             "Strategic objectives",
-            "Select the strategic objectives this product supports.",
+            "Select every strategic objective this product supports.",
             CensusLookupSource.StrategicObjective, CensusLookupControl.Checkbox, "strategic-objective"),
         Lookup("user-group", "users", "Users and needs",
             "User groups",
-            "Select the level 1 user groups this product serves. More detailed subgroups are not needed for the census.",
+            "Select the level 1 user groups this product serves. You do not need more detailed subgroups.\n\nFor example, school staff would be under Education provider and early years workforce.",
             CensusLookupSource.UserGroup, CensusLookupControl.Checkbox, "user-group"),
         Item("user-need", "users", "Users and needs", "User needs",
-            "Add high-level user needs only. We do not require a need for every feature of the product. Add one entry per need.",
+            "Add high-level user needs only, one per entry. You do not need a need for every feature.\n\nA user researcher or service designer could help complete this question.",
             "user need", "user needs", "user-need"),
         new()
         {
             Key = "pattern",
             GroupKey = "functionality",
             GroupName = "Functionality and reuse",
-            Heading = "Patterns",
-            Help = "Select the common government service patterns this product supports.",
+            Heading = "Patterns used",
+            NavHeading = "Patterns",
+            Help = "Select any features this product has. For example, if the product allows someone to apply for something or submit an application, select \"Apply for something\".\n\nA service designer could help complete this question.",
             Kind = CensusTaskKind.Lookup,
             LookupControl = CensusLookupControl.Checkbox,
             RegisterDomainKey = "pattern",
             ChoiceOptions = ServicePatterns
         },
         Item("component", "functionality", "Functionality and reuse", "Components",
-            "Record reusable components this product provides. Add one entry per component.",
+            "Add reusable parts of this product that other products could use, one per entry. For example a shared design component, library or module.\n\nA developer or architect could help complete this question.",
             "component", "components", "component"),
         Item("api-provide", "functionality", "Functionality and reuse", "APIs this product provides",
-            "Record APIs this product offers for other services to use. Add one entry per API. If you have documentation for the API, add a link to it.",
+            "Add each API this product provides for other services to use, one per entry. Include a link to the documentation if you have it.\n\nYou may need to speak to a developer, technical or solution architect, or business analyst.",
             "API", "APIs", "api-provide",
             url: true,
             urlLabel: "Link to API documentation",
@@ -427,7 +457,7 @@ public static class CensusDefinition
             GroupKey = "technology",
             GroupName = "Technology",
             Heading = "Source code",
-            Help = "Tell us where the source code for this product is held, and add links to every repository that applies.",
+            Help = "Tell us where the source code is held and add a link to every repository that applies.\n\nYou may need to speak to a developer, technical or solution architect, or business analyst.",
             Kind = CensusTaskKind.Form,
             RegisterDomainKey = "source-code",
             TitleLabel = "Repository URL",
@@ -458,9 +488,9 @@ public static class CensusDefinition
             Key = "technology",
             GroupKey = "technology",
             GroupName = "Technology",
-            Heading = "What technologies is this product built using?",
+            Heading = "Technologies",
             NavHeading = "Technologies",
-            Help = "Select all that apply. Use the box below to tell us more about the tech stack.",
+            Help = "Select every technology this product is built with. Use the box to add anything that is not listed.\n\nYou may need to speak to a developer, technical or solution architect, or business analyst.",
             NarrativeLabel = "Give us more information about the tech stack",
             Kind = CensusTaskKind.Lookup,
             LookupSource = CensusLookupSource.Technology,
@@ -473,7 +503,7 @@ public static class CensusDefinition
             GroupKey = "technology",
             GroupName = "Technology",
             Heading = "AI functionality",
-            Help = "Select Yes where AI is embedded in the service or its operation. Do not select Yes simply because AI tools were used to design, develop, test or manage the service.",
+            Help = "Select yes only if AI is part of how the service works. Do not select yes just because AI tools were used to design, build, test or manage it.\n\nYou may need to speak to a developer, technical or solution architect, or business analyst.",
             Kind = CensusTaskKind.Form,
             RegisterDomainKey = "ai",
             FormFields =
@@ -492,8 +522,8 @@ public static class CensusDefinition
             ]
         },
         Item("api-use", "technology", "Technology",
-            "What APIs does this product make use of (this is often called consuming an API)",
-            "Add one entry per API this product consumes. Do not include APIs this product provides. If you have documentation for the API, add a link to it.",
+            "APIs this product uses",
+            "Add each API this product uses (consumes), one per entry. Do not include APIs this product provides. Include a link to the documentation if you have it.\n\nYou may need to speak to a developer, technical or solution architect, or business analyst.",
             "API", "APIs", "api-use",
             url: true,
             urlLabel: "Link to API documentation",
@@ -504,7 +534,7 @@ public static class CensusDefinition
             GroupKey = "technology",
             GroupName = "Technology",
             Heading = "Hosting provision",
-            Help = "Where is this product hosted?",
+            Help = "Select where this product is hosted. If it is not Azure or AWS, explain where it is hosted.\n\nYou may need to speak to a developer, technical or solution architect, or business analyst.",
             Kind = CensusTaskKind.Form,
             RegisterDomainKey = "stack",
             FormFields =
@@ -530,29 +560,29 @@ public static class CensusDefinition
             Key = "integration",
             GroupKey = "technology",
             GroupName = "Technology",
-            Heading = "What integrations does this product use?",
+            Heading = "Integrations",
             NavHeading = "Integrations",
-            Help = "Select all that apply.",
+            Help = "Select every integration this product uses, for example identity or payments.\n\nYou may need to speak to a developer, technical or solution architect, or business analyst.",
             Kind = CensusTaskKind.Lookup,
             LookupSource = CensusLookupSource.Integration,
             LookupControl = CensusLookupControl.Checkbox,
             RegisterDomainKey = "integration"
         },
         Item("dependency", "technology", "Technology", "Other product dependencies",
-            "Search for a product or service this product depends on. If it is not listed, provide details. Add one entry per dependency.",
+            "Add products or services this one depends on. Search the register first. If it is not listed, provide details. Add one dependency per entry.\n\nYou may need to speak to a developer, technical or solution architect, or business analyst.",
             "dependency", "dependencies", "dependency", pickFromRegister: true),
         Item("data", "data", "Data and information", "Information assets",
-            "Record information this product creates, reads, updates or publishes. Add one entry per information asset.",
+            "Add information this product creates, reads, updates or publishes, one asset per entry.\n\nYou may need to speak to a business analyst. If you record any information assets here, check there is an information asset owner in the contacts section.",
             "information asset", "information assets", "data"),
         Item("measure", "performance", "Performance", "Metrics and KPIs",
-            "Record the key KPIs for this product. Add one entry per KPI. Include a link to any reference materials relating to this question.",
+            "Add the key metrics for this product, one per entry. Include a link to a dashboard or other reference if you have one.",
             "KPI", "KPIs", "measure", url: true),
         Lookup("risk-appetite", "governance", "Governance and assurance",
             "Risk appetite",
-            "Select the risk appetite for this product.",
+            "Select the risk appetite agreed for this product.",
             CensusLookupSource.RiskAppetite, CensusLookupControl.Radio, "risk-appetite"),
         Item("assurance", "governance", "Governance and assurance", "Assurance",
-            "Record assurance activity for this product. Add one entry per assurance activity.",
+            "What assurance activity has taken place on this product, for example service assessment, peer review, IT health check, accessibility audit, pen testing or similar external assurance activities. Add one activity per entry.",
             "assurance activity", "assurance activities", "assurance"),
         new()
         {
@@ -561,7 +591,7 @@ public static class CensusDefinition
             GroupName = "Risk and service management",
             Heading = "Risks, issues, actions and decisions",
             NavHeading = "RAID",
-            Help = "Tell us where RAID is recorded for this product, and how often it is reviewed.",
+            Help = "Tell us where you record risks, issues, actions and decisions for this product, and how often you review them.",
             Kind = CensusTaskKind.Form,
             RegisterDomainKey = "risk",
             FormFields =
@@ -605,7 +635,7 @@ public static class CensusDefinition
             GroupKey = "risk",
             GroupName = "Risk and service management",
             Heading = "Incidents",
-            Help = "Tell us how incidents for this product are managed.",
+            Help = "Tell us whether you have an incident management process and how you find out about incidents.",
             Kind = CensusTaskKind.Form,
             RegisterDomainKey = "incidents",
             FormFields =
@@ -630,7 +660,7 @@ public static class CensusDefinition
             ]
         },
         Item("resource", "evidence", "Evidence", "Evidence and resources",
-            "Record evidence, guidance or research for this product. Add one entry per resource.",
+            "Add links to any useful guidance or supporting documentation you may have published about this product that may be relevant to this census.",
             "resource", "resources", "resource")
     ];
 

@@ -16,17 +16,20 @@ public sealed class ServiceCensusService : IServiceCensusService
     private readonly IAissProductAccessibilityService _aiss;
     private readonly IFipsBusinessAreaLookupSyncService _businessAreaSync;
     private readonly IFipsDirectorateLookupSyncService _directorateSync;
+    private readonly IPermissionService _permissions;
 
     public ServiceCensusService(
         CompassDbContext db,
         IAissProductAccessibilityService aiss,
         IFipsBusinessAreaLookupSyncService businessAreaSync,
-        IFipsDirectorateLookupSyncService directorateSync)
+        IFipsDirectorateLookupSyncService directorateSync,
+        IPermissionService permissions)
     {
         _db = db;
         _aiss = aiss;
         _businessAreaSync = businessAreaSync;
         _directorateSync = directorateSync;
+        _permissions = permissions;
     }
 
     public async Task<ServiceCensusProductListViewModel> ListProductsAsync(
@@ -48,6 +51,28 @@ public sealed class ServiceCensusService : IServiceCensusService
             .ToListAsync(ct);
 
         var productIds = products.Select(p => p.Id).ToList();
+        var actorEmail = (userEmail ?? "").Trim();
+        var censusContacts = productIds.Count == 0
+            ? []
+            : await _db.ServiceCensusContactReviews.AsNoTracking()
+                .Where(r => productIds.Contains(r.Response.ProductId)
+                    && ((r.CmdbName != null && r.CmdbName != "")
+                        || (r.CmdbEmail != null && r.CmdbEmail != "")))
+                .Select(r => new
+                {
+                    r.Response.ProductId,
+                    r.RoleKey,
+                    r.CmdbName,
+                    r.CmdbEmail,
+                    r.IncorrectReason
+                })
+                .ToListAsync(ct);
+        var censusNamedIds = censusContacts
+            .Where(c => actorEmail.Length > 0
+                && !string.IsNullOrWhiteSpace(c.CmdbEmail)
+                && string.Equals(c.CmdbEmail.Trim(), actorEmail, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.ProductId)
+            .ToHashSet();
         var responses = await _db.ServiceCensusResponses.AsNoTracking()
             .Where(r => productIds.Contains(r.ProductId))
             .Select(r => new
@@ -97,7 +122,7 @@ public sealed class ServiceCensusService : IServiceCensusService
                 TaskCount = taskCount,
                 Submitted = submitted,
                 SubmittedAt = response?.SubmittedAt,
-                UserIsNamedContact = p.IsNamed
+                UserIsNamedContact = p.IsNamed || censusNamedIds.Contains(p.Id)
             };
         }).ToList();
 
@@ -111,36 +136,43 @@ public sealed class ServiceCensusService : IServiceCensusService
             .ThenBy(r => r.Name)
             .Select(r => r.Name)
             .ToListAsync(ct);
+        foreach (var censusRole in CensusDefinition.ContactRoles)
+        {
+            if (!contactRoles.Any(name => string.Equals(name, censusRole.Name, StringComparison.OrdinalIgnoreCase)))
+                contactRoles.Add(censusRole.Name);
+        }
         var offeringContacts = await _db.CMDBProductContacts.AsNoTracking()
             .Where(c => productIds.Contains(c.CMDBProductId))
             .Select(c => new { c.CMDBProductId, Role = c.FipsContactRole.Name, c.UserName, c.UserEmail })
             .ToListAsync(ct);
-        var contactsByProduct = offeringContacts
-            .GroupBy(c => c.CMDBProductId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.GroupBy(c => c.Role, StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(
-                        r => r.Key,
-                        r => string.Join(", ", r
-                            .Select(x => (x.UserName ?? "").Trim())
-                            .Where(n => n.Length > 0)
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
-                            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)),
-                        StringComparer.OrdinalIgnoreCase));
+        var peopleByProduct = new Dictionary<Guid, Dictionary<string, List<string>>>();
+        foreach (var offering in offeringContacts)
+        {
+            AddRolePerson(peopleByProduct, offering.CMDBProductId, offering.Role, offering.UserName);
+        }
+        foreach (var review in censusContacts)
+        {
+            var roleName = CensusContactRoleName(review.RoleKey, review.IncorrectReason);
+            if (!contactRoles.Any(name => string.Equals(name, roleName, StringComparison.OrdinalIgnoreCase)))
+                contactRoles.Add(roleName);
+            AddRolePerson(peopleByProduct, review.ProductId, roleName, FirstNonBlank(review.CmdbName, review.CmdbEmail));
+        }
         foreach (var row in rows)
         {
-            if (!contactsByProduct.TryGetValue(row.Id, out var roles)) continue;
-            row.RoleContacts = roles;
+            if (!peopleByProduct.TryGetValue(row.Id, out var roles)) continue;
+            row.RoleContacts = roles.ToDictionary(
+                r => r.Key,
+                r => string.Join(", ", r.Value.OrderBy(n => n, StringComparer.OrdinalIgnoreCase)),
+                StringComparer.OrdinalIgnoreCase);
             row.ContactNames = roles.Values
-                .SelectMany(names => names.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                .SelectMany(names => names)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
-        var contactOptions = offeringContacts
-            .Select(c => (c.UserName ?? "").Trim())
-            .Where(name => name.Length > 0)
+        var contactOptions = peopleByProduct.Values
+            .SelectMany(roles => roles.Values)
+            .SelectMany(names => names)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -157,6 +189,11 @@ public sealed class ServiceCensusService : IServiceCensusService
                     string.Equals((c.UserName ?? "").Trim(), contactNeedle, StringComparison.OrdinalIgnoreCase)
                     || string.Equals((c.UserEmail ?? "").Trim(), contactNeedle, StringComparison.OrdinalIgnoreCase))
                 .Select(c => c.CMDBProductId)
+                .Concat(censusContacts
+                    .Where(c =>
+                        string.Equals((c.CmdbName ?? "").Trim(), contactNeedle, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals((c.CmdbEmail ?? "").Trim(), contactNeedle, StringComparison.OrdinalIgnoreCase))
+                    .Select(c => c.ProductId))
                 .ToHashSet();
             rows = rows.Where(r => matchingIds.Contains(r.Id)).ToList();
         }
@@ -191,20 +228,23 @@ public sealed class ServiceCensusService : IServiceCensusService
             await MarkAccessibilityEnrolledCompleteAsync(response, userEmail, ct);
         var named = NamedSubmitters(product, response);
         var userIsNamed = UserIsNamedSubmitter(named, userEmail);
+        var opsCanSubmit = await UserIsOpsSubmitterAsync(userEmail);
         var allComplete = CensusDefinition.Tasks.All(t =>
             StatusOf(response, t.Key) == ServiceCensusStatuses.Complete);
         var submitted = await EnsureSubmittedStateAsync(response, product.Id, userEmail, ct);
+        var canSubmit = CanUserSubmitReturn(userIsNamed, opsCanSubmit, allComplete, submitted);
 
-        string blocked = SubmitBlockedReason(submitted, allComplete, userIsNamed, named.Count);
+        string blocked = SubmitBlockedReason(submitted, allComplete, userIsNamed, opsCanSubmit, named.Count);
 
         return new ServiceCensusTaskListViewModel
         {
             ProductId = product.Id,
             ProductTitle = product.Title,
             ShowAll = showAll,
-            CanSubmit = userIsNamed && allComplete && !submitted,
+            CanSubmit = canSubmit,
             AllComplete = allComplete,
             UserIsNamedSubmitter = userIsNamed,
+            UserIsNamedOrAdmin = userIsNamed || opsCanSubmit,
             Submitted = submitted,
             SubmittedAt = response.SubmittedAt,
             SubmittedBy = response.SubmittedBy,
@@ -318,17 +358,18 @@ public sealed class ServiceCensusService : IServiceCensusService
         }
 
         if (task.Kind == CensusTaskKind.Form)
-            HydrateNamedFormFields(vm, task, response, state);
+            HydrateNamedFormFields(vm, task, response, state, product);
 
         var named = NamedSubmitters(product, response);
         var submitted = await EnsureSubmittedStateAsync(response, product.Id, userEmail, ct);
         var allComplete = CensusDefinition.Tasks.All(t =>
             StatusOf(response, t.Key) == ServiceCensusStatuses.Complete);
         var userIsNamed = UserIsNamedSubmitter(named, userEmail);
+        var opsCanSubmit = await UserIsOpsSubmitterAsync(userEmail);
         vm.Submitted = submitted;
         vm.AllComplete = allComplete;
         vm.UserIsNamedSubmitter = userIsNamed;
-        vm.CanSubmit = userIsNamed && allComplete && !submitted;
+        vm.CanSubmit = CanUserSubmitReturn(userIsNamed, opsCanSubmit, allComplete, submitted);
         vm.NamedSubmitters = named;
 
         return vm;
@@ -423,23 +464,25 @@ public sealed class ServiceCensusService : IServiceCensusService
             await MarkAccessibilityEnrolledCompleteAsync(response, userEmail, ct);
         var named = NamedSubmitters(product, response);
         var userIsNamed = UserIsNamedSubmitter(named, userEmail);
+        var opsCanSubmit = await UserIsOpsSubmitterAsync(userEmail);
         var incomplete = CensusDefinition.Tasks
             .Where(t => StatusOf(response, t.Key) != ServiceCensusStatuses.Complete)
             .Select(t => Summary(t, StatusOf(response, t.Key)))
             .ToList();
         var submitted = await EnsureSubmittedStateAsync(response, product.Id, userEmail, ct);
         var allComplete = incomplete.Count == 0;
+        var canSubmit = CanUserSubmitReturn(userIsNamed, opsCanSubmit, allComplete, submitted);
 
         return new ServiceCensusSubmitViewModel
         {
             ProductId = product.Id,
             ProductTitle = product.Title,
             ShowAll = showAll,
-            CanSubmit = userIsNamed && allComplete && !submitted,
-            UserIsNamedOrAdmin = userIsNamed,
+            CanSubmit = canSubmit,
+            UserIsNamedOrAdmin = userIsNamed || opsCanSubmit,
             AllComplete = allComplete,
             Submitted = submitted,
-            BlockedReason = SubmitBlockedReason(submitted, allComplete, userIsNamed, named.Count),
+            BlockedReason = SubmitBlockedReason(submitted, allComplete, userIsNamed, opsCanSubmit, named.Count),
             NamedSubmitters = named,
             Incomplete = incomplete,
             Nav = NavFor(response, null)
@@ -456,8 +499,10 @@ public sealed class ServiceCensusService : IServiceCensusService
         if (await ProductIsAissEnrolledAsync(product, ct))
             await MarkAccessibilityEnrolledCompleteAsync(response, userEmail, ct);
         var named = NamedSubmitters(product, response);
-        if (!UserIsNamedSubmitter(named, userEmail))
-            return (false, "Only a person named on the contacts page can submit this census.");
+        var userIsNamed = UserIsNamedSubmitter(named, userEmail);
+        var opsCanSubmit = await UserIsOpsSubmitterAsync(userEmail);
+        if (!userIsNamed && !opsCanSubmit)
+            return (false, "Only a person named on the contacts page, or an admin, can submit this census.");
         if (CensusDefinition.Tasks.Any(t => StatusOf(response, t.Key) != ServiceCensusStatuses.Complete))
             return (false, "Every question must be marked complete before you can submit.");
 
@@ -628,6 +673,13 @@ public sealed class ServiceCensusService : IServiceCensusService
                 && !c.CMDBProduct.IsEnterpriseService)
             .Select(c => new { c.CMDBProductId, c.CMDBProduct.Title })
             .ToListAsync(ct);
+        var censusNamed = await _db.ServiceCensusContactReviews.AsNoTracking()
+            .Where(r => r.CmdbEmail != null && r.CmdbEmail.ToLower() == email
+                && r.Response.Product.Status == CMDBProductStatus.Active
+                && !r.Response.Product.IsEnterpriseService)
+            .Select(r => new { CMDBProductId = r.Response.ProductId, r.Response.Product.Title })
+            .ToListAsync(ct);
+        named = named.Concat(censusNamed).ToList();
         if (named.Count == 0)
             return null;
 
@@ -767,6 +819,38 @@ public sealed class ServiceCensusService : IServiceCensusService
         }
     }
 
+    private static string CensusContactRoleName(string roleKey, string? extraName)
+    {
+        var defined = CensusDefinition.ContactRoles.FirstOrDefault(r =>
+            string.Equals(r.Key, roleKey, StringComparison.OrdinalIgnoreCase));
+        if (defined != null) return defined.Name;
+        var extra = (extraName ?? "").Trim();
+        return extra.Length > 0 ? extra : "Additional contact";
+    }
+
+    private static void AddRolePerson(
+        Dictionary<Guid, Dictionary<string, List<string>>> peopleByProduct,
+        Guid productId,
+        string? role,
+        string? person)
+    {
+        var roleName = (role ?? "").Trim();
+        var name = (person ?? "").Trim();
+        if (roleName.Length == 0 || name.Length == 0) return;
+        if (!peopleByProduct.TryGetValue(productId, out var roles))
+        {
+            roles = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            peopleByProduct[productId] = roles;
+        }
+        if (!roles.TryGetValue(roleName, out var names))
+        {
+            names = [];
+            roles[roleName] = names;
+        }
+        if (!names.Any(existing => string.Equals(existing, name, StringComparison.OrdinalIgnoreCase)))
+            names.Add(name);
+    }
+
     private static List<ServiceCensusNamedPersonViewModel> NamedSubmitters(
         CMDBProduct product, ServiceCensusResponse response)
     {
@@ -798,11 +882,19 @@ public sealed class ServiceCensusService : IServiceCensusService
             && string.Equals(p.Email.Trim(), actor, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string SubmitBlockedReason(bool submitted, bool allComplete, bool userIsNamed, int namedCount)
+    private Task<bool> UserIsOpsSubmitterAsync(string email) =>
+        _permissions.IsOperationConsoleUserAsync(email);
+
+    private static bool CanUserSubmitReturn(bool userIsNamed, bool opsCanSubmit, bool allComplete, bool submitted) =>
+        !submitted && allComplete && (userIsNamed || opsCanSubmit);
+
+    private static string SubmitBlockedReason(
+        bool submitted, bool allComplete, bool userIsNamed, bool opsCanSubmit, int namedCount)
     {
         if (submitted) return "This census has already been submitted.";
         var parts = new List<string>();
         if (!allComplete) parts.Add("All sections must be complete.");
+        if (opsCanSubmit) return string.Join(" ", parts);
         if (namedCount == 0) parts.Add("Name people on the contacts page before this census can be submitted.");
         else if (!userIsNamed) parts.Add("Only one of the people listed can submit this census.");
         return string.Join(" ", parts);
@@ -2075,15 +2167,43 @@ public sealed class ServiceCensusService : IServiceCensusService
             }
         }
 
+        ApplyProductUrlFromCensus(product, response);
         product.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static void ApplyProductUrlFromCensus(CMDBProduct product, ServiceCensusResponse response)
+    {
+        var task = CensusDefinition.Find("product-url");
+        if (task == null) return;
+        var state = StateOf(response, task.Key);
+        if (state == null || state.CannotAnswer) return;
+
+        var access = (state.Answers ?? []).FirstOrDefault(a =>
+            string.Equals(a.Title, "access", StringComparison.OrdinalIgnoreCase));
+        if (access == null) return;
+
+        var hasUrl = string.Equals(access.LookupCode, "has-url", StringComparison.OrdinalIgnoreCase);
+        product.ProductURL = hasUrl ? Trim(access.Narrative, 2000) : null;
     }
 
     private static void HydrateNamedFormFields(
         ServiceCensusQuestionViewModel vm,
         CensusTask task,
         ServiceCensusResponse response,
-        ServiceCensusTaskState? state)
+        ServiceCensusTaskState? state,
+        CMDBProduct product)
     {
+        if (task.Key == "product-url")
+        {
+            vm.RegisterProductUrl = string.IsNullOrWhiteSpace(product.ProductURL) ? null : product.ProductURL.Trim();
+            if (!HasFormValue(vm, "access") && !string.IsNullOrWhiteSpace(vm.RegisterProductUrl))
+            {
+                vm.FormValues["access"] = "has-url";
+                if (!vm.FormNarratives.TryGetValue("access", out var url) || string.IsNullOrWhiteSpace(url))
+                    vm.FormNarratives["access"] = vm.RegisterProductUrl;
+            }
+        }
+
         if (task.Key is "service" or "service-line")
         {
             var stored = task.Key == "service" ? response.ServiceDescription : response.ServiceLineDescription;
