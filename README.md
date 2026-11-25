@@ -31,9 +31,9 @@ Strategic delivery and compliance platform for the Department for Education (DfE
 | --- | --- | --- |
 | `Development` | Development Azure Web App | automatic on push to `Development` |
 | `Test` | Test Azure Web App | automatic on push to `Test` |
-| `main` | Production Azure Web App | **manual only** — no GitHub Actions deploy on push |
+| `main` | Production Azure Web App | automatic on push to `main` |
 
-Development and Test use workflows under `.github/workflows/`. Production is deployed manually to reduce the risk of accidental releases when merging to `main`.
+Workflows live under `.github/workflows/`.
 
 ## Prerequisites
 
