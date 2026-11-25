@@ -245,6 +245,7 @@ public sealed class ServiceCensusService : IServiceCensusService
             AllComplete = allComplete,
             UserIsNamedSubmitter = userIsNamed,
             UserIsNamedOrAdmin = userIsNamed || opsCanSubmit,
+            UserIsOpsAdmin = opsCanSubmit,
             Submitted = submitted,
             SubmittedAt = response.SubmittedAt,
             SubmittedBy = response.SubmittedBy,
@@ -480,6 +481,7 @@ public sealed class ServiceCensusService : IServiceCensusService
             ShowAll = showAll,
             CanSubmit = canSubmit,
             UserIsNamedOrAdmin = userIsNamed || opsCanSubmit,
+            UserIsOpsAdmin = opsCanSubmit,
             AllComplete = allComplete,
             Submitted = submitted,
             BlockedReason = SubmitBlockedReason(submitted, allComplete, userIsNamed, opsCanSubmit, named.Count),
@@ -503,7 +505,9 @@ public sealed class ServiceCensusService : IServiceCensusService
         var opsCanSubmit = await UserIsOpsSubmitterAsync(userEmail);
         if (!userIsNamed && !opsCanSubmit)
             return (false, "Only a person named on the contacts page, or an admin, can submit this census.");
-        if (CensusDefinition.Tasks.Any(t => StatusOf(response, t.Key) != ServiceCensusStatuses.Complete))
+        // Named contacts must finish every section; ops/admin may submit incomplete returns.
+        if (!opsCanSubmit
+            && CensusDefinition.Tasks.Any(t => StatusOf(response, t.Key) != ServiceCensusStatuses.Complete))
             return (false, "Every question must be marked complete before you can submit.");
 
         await PersistSubmittedStatusAsync(response, userEmail, ct);
@@ -899,16 +903,20 @@ public sealed class ServiceCensusService : IServiceCensusService
     private Task<bool> UserIsOpsSubmitterAsync(string email) =>
         _permissions.IsOperationConsoleUserAsync(email);
 
+    /// <summary>
+    /// Named contacts may submit only when every section is complete.
+    /// Ops/admin (operation console) may submit even when some sections are incomplete.
+    /// </summary>
     private static bool CanUserSubmitReturn(bool userIsNamed, bool opsCanSubmit, bool allComplete, bool submitted) =>
-        !submitted && allComplete && (userIsNamed || opsCanSubmit);
+        !submitted && (opsCanSubmit || (userIsNamed && allComplete));
 
     private static string SubmitBlockedReason(
         bool submitted, bool allComplete, bool userIsNamed, bool opsCanSubmit, int namedCount)
     {
         if (submitted) return "This census has already been submitted.";
+        if (opsCanSubmit) return "";
         var parts = new List<string>();
         if (!allComplete) parts.Add("All sections must be complete.");
-        if (opsCanSubmit) return string.Join(" ", parts);
         if (namedCount == 0) parts.Add("Name people on the contacts page before this census can be submitted.");
         else if (!userIsNamed) parts.Add("Only one of the people listed can submit this census.");
         return string.Join(" ", parts);

@@ -66,6 +66,23 @@
 
     @if (Model.CanSubmit)
     {
+      @if (Model.UserIsOpsAdmin && Model.Incomplete.Count > 0)
+      {
+        <div class="govuk-warning-text">
+          <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+          <strong class="govuk-warning-text__text">
+            <span class="govuk-visually-hidden">Warning</span>
+            You are submitting as an admin with incomplete sections. Only completed answers will be copied to the service register.
+          </strong>
+        </div>
+        <p class="govuk-body">These questions are still incomplete:</p>
+        <ul class="govuk-list govuk-list--bullet">
+          @foreach (var item in Model.Incomplete)
+          {
+            <li><a class="govuk-link" href="@Url.Action("Question", new { id = Model.ProductId, taskKey = item.Key, all = Model.ShowAll })">@item.Heading</a> — @item.StatusLabel</li>
+          }
+        </ul>
+      }
       <form method="post" action="@Url.Action("SubmitPost", new { id = Model.ProductId, all = Model.ShowAll })">
         @Html.AntiForgeryToken()
         <button type="submit" class="govuk-button" data-module="govuk-button">Submit census</button>
