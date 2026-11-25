@@ -1,0 +1,789 @@
+@model Compass.ViewModels.Modern.ServiceCensusAnalysisViewModel
+@using Compass.Models.Modern.Work
+@using Microsoft.AspNetCore.Html
+@{
+  var m = Model ?? new Compass.ViewModels.Modern.ServiceCensusAnalysisViewModel();
+  string AnalysisHref(string view, string? area = null, string? question = null, Guid? product = null, bool? groupBy = null) =>
+      Url.Action("Analysis", "ModernCensus", new
+      {
+        view,
+        area = area ?? m.BusinessAreaFilter,
+        question = question ?? m.QuestionKey,
+        product = product ?? m.ProductId,
+        submittedOnly = m.SubmittedOnly,
+        groupBy = groupBy ?? (view == "question" ? m.GroupByAnswer : (bool?)null),
+        applied = 1
+      }) ?? "#";
+  var exportHref = Url.Action("ExportReport", "ModernCensus", new { area = m.BusinessAreaFilter }) ?? "#";
+  var submittedPct = m.ProductCount == 0 ? 0 : (int)Math.Round(100.0 * m.SubmittedCount / m.ProductCount);
+  var scopeLabel = string.IsNullOrWhiteSpace(m.BusinessAreaFilter) ? "All business areas" : m.BusinessAreaFilter;
+  var lensTitle = m.View switch
+  {
+    "themes" => "What the answers say",
+    "hierarchy" => "How offerings are organised",
+    "contacts" => "Who changed on offerings",
+    "area" => "How areas compare",
+    "question" => m.SelectedQuestion?.Question ?? "One question in depth",
+    "product" => m.SelectedProduct?.Title ?? "One product’s census",
+    _ => "What stands out"
+  };
+}
+
+@section Styles {
+  <link rel="stylesheet" href="@Url.Content("~/modern/css/service-schema-report.css")" asp-append-version="true" />
+}
+
+@section Breadcrumbs {
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernDashboard")">Home</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Index", "ModernCensus")">Service census</a></li>
+  <li class="govuk-breadcrumbs__list-item"><a class="govuk-breadcrumbs__link" href="@Url.Action("Report", "ModernCensus")">Report</a></li>
+  <li class="govuk-breadcrumbs__list-item" aria-current="page">Analysis</li>
+}
+
+@await Html.PartialAsync("_ModernPageHeader", new Compass.ViewModels.Modern.ModernPageHeaderViewModel {
+  Caption = "Service census",
+  Title = "Census analysis",
+  Lede = new HtmlString("<p class=\"govuk-body govuk-!-margin-bottom-0\">Read submitted census answers as operational insight — patterns, ownership structure, and contact changes across the register.</p>"),
+  Actions = new HtmlString(
+      "<a class=\"govuk-button govuk-!-margin-bottom-0\" href=\"" + exportHref + "\">Export spreadsheet</a>")
+})
+
+@if (TempData["ErrorMessage"] != null)
+{
+  <div class="govuk-error-summary" data-module="govuk-error-summary">
+    <div class="govuk-error-summary__body">
+      <p class="govuk-body">@TempData["ErrorMessage"]</p>
+    </div>
+  </div>
+}
+
+<div class="census-analysis">
+  <aside class="ca-scope" aria-label="Analysis scope">
+    <form method="get" action="@Url.Action("Analysis", "ModernCensus")" role="search">
+      <input type="hidden" name="view" value="@m.View" />
+      <input type="hidden" name="applied" value="1" />
+      @if (!string.IsNullOrWhiteSpace(m.QuestionKey) && m.View != "question")
+      {
+        <input type="hidden" name="question" value="@m.QuestionKey" />
+      }
+      @if (m.ProductId is Guid pid && m.View != "product")
+      {
+        <input type="hidden" name="product" value="@pid" />
+      }
+
+      <div class="ca-scope__row">
+        <div class="ca-scope__field">
+          <label class="govuk-label" for="census-analysis-area">Business area</label>
+          <select class="govuk-select" id="census-analysis-area" name="area">
+            <option value="">All business areas</option>
+            @foreach (var option in m.BusinessAreaOptions)
+            {
+              if (string.Equals(m.BusinessAreaFilter, option, StringComparison.OrdinalIgnoreCase))
+              {
+                <option value="@option" selected>@option</option>
+              }
+              else
+              {
+                <option value="@option">@option</option>
+              }
+            }
+          </select>
+        </div>
+
+        @if (m.View == "question")
+        {
+          <div class="ca-scope__field ca-scope__field--grow">
+            <label class="govuk-label" for="census-analysis-question">Question</label>
+            <select class="govuk-select" id="census-analysis-question" name="question">
+              @foreach (var q in m.Questions)
+              {
+                if (string.Equals(m.QuestionKey, q.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                  <option value="@q.Key" selected>@q.Section — @q.Question</option>
+                }
+                else
+                {
+                  <option value="@q.Key">@q.Section — @q.Question</option>
+                }
+              }
+            </select>
+          </div>
+        }
+
+        @if (m.View == "product")
+        {
+          <div class="ca-scope__field ca-scope__field--grow">
+            <label class="govuk-label" for="census-analysis-product">Product</label>
+            <select class="govuk-select" id="census-analysis-product" name="product">
+              @foreach (var product in m.Products)
+              {
+                if (product.Id == m.ProductId)
+                {
+                  <option value="@product.Id" selected>@product.Title</option>
+                }
+                else
+                {
+                  <option value="@product.Id">@product.Title</option>
+                }
+              }
+            </select>
+          </div>
+        }
+
+        <div class="ca-scope__actions">
+          <button type="submit" class="govuk-button govuk-!-margin-bottom-0">Update</button>
+        </div>
+      </div>
+
+      <div class="ca-scope__meta">
+        <span class="ca-scope__chip">@scopeLabel</span>
+        <span class="ca-scope__chip">@m.SubmittedCount.ToString("N0") submitted of @m.ProductCount.ToString("N0")</span>
+        <div class="govuk-checkboxes govuk-checkboxes--small ca-scope__check">
+          <div class="govuk-checkboxes__item">
+            <input class="govuk-checkboxes__input" id="census-analysis-submitted" name="submittedOnly" type="checkbox" value="true"@(m.SubmittedOnly ? " checked" : "")>
+            <label class="govuk-label govuk-checkboxes__label" for="census-analysis-submitted">Submitted only</label>
+          </div>
+        </div>
+        @if (m.View == "question" && m.SelectedQuestion?.CanGroupByAnswer == true)
+        {
+          <div class="govuk-radios govuk-radios--inline govuk-radios--small" data-module="govuk-radios">
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="census-analysis-groupby-yes" name="groupBy" type="radio" value="true"@(m.GroupByAnswer ? " checked" : "")>
+              <label class="govuk-label govuk-radios__label" for="census-analysis-groupby-yes">By answer</label>
+            </div>
+            <div class="govuk-radios__item">
+              <input class="govuk-radios__input" id="census-analysis-groupby-no" name="groupBy" type="radio" value="false"@(!m.GroupByAnswer ? " checked" : "")>
+              <label class="govuk-label govuk-radios__label" for="census-analysis-groupby-no">By product</label>
+            </div>
+          </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(m.BusinessAreaFilter))
+        {
+          <a class="govuk-link" href="@AnalysisHref(m.View, area: "")">Clear area</a>
+        }
+      </div>
+    </form>
+  </aside>
+
+  <nav class="ca-lenses" aria-label="Analysis lenses">
+    <a class="ca-lens@(m.View == "overview" ? " ca-lens--current" : "")" href="@AnalysisHref("overview")"@if (m.View == "overview") { <text> aria-current="page"</text> }>
+      <span class="ca-lens__name">Overview</span>
+      <span class="ca-lens__desc">Coverage and standout answers</span>
+    </a>
+    <a class="ca-lens@(m.View == "themes" ? " ca-lens--current" : "")" href="@AnalysisHref("themes")"@if (m.View == "themes") { <text> aria-current="page"</text> }>
+      <span class="ca-lens__name">Themes</span>
+      <span class="ca-lens__desc">Distributions across key questions</span>
+    </a>
+    <a class="ca-lens@(m.View == "hierarchy" ? " ca-lens--current" : "")" href="@AnalysisHref("hierarchy")"@if (m.View == "hierarchy") { <text> aria-current="page"</text> }>
+      <span class="ca-lens__name">Hierarchy</span>
+      <span class="ca-lens__desc">Service line → service → product</span>
+    </a>
+    <a class="ca-lens@(m.View == "contacts" ? " ca-lens--current" : "")" href="@AnalysisHref("contacts")"@if (m.View == "contacts") { <text> aria-current="page"</text> }>
+      <span class="ca-lens__name">Contacts</span>
+      <span class="ca-lens__desc">Changed, added and removed</span>
+    </a>
+    <a class="ca-lens@(m.View == "area" ? " ca-lens--current" : "")" href="@AnalysisHref("area")"@if (m.View == "area") { <text> aria-current="page"</text> }>
+      <span class="ca-lens__name">Areas</span>
+      <span class="ca-lens__desc">Compare business areas</span>
+    </a>
+    <a class="ca-lens@(m.View == "question" ? " ca-lens--current" : "")" href="@AnalysisHref("question")"@if (m.View == "question") { <text> aria-current="page"</text> }>
+      <span class="ca-lens__name">Question</span>
+      <span class="ca-lens__desc">Drill into one answer set</span>
+    </a>
+    <a class="ca-lens@(m.View == "product" ? " ca-lens--current" : "")" href="@AnalysisHref("product")"@if (m.View == "product") { <text> aria-current="page"</text> }>
+      <span class="ca-lens__name">Product</span>
+      <span class="ca-lens__desc">Full response for one offering</span>
+    </a>
+  </nav>
+
+  <header class="ca-lens-heading">
+    <h2 class="govuk-heading-l govuk-!-margin-bottom-1">@lensTitle</h2>
+  </header>
+
+@if (m.ProductCount == 0)
+{
+  <p class="govuk-body">No products match this scope.@(m.SubmittedOnly ? " Try clearing “Submitted only”." : "")</p>
+}
+else if (m.View == "overview")
+{
+  <section class="ca-hero" aria-labelledby="ca-overview-coverage">
+    <div class="ca-hero__main">
+      <h3 id="ca-overview-coverage" class="govuk-heading-m govuk-!-margin-bottom-2">Coverage in this scope</h3>
+      <p class="ca-hero__figure dfe-f-u-tabular-numbers">@submittedPct%</p>
+      <p class="govuk-body govuk-!-margin-bottom-2">
+        <strong>@m.SubmittedCount.ToString("N0")</strong> submitted of <strong>@m.ProductCount.ToString("N0")</strong> products
+        @(string.IsNullOrWhiteSpace(m.BusinessAreaFilter) ? "across the register" : "in " + m.BusinessAreaFilter).
+      </p>
+      <div class="ca-progress" aria-hidden="true"><span style="width: @submittedPct%"></span></div>
+    </div>
+    <div class="ca-hero__side">
+      @foreach (var kpi in m.Kpis.Where(k => !string.IsNullOrWhiteSpace(k.QuestionKey)).Take(3))
+      {
+        <a class="ca-hero__signal" href="@AnalysisHref("question", question: kpi.QuestionKey)">
+          <span class="ca-hero__signal-label">@kpi.Label</span>
+          <span class="ca-hero__signal-value dfe-f-u-tabular-numbers">@kpi.Value</span>
+          <span class="govuk-hint govuk-!-margin-bottom-0">@kpi.Hint</span>
+        </a>
+      }
+    </div>
+  </section>
+
+  <section class="govuk-!-margin-bottom-8" aria-labelledby="ca-overview-findings">
+    <h3 id="ca-overview-findings" class="govuk-heading-m">Standout answers</h3>
+    <p class="govuk-body">Dominant responses on the questions that matter most for operational planning. Open any row to see the products behind it.</p>
+    @if (m.Themes.Count == 0)
+    {
+      <p class="govuk-body">No categorical answers to summarise yet.</p>
+    }
+    else
+    {
+      <ol class="ca-rank govuk-list">
+        @foreach (var theme in m.Themes.Where(t => t.Values.Count > 0).Take(8))
+        {
+          var top = theme.Values[0];
+          <li class="ca-rank__item">
+            <a class="ca-rank__link" href="@AnalysisHref("question", question: theme.QuestionKey)">
+              <div class="ca-rank__head">
+                <span class="ca-rank__title">@theme.Title</span>
+                <span class="ca-rank__section">@theme.Section</span>
+              </div>
+              <div class="ca-rank__dominant">
+                <span class="ca-rank__answer">@top.Value</span>
+                <span class="ca-rank__pct dfe-f-u-tabular-numbers">@top.Percent%</span>
+              </div>
+              <div class="ca-rank__bar" aria-hidden="true"><span style="width: @top.Percent%"></span></div>
+              <p class="govuk-hint govuk-!-margin-bottom-0">@top.ProductCount.ToString("N0") products · @theme.Description</p>
+            </a>
+          </li>
+        }
+      </ol>
+    }
+  </section>
+
+  <section aria-labelledby="ca-overview-next">
+    <h3 id="ca-overview-next" class="govuk-heading-m">Continue reading</h3>
+    <div class="ca-jumps">
+      <a class="ca-jump" href="@AnalysisHref("themes")"><strong>Themes</strong><span>See full distributions side by side</span></a>
+      <a class="ca-jump" href="@AnalysisHref("hierarchy")"><strong>Hierarchy</strong><span>Service line → service → product</span></a>
+      <a class="ca-jump" href="@AnalysisHref("contacts")"><strong>Contacts</strong><span>Who was changed, added or removed</span></a>
+      <a class="ca-jump" href="@AnalysisHref("area")"><strong>Areas</strong><span>Compare business areas</span></a>
+    </div>
+  </section>
+}
+else if (m.View == "themes")
+{
+  <p class="govuk-body">Each theme shows how products answered. The leading answer is called out so you can scan the register quickly.</p>
+  @if (m.ThemeBoard.Count == 0)
+  {
+    <p class="govuk-body">No themed answer distributions for this scope.</p>
+  }
+  else
+  {
+    <div class="ca-theme-stack">
+      @foreach (var theme in m.ThemeBoard)
+      {
+        var top = theme.Values.FirstOrDefault();
+        <article class="ca-theme">
+          <header class="ca-theme__header">
+            <div>
+              <p class="ca-theme__eyebrow">@theme.Section</p>
+              <h3 class="govuk-heading-m govuk-!-margin-bottom-1">
+                <a class="govuk-link govuk-link--no-visited-state" href="@AnalysisHref("question", question: theme.QuestionKey)">@theme.Title</a>
+              </h3>
+              <p class="govuk-hint govuk-!-margin-bottom-0">@theme.Description</p>
+            </div>
+            @if (top != null)
+            {
+              <div class="ca-theme__lead">
+                <span class="ca-theme__lead-label">Leading answer</span>
+                <span class="ca-theme__lead-answer">@top.Value</span>
+                <span class="ca-theme__lead-pct dfe-f-u-tabular-numbers">@top.Percent%</span>
+              </div>
+            }
+          </header>
+          @if (theme.Values.Count == 0)
+          {
+            <p class="govuk-body govuk-!-margin-bottom-0">No categorical answers to summarise.</p>
+          }
+          else
+          {
+            <ul class="ca-bars govuk-list">
+              @foreach (var value in theme.Values)
+              {
+                <li class="ca-bars__row">
+                  <div class="ca-bars__label">
+                    <span>@value.Value</span>
+                    <span class="dfe-f-u-tabular-numbers">@value.ProductCount · @value.Percent%</span>
+                  </div>
+                  <div class="ca-bars__track" aria-hidden="true"><span style="width: @value.Percent%"></span></div>
+                </li>
+              }
+            </ul>
+          }
+        </article>
+      }
+    </div>
+  }
+}
+else if (m.View == "hierarchy")
+{
+  <p class="govuk-body">Read the register the way teams organise work: <strong>service line</strong>, then <strong>service</strong>, then the products underneath.</p>
+  @if (m.Kpis.Count > 0)
+  {
+    <div class="ca-inline-stats" role="list">
+      @foreach (var kpi in m.Kpis)
+      {
+        <div class="ca-inline-stat" role="listitem">
+          <span class="ca-inline-stat__value dfe-f-u-tabular-numbers">@kpi.Value</span>
+          <span class="ca-inline-stat__label">@kpi.Label</span>
+        </div>
+      }
+    </div>
+  }
+  @if (m.ServiceHierarchy.Count == 0)
+  {
+    <p class="govuk-body">No service or service line answers in this scope.</p>
+  }
+  else
+  {
+    <div class="ca-tree">
+      @foreach (var line in m.ServiceHierarchy)
+      {
+        <section class="ca-tree__line">
+          <header class="ca-tree__line-head">
+            <span class="ca-tree__tag">Service line</span>
+            <h3 class="govuk-heading-m govuk-!-margin-bottom-1">@line.ServiceLineName</h3>
+            <p class="govuk-hint govuk-!-margin-bottom-0">@line.ProductCount.ToString("N0") products</p>
+            @if (!string.IsNullOrWhiteSpace(line.Description))
+            {
+              <p class="govuk-body govuk-!-margin-top-2 govuk-!-margin-bottom-0">@line.Description</p>
+            }
+          </header>
+
+          @foreach (var service in line.Services)
+          {
+            <div class="ca-tree__service">
+              <div class="ca-tree__service-head">
+                <span class="ca-tree__tag ca-tree__tag--service">Service</span>
+                <h4 class="govuk-heading-s govuk-!-margin-bottom-0">@service.ServiceName</h4>
+                <span class="govuk-hint">@service.ProductCount.ToString("N0")</span>
+              </div>
+              <ul class="ca-tree__products govuk-list">
+                @foreach (var product in service.Products)
+                {
+                  <li>
+                    <a class="govuk-link govuk-link--no-visited-state" href="@AnalysisHref("product", product: product.ProductId)">@product.Product</a>
+                    @if (!string.IsNullOrWhiteSpace(product.Areas))
+                    {
+                      <span class="ca-tree__meta">@product.Areas</span>
+                    }
+                    <span class="@WorkBadgeCss.CensusStatusBadgeClass(product.CensusStatus) ca-tree__badge">@product.CensusStatus</span>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+
+          @if (line.UnassignedProducts.Count > 0)
+          {
+            <div class="ca-tree__service ca-tree__service--loose">
+              <div class="ca-tree__service-head">
+                <span class="ca-tree__tag ca-tree__tag--loose">No service</span>
+                <h4 class="govuk-heading-s govuk-!-margin-bottom-0">Products without a service</h4>
+              </div>
+              <ul class="ca-tree__products govuk-list">
+                @foreach (var product in line.UnassignedProducts)
+                {
+                  <li>
+                    <a class="govuk-link govuk-link--no-visited-state" href="@AnalysisHref("product", product: product.ProductId)">@product.Product</a>
+                    @if (!string.IsNullOrWhiteSpace(product.Areas))
+                    {
+                      <span class="ca-tree__meta">@product.Areas</span>
+                    }
+                    <span class="@WorkBadgeCss.CensusStatusBadgeClass(product.CensusStatus) ca-tree__badge">@product.CensusStatus</span>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+        </section>
+      }
+    </div>
+  }
+}
+else if (m.View == "contacts" && m.Contacts != null)
+{
+  var contacts = m.Contacts;
+  <p class="govuk-body">Use this to brief register updates: who moved on a role, which roles were added for offerings, and who was removed with no replacement.</p>
+  <div class="ca-inline-stats" role="list">
+    <div class="ca-inline-stat" role="listitem"><span class="ca-inline-stat__value dfe-f-u-tabular-numbers">@contacts.ChangedCount</span><span class="ca-inline-stat__label">Changed</span></div>
+    <div class="ca-inline-stat" role="listitem"><span class="ca-inline-stat__value dfe-f-u-tabular-numbers">@contacts.AddedCount</span><span class="ca-inline-stat__label">Added</span></div>
+    <div class="ca-inline-stat" role="listitem"><span class="ca-inline-stat__value dfe-f-u-tabular-numbers">@contacts.RemovedCount</span><span class="ca-inline-stat__label">Removed</span></div>
+    <div class="ca-inline-stat" role="listitem"><span class="ca-inline-stat__value dfe-f-u-tabular-numbers">@contacts.ConfirmedCount</span><span class="ca-inline-stat__label">Confirmed</span></div>
+  </div>
+
+  <section class="ca-diff-block" aria-labelledby="ca-contacts-changed">
+    <h3 id="ca-contacts-changed" class="govuk-heading-m">Changed <span class="ca-tag ca-tag--changed">@contacts.ChangedCount</span></h3>
+    @if (contacts.Changes.Count == 0)
+    {
+      <p class="govuk-body">No changed contacts in this scope.</p>
+    }
+    else
+    {
+      <ul class="ca-diff-list govuk-list">
+        @foreach (var row in contacts.Changes)
+        {
+          <li class="ca-diff">
+            <div class="ca-diff__context">
+              <a class="govuk-link govuk-link--no-visited-state" href="@AnalysisHref("product", product: row.ProductId)">@row.Product</a>
+              <span class="ca-diff__role">@row.Role</span>
+            </div>
+            <div class="ca-diff__swap">
+              <div class="ca-diff__person ca-diff__person--from">
+                <span class="ca-diff__person-label">Was</span>
+                <span class="ca-diff__person-name">@(string.IsNullOrWhiteSpace(row.OriginalName) ? "—" : row.OriginalName)</span>
+                @if (!string.IsNullOrWhiteSpace(row.OriginalEmail))
+                {
+                  <span class="ca-diff__person-email">@row.OriginalEmail</span>
+                }
+              </div>
+              <span class="ca-diff__arrow" aria-hidden="true">→</span>
+              <div class="ca-diff__person ca-diff__person--to">
+                <span class="ca-diff__person-label">Now</span>
+                <span class="ca-diff__person-name">@(string.IsNullOrWhiteSpace(row.NewName) ? "—" : row.NewName)</span>
+                @if (!string.IsNullOrWhiteSpace(row.NewEmail))
+                {
+                  <span class="ca-diff__person-email">@row.NewEmail</span>
+                }
+              </div>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <section class="ca-diff-block" aria-labelledby="ca-contacts-added">
+    <h3 id="ca-contacts-added" class="govuk-heading-m">Added <span class="ca-tag ca-tag--added">@contacts.AddedCount</span></h3>
+    @if (contacts.AddedRoles.Count == 0)
+    {
+      <p class="govuk-body">No additional roles in this scope.</p>
+    }
+    else
+    {
+      <ul class="ca-diff-list govuk-list">
+        @foreach (var row in contacts.AddedRoles)
+        {
+          <li class="ca-diff ca-diff--added">
+            <div class="ca-diff__context">
+              <a class="govuk-link govuk-link--no-visited-state" href="@AnalysisHref("product", product: row.ProductId)">@row.Product</a>
+              <span class="ca-diff__role">@row.Role</span>
+            </div>
+            <div class="ca-diff__person ca-diff__person--to">
+              <span class="ca-diff__person-name">@(string.IsNullOrWhiteSpace(row.NewName) ? "—" : row.NewName)</span>
+              @if (!string.IsNullOrWhiteSpace(row.NewEmail))
+              {
+                <span class="ca-diff__person-email">@row.NewEmail</span>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <section class="ca-diff-block" aria-labelledby="ca-contacts-removed">
+    <h3 id="ca-contacts-removed" class="govuk-heading-m">Removed <span class="ca-tag ca-tag--removed">@contacts.RemovedCount</span></h3>
+    @if (contacts.RemovedRoles.Count == 0)
+    {
+      <p class="govuk-body">No removed contacts in this scope.</p>
+    }
+    else
+    {
+      <ul class="ca-diff-list govuk-list">
+        @foreach (var row in contacts.RemovedRoles)
+        {
+          <li class="ca-diff ca-diff--removed">
+            <div class="ca-diff__context">
+              <a class="govuk-link govuk-link--no-visited-state" href="@AnalysisHref("product", product: row.ProductId)">@row.Product</a>
+              <span class="ca-diff__role">@row.Role</span>
+            </div>
+            <div class="ca-diff__swap">
+              <div class="ca-diff__person ca-diff__person--from">
+                <span class="ca-diff__person-label">Was</span>
+                <span class="ca-diff__person-name">@(string.IsNullOrWhiteSpace(row.OriginalName) ? "—" : row.OriginalName)</span>
+                @if (!string.IsNullOrWhiteSpace(row.OriginalEmail))
+                {
+                  <span class="ca-diff__person-email">@row.OriginalEmail</span>
+                }
+              </div>
+              <span class="ca-diff__arrow" aria-hidden="true">→</span>
+              <div class="ca-diff__person">
+                <span class="ca-diff__person-label">Now</span>
+                <span class="ca-diff__person-name">None named</span>
+              </div>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+}
+else if (m.View == "area")
+{
+  <p class="govuk-body">Compare submission and key technology signals across business areas. Open an area to see its products.</p>
+  @if (m.Areas.Count == 0)
+  {
+    <p class="govuk-body">No business areas in this view.</p>
+  }
+  else
+  {
+    <div class="ca-area-grid">
+      @foreach (var area in m.Areas)
+      {
+        var selected = string.Equals(m.SelectedArea?.Name, area.Name, StringComparison.OrdinalIgnoreCase);
+        <a class="ca-area@(selected ? " ca-area--current" : "")" href="@AnalysisHref("area", area: area.Name)">
+          <h3 class="govuk-heading-s govuk-!-margin-bottom-1">@area.Name</h3>
+          <p class="ca-area__submitted dfe-f-u-tabular-numbers">@area.SubmittedPercent% submitted</p>
+          <div class="ca-progress ca-progress--thin" aria-hidden="true"><span style="width: @area.SubmittedPercent%"></span></div>
+          <dl class="ca-area__signals">
+            <div><dt>Phase</dt><dd>@area.TopPhase</dd></div>
+            <div><dt>AI</dt><dd>@area.AiYesPercent</dd></div>
+            <div><dt>Azure</dt><dd>@area.AzurePercent</dd></div>
+            <div><dt>Tech</dt><dd>@area.TopTechnology</dd></div>
+          </dl>
+          <p class="govuk-hint govuk-!-margin-bottom-0">@area.ProductCount.ToString("N0") products</p>
+        </a>
+      }
+    </div>
+  }
+
+  @if (m.SelectedArea != null)
+  {
+    var area = m.SelectedArea;
+    <section class="ca-area-detail govuk-!-margin-top-8" aria-labelledby="ca-area-detail">
+      <h3 id="ca-area-detail" class="govuk-heading-m">@area.Name</h3>
+      <p class="govuk-body">@area.SubmittedCount.ToString("N0") submitted of @area.ProductCount.ToString("N0") products.</p>
+      @if (area.Themes.Count > 0)
+      {
+        <ol class="ca-rank govuk-list govuk-!-margin-bottom-6">
+          @foreach (var theme in area.Themes.Where(t => t.Values.Count > 0).Take(4))
+          {
+            var top = theme.Values[0];
+            <li class="ca-rank__item">
+              <a class="ca-rank__link" href="@AnalysisHref("question", area: area.Name, question: theme.QuestionKey)">
+                <div class="ca-rank__head">
+                  <span class="ca-rank__title">@theme.Title</span>
+                </div>
+                <div class="ca-rank__dominant">
+                  <span class="ca-rank__answer">@top.Value</span>
+                  <span class="ca-rank__pct dfe-f-u-tabular-numbers">@top.Percent%</span>
+                </div>
+                <div class="ca-rank__bar" aria-hidden="true"><span style="width: @top.Percent%"></span></div>
+              </a>
+            </li>
+          }
+        </ol>
+      }
+      <ul class="ca-tree__products govuk-list">
+        @foreach (var product in area.Products)
+        {
+          <li>
+            <a class="govuk-link govuk-link--no-visited-state" href="@AnalysisHref("product", area: area.Name, product: product.Id)">@product.Title</a>
+            <span class="@WorkBadgeCss.CensusStatusBadgeClass(product.CensusStatus) ca-tree__badge">@product.CensusStatus</span>
+            <span class="ca-tree__meta">@product.TasksComplete/@product.TaskCount</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+}
+else if (m.View == "question" && m.SelectedQuestion != null)
+{
+  var q = m.SelectedQuestion;
+  var answeredPct = q.ProductsInScope == 0 ? 0 : (int)Math.Round(100.0 * q.ProductsAnswered / q.ProductsInScope);
+  <p class="govuk-hint">@q.Section · @q.KindLabel</p>
+  <div class="ca-inline-stats" role="list">
+    <div class="ca-inline-stat" role="listitem"><span class="ca-inline-stat__value dfe-f-u-tabular-numbers">@answeredPct%</span><span class="ca-inline-stat__label">Answered</span></div>
+    <div class="ca-inline-stat" role="listitem"><span class="ca-inline-stat__value dfe-f-u-tabular-numbers">@q.ProductsAnswered</span><span class="ca-inline-stat__label">of @q.ProductsInScope</span></div>
+    <div class="ca-inline-stat" role="listitem"><span class="ca-inline-stat__value dfe-f-u-tabular-numbers">@q.ProductsCannotAnswer</span><span class="ca-inline-stat__label">Cannot answer</span></div>
+    <div class="ca-inline-stat" role="listitem"><span class="ca-inline-stat__value dfe-f-u-tabular-numbers">@q.ProductsMissing</span><span class="ca-inline-stat__label">Missing</span></div>
+  </div>
+
+  @if (q.ValueCounts.Count > 0)
+  {
+    <section class="govuk-!-margin-bottom-6" aria-labelledby="ca-q-dist">
+      <h3 id="ca-q-dist" class="govuk-heading-m">How products answered</h3>
+      <ul class="ca-bars govuk-list">
+        @foreach (var entry in q.ValueCounts.Select((value, index) => new { value, index }))
+        {
+          var value = entry.value;
+          <li class="ca-bars__row">
+            <div class="ca-bars__label">
+              @if (m.GroupByAnswer && q.CanGroupByAnswer)
+              {
+                <a class="govuk-link govuk-link--no-visited-state" href="#answer-@entry.index">@value.Value</a>
+              }
+              else
+              {
+                <span>@value.Value</span>
+              }
+              <span class="dfe-f-u-tabular-numbers">@value.ProductCount · @value.Percent%</span>
+            </div>
+            <div class="ca-bars__track" aria-hidden="true"><span style="width: @value.Percent%"></span></div>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (m.GroupByAnswer && q.CanGroupByAnswer && q.AnswerGroups.Count > 0)
+  {
+    @if (q.IsMultiSelect)
+    {
+      <p class="govuk-hint">Products can appear under more than one answer.</p>
+    }
+    @foreach (var entry in q.AnswerGroups.Select((group, index) => new { group, index }))
+    {
+      var group = entry.group;
+      <section class="ca-band" id="answer-@entry.index" aria-labelledby="answer-@entry.index-heading">
+        <header class="ca-band__head">
+          <h3 id="answer-@entry.index-heading" class="govuk-heading-m govuk-!-margin-bottom-1">@group.Answer</h3>
+          <p class="govuk-hint govuk-!-margin-bottom-0">@group.ProductCount.ToString("N0") products · @group.Percent%</p>
+          <div class="ca-progress ca-progress--thin govuk-!-margin-top-2" aria-hidden="true"><span style="width: @group.Percent%"></span></div>
+        </header>
+        @if (group.Products.Count == 0)
+        {
+          <p class="govuk-body">No products selected this answer.</p>
+        }
+        else
+        {
+          <ul class="ca-tree__products govuk-list">
+            @foreach (var row in group.Products)
+            {
+              <li>
+                <a class="govuk-link govuk-link--no-visited-state" href="@AnalysisHref("product", product: row.ProductId)">@row.Product</a>
+                @if (!string.IsNullOrWhiteSpace(row.Areas))
+                {
+                  <span class="ca-tree__meta">@row.Areas</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(row.Details))
+                {
+                  <span class="ca-tree__meta">@row.Details</span>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    }
+  }
+  else
+  {
+    <ul class="ca-tree__products govuk-list">
+      @foreach (var row in q.ProductAnswers)
+      {
+        <li>
+          <a class="govuk-link govuk-link--no-visited-state" href="@AnalysisHref("product", product: row.ProductId)">@row.Product</a>
+          <span class="ca-tree__meta">@row.Summary</span>
+          @if (!string.IsNullOrWhiteSpace(row.Details))
+          {
+            <span class="ca-tree__meta">@row.Details</span>
+          }
+        </li>
+      }
+    </ul>
+  }
+}
+else if (m.View == "product" && m.SelectedProduct != null)
+{
+  var p = m.SelectedProduct;
+  <div class="ca-product-head">
+    <dl class="govuk-summary-list govuk-summary-list--no-border">
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Business area</dt>
+        <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(p.Areas) ? "—" : p.Areas)</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Census status</dt>
+        <dd class="govuk-summary-list__value"><span class="@WorkBadgeCss.CensusStatusBadgeClass(p.CensusStatus)">@p.CensusStatus</span></dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Submitted</dt>
+        <dd class="govuk-summary-list__value">
+          @(p.SubmittedAt is DateTime at ? at.ToString("d MMM yyyy HH:mm") + " UTC" : "—")
+          @if (!string.IsNullOrWhiteSpace(p.SubmittedBy))
+          {
+            <text> by @p.SubmittedBy</text>
+          }
+        </dd>
+      </div>
+    </dl>
+    <p class="govuk-body"><a class="govuk-link" href="@Url.Action("TaskList", "ModernCensus", new { id = p.Id, all = true })">Open census task list</a></p>
+  </div>
+
+  @foreach (var entry in p.Sections.Select((censusSection, index) => new { censusSection, index }))
+  {
+    var censusSection = entry.censusSection;
+    var sheetId = "sheet-" + entry.index;
+    <section class="ca-sheet" aria-labelledby="@sheetId">
+      <h3 id="@sheetId" class="govuk-heading-m">@censusSection.Name</h3>
+      <dl class="ca-sheet__list">
+        @foreach (var question in censusSection.Questions)
+        {
+          <div class="ca-sheet__row">
+            <dt>
+              <a class="govuk-link govuk-link--no-visited-state" href="@AnalysisHref("question", question: question.Key)">@question.Question</a>
+              <span class="ca-sheet__status">@question.Status</span>
+            </dt>
+            <dd>
+              @if (question.CannotAnswer)
+              {
+                <span>Cannot answer@(string.IsNullOrWhiteSpace(question.CannotAnswerReason) ? "" : ": " + question.CannotAnswerReason)</span>
+              }
+              else if (question.Items.Count == 0)
+              {
+                <span>—</span>
+              }
+              else
+              {
+                <ul class="govuk-list govuk-!-margin-bottom-0">
+                  @foreach (var item in question.Items)
+                  {
+                    var showDetails = !string.IsNullOrWhiteSpace(item.Details)
+                        && !string.Equals(item.Item, item.Details, StringComparison.OrdinalIgnoreCase);
+                    <li>
+                      @if (!string.IsNullOrWhiteSpace(item.Item))
+                      {
+                        @item.Item
+                      }
+                      @if (showDetails)
+                      {
+                        <span>@(string.IsNullOrWhiteSpace(item.Item) ? item.Details : " — " + item.Details)</span>
+                      }
+                      @{
+                        var isChangeTag = string.Equals(item.Reference, "Added", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(item.Reference, "Changed", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(item.Reference, "Confirmed", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(item.Reference, "Removed", StringComparison.OrdinalIgnoreCase);
+                      }
+                      @if (!string.IsNullOrWhiteSpace(item.Reference) && !isChangeTag)
+                      {
+                        <br /><a class="govuk-link" href="@item.Reference" rel="noreferrer noopener" target="_blank">@item.Reference</a>
+                      }
+                      else if (!string.IsNullOrWhiteSpace(item.Reference))
+                      {
+                        <span class="govuk-hint"> (@item.Reference)</span>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </dd>
+          </div>
+        }
+      </dl>
+    </section>
+  }
+}
+</div>

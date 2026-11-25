@@ -368,6 +368,29 @@ if (args.Length > 0 && args[0] == "--refresh-dev-from-production")
     return;
 }
 
+// One-way census-only refresh: read production census tables into development. Production is never written.
+if (args.Length > 0 && args[0] == "--refresh-census-from-production")
+{
+    var dryRun = args.Any(a => a == "--dry-run");
+    string? confirm = null;
+    for (var i = 1; i < args.Length - 1; i++)
+    {
+        if (args[i] == "--confirm")
+            confirm = args[i + 1];
+    }
+
+    if (!dryRun && !string.Equals(confirm, Compass.CensusProductionToDevelopmentRefresh.ConfirmationPhrase, StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("Refusing to refresh development census data. Re-run with:");
+        Console.Error.WriteLine($"  dotnet run -- --refresh-census-from-production --confirm \"{Compass.CensusProductionToDevelopmentRefresh.ConfirmationPhrase}\"");
+        Console.Error.WriteLine("Add --dry-run to list production census row counts without changing development.");
+        return;
+    }
+
+    await Compass.CensusProductionToDevelopmentRefresh.RunAsync(dryRun);
+    return;
+}
+
 // Check for Azure SQL → Azure SQL environment migration. Writing to production is refused.
 if (args.Length > 0 && args[0] == "--migrate-sql")
 {

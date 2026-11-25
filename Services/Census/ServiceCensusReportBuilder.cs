@@ -385,6 +385,16 @@ public static class ServiceCensusReportBuilder
             .Include(r => r.ContactReviews)
             .Where(r => productIds.Contains(r.ProductId))
             .ToListAsync(ct);
+        var cmdbContacts = await db.CMDBProductContacts.AsNoTracking()
+            .Include(c => c.FipsContactRole)
+            .Where(c => productIds.Contains(c.CMDBProductId))
+            .Select(c => new { c.CMDBProductId, c.UserName, c.UserEmail, RoleName = c.FipsContactRole != null ? c.FipsContactRole.Name : null })
+            .ToListAsync(ct);
+        var cmdbByProduct = cmdbContacts
+            .GroupBy(c => c.CMDBProductId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(c => (c.UserName, c.UserEmail, c.RoleName)).ToList());
 
         var answers = new List<ServiceCensusReportAnswerRow>();
         var contacts = new List<ServiceCensusReportContactRow>();
@@ -445,7 +455,7 @@ public static class ServiceCensusReportBuilder
                         AddAnswer(
                             role?.Name ?? review.IncorrectReason ?? review.RoleKey,
                             string.Join(" · ", new[] { review.CmdbName, review.CmdbEmail }.Where(v => !string.IsNullOrWhiteSpace(v))),
-                            added ? "Added" : review.IsIncorrect ? "Changed" : "Confirmed");
+                            ContactChangeLabel(added, review.IsIncorrect, review.CmdbName, review.CmdbEmail));
                     }
                     continue;
                 }
@@ -462,15 +472,29 @@ public static class ServiceCensusReportBuilder
                     continue;
                 }
 
-                if (task.Kind == CensusTaskKind.LongText
-                    || (task.Key is "service" or "service-line" && state.Answers.Count == 0))
+                if (task.Key == "service")
                 {
-                    var text = task.Key == "service" ? response.ServiceDescription
-                        : task.Key == "service-line" ? response.ServiceLineDescription
-                        : state.Answers.FirstOrDefault()?.Narrative;
-                    if (string.IsNullOrWhiteSpace(text))
-                        text = state.Answers.FirstOrDefault()?.Narrative;
-                    AddAnswer(task.TitleLabel, text, null);
+                    var name = FirstAnswerNarrative(state, "name") ?? response.ServiceDescription;
+                    AddAnswer(string.IsNullOrWhiteSpace(name) ? null : name.Trim(), null, null);
+                    continue;
+                }
+
+                if (task.Key == "service-line")
+                {
+                    var name = FirstAnswerNarrative(state, "name") ?? response.ServiceLineDescription;
+                    var description = FirstAnswerNarrative(state, "description");
+                    AddAnswer(
+                        string.IsNullOrWhiteSpace(name) ? null : name.Trim(),
+                        string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+                        null);
+                    continue;
+                }
+
+                if (task.Kind == CensusTaskKind.LongText)
+                {
+                    var text = state.Answers.FirstOrDefault()?.Narrative;
+                    // Put the value in Item so analysis/export do not show a repeated field label.
+                    AddAnswer(string.IsNullOrWhiteSpace(text) ? null : text.Trim(), null, null);
                     continue;
                 }
 
@@ -488,26 +512,48 @@ public static class ServiceCensusReportBuilder
                 }
 
                 foreach (var answer in state.Answers.OrderBy(a => a.SortOrder))
-                    AddAnswer(
-                        DisplayItem(task, answer.Title, answer.LookupCode, lookups),
-                        answer.Narrative,
-                        answer.ExternalUrl);
+                {
+                    var item = DisplayItem(task, answer.Title, answer.LookupCode, lookups);
+                    var details = answer.Narrative;
+                    // Promote free-text values into Item so answers are not shown as "label + same value".
+                    if (string.IsNullOrWhiteSpace(item) && !string.IsNullOrWhiteSpace(details))
+                    {
+                        item = details.Trim();
+                        details = null;
+                    }
+                    AddAnswer(item, details, answer.ExternalUrl);
+                }
             }
 
+            var productCmdb = cmdbByProduct.GetValueOrDefault(product.Id) ?? [];
             foreach (var review in response.ContactReviews)
             {
                 var role = CensusDefinition.ContactRoles.FirstOrDefault(r =>
                     string.Equals(r.Key, review.RoleKey, StringComparison.OrdinalIgnoreCase));
-                var added = role == null;
+                var added = role == null || review.RoleKey.StartsWith("cmdb-", StringComparison.OrdinalIgnoreCase);
+                var original = role == null
+                    ? null
+                    : MatchCmdbContact(productCmdb, role);
+                var roleLabel = role?.Name;
+                if (string.IsNullOrWhiteSpace(roleLabel) && !string.IsNullOrWhiteSpace(review.IncorrectReason))
+                    roleLabel = review.IncorrectReason;
+                if (string.IsNullOrWhiteSpace(roleLabel))
+                    roleLabel = added ? "Additional contact" : review.RoleKey;
+
                 contacts.Add(new ServiceCensusReportContactRow
                 {
+                    ProductId = product.Id,
                     Product = product.Title,
                     Areas = product.Areas,
                     CensusStatus = product.CensusStatus,
-                    Role = role?.Name ?? review.IncorrectReason ?? review.RoleKey,
+                    RoleKey = review.RoleKey,
+                    Role = roleLabel ?? "Additional contact",
                     Name = review.CmdbName,
                     Email = review.CmdbEmail,
-                    Change = added ? "Added" : review.IsIncorrect ? "Changed" : "Confirmed"
+                    OriginalName = original?.UserName,
+                    OriginalEmail = original?.UserEmail,
+                    IsAdded = added,
+                    Change = ContactChangeLabel(added, review.IsIncorrect, review.CmdbName, review.CmdbEmail)
                 });
             }
         }
@@ -592,7 +638,8 @@ public static class ServiceCensusReportBuilder
             {
                 var revealedOption = revealed.Choices.FirstOrDefault(o =>
                     string.Equals(o.Value, lookupCode, StringComparison.OrdinalIgnoreCase));
-                return (revealed.Legend ?? formField.Label) + ": " + (revealedOption?.Label ?? lookupCode ?? "");
+                // Option label only — the question/legend is already shown as context.
+                return revealedOption?.Label ?? lookupCode;
             }
         }
 
@@ -604,9 +651,11 @@ public static class ServiceCensusReportBuilder
             {
                 var option = field.Options.FirstOrDefault(o =>
                     string.Equals(o.Value, lookupCode, StringComparison.OrdinalIgnoreCase));
-                return field.Label + ": " + (option?.Label ?? lookupCode ?? "");
+                return option?.Label ?? lookupCode;
             }
-            return field.Label;
+
+            // Text / long-text values live in Narrative; avoid repeating the field label as the answer.
+            return null;
         }
 
         var choice = task.ChoiceOptions.FirstOrDefault(o =>
@@ -624,6 +673,42 @@ public static class ServiceCensusReportBuilder
             return titled;
 
         return string.IsNullOrWhiteSpace(title) ? lookupCode : title;
+    }
+
+    private static string? FirstAnswerNarrative(ServiceCensusTaskState? state, string fieldKey)
+    {
+        if (state == null)
+            return null;
+        return state.Answers
+            .Where(a => string.Equals(a.Title, fieldKey, StringComparison.OrdinalIgnoreCase))
+            .Select(a => a.Narrative)
+            .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+    }
+
+    private static string ContactChangeLabel(bool added, bool isIncorrect, string? name, string? email)
+    {
+        if (added)
+            return "Added";
+        if (!isIncorrect)
+            return "Confirmed";
+        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(email))
+            return "Removed";
+        return "Changed";
+    }
+
+    private static (string? UserName, string? UserEmail, string? RoleName)? MatchCmdbContact(
+        List<(string? UserName, string? UserEmail, string? RoleName)> contacts,
+        CensusContactRole role)
+    {
+        foreach (var contact in contacts)
+        {
+            var name = (contact.RoleName ?? "").Trim().ToLowerInvariant();
+            if (role.NameAliases.Any(alias => name.Contains(alias, StringComparison.OrdinalIgnoreCase))
+                || name.Contains(role.Name.ToLowerInvariant(), StringComparison.Ordinal))
+                return contact;
+        }
+
+        return null;
     }
 
     private sealed record SectionDef(string Key, string Name, List<string> Keys);

@@ -606,6 +606,20 @@ public sealed class ServiceCensusService : IServiceCensusService
         string? businessArea, CancellationToken ct, bool includeSubmissions = false) =>
         ServiceCensusReportBuilder.LoadAsync(_db, businessArea, ct, includeSubmissions);
 
+    public async Task<ServiceCensusAnalysisViewModel> GetAnalysisAsync(
+        string? businessArea,
+        string? view,
+        string? questionKey,
+        Guid? productId,
+        bool submittedOnly,
+        CancellationToken ct,
+        bool? groupByAnswer = null)
+    {
+        var report = await GetReportAsync(businessArea, ct, includeSubmissions: true);
+        return ServiceCensusAnalysisBuilder.Build(
+            report, view, questionKey, productId, submittedOnly, groupByAnswer);
+    }
+
     public async Task<IReadOnlyList<ServiceCensusProductRowViewModel>> SuggestProductsAsync(
         string userEmail, bool showAll, string? search, int limit, CancellationToken ct)
     {
@@ -1468,11 +1482,18 @@ public sealed class ServiceCensusService : IServiceCensusService
         var order = 0;
         foreach (var field in task.FormFields)
         {
-            var value = Trim(FormValue(request, field.Key), 300);
+            // LongText / Text post into FormValues; do not apply the radio LookupCode length (300) to them.
+            var valueMax = field.Kind switch
+            {
+                CensusFormFieldKind.LongText => 10000,
+                CensusFormFieldKind.Text => 400,
+                _ => 300
+            };
+            var value = Trim(FormValue(request, field.Key), valueMax);
             var narrative = Trim(FormNarrative(request, field.Key), 10000);
             if (field.Kind == CensusFormFieldKind.LongText || field.Kind == CensusFormFieldKind.Text)
             {
-                narrative = Trim(value ?? narrative, field.Kind == CensusFormFieldKind.Text ? 400 : 10000);
+                narrative = Trim(value ?? narrative, valueMax);
                 value = field.Key;
             }
             if (string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(narrative))

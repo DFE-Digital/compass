@@ -27,6 +27,15 @@ public interface IServiceCensusService
 
     Task<ServiceCensusReportViewModel> GetReportAsync(string? businessArea, CancellationToken ct, bool includeSubmissions = false);
 
+    Task<ServiceCensusAnalysisViewModel> GetAnalysisAsync(
+        string? businessArea,
+        string? view,
+        string? questionKey,
+        Guid? productId,
+        bool submittedOnly,
+        CancellationToken ct,
+        bool? groupByAnswer = null);
+
     Task<ServiceCensusPromptViewModel?> GetPromptAsync(string userEmail, CancellationToken ct);
 
     Task<IReadOnlyList<ServiceCensusProductRowViewModel>> SuggestProductsAsync(

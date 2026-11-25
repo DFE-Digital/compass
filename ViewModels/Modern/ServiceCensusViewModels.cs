@@ -286,12 +286,17 @@ public sealed class ServiceCensusReportAnswerRow
 
 public sealed class ServiceCensusReportContactRow
 {
+    public Guid ProductId { get; set; }
     public string Product { get; set; } = "";
     public string Areas { get; set; } = "";
     public string CensusStatus { get; set; } = "";
+    public string? RoleKey { get; set; }
     public string Role { get; set; } = "";
     public string? Name { get; set; }
     public string? Email { get; set; }
+    public string? OriginalName { get; set; }
+    public string? OriginalEmail { get; set; }
+    public bool IsAdded { get; set; }
     public string Change { get; set; } = "";
 }
 
@@ -356,6 +361,204 @@ public sealed class ServiceCensusExploreValueCount
 {
     public string Value { get; set; } = "";
     public int ProductCount { get; set; }
+}
+
+public sealed class ServiceCensusAnalysisViewModel
+{
+    /// <summary>overview | themes | hierarchy | contacts | area | question | product</summary>
+    public string View { get; set; } = "overview";
+    public string? BusinessAreaFilter { get; set; }
+    public string? QuestionKey { get; set; }
+    public Guid? ProductId { get; set; }
+    public bool SubmittedOnly { get; set; } = true;
+    /// <summary>When the selected question has a fixed option set, group the product list by answer.</summary>
+    public bool GroupByAnswer { get; set; }
+    public List<string> BusinessAreaOptions { get; set; } = [];
+    public List<ServiceCensusReportQuestionRow> Questions { get; set; } = [];
+    public List<ServiceCensusReportProductRow> Products { get; set; } = [];
+
+    public int ProductCount { get; set; }
+    public int SubmittedCount { get; set; }
+    public int AnswerRowCount { get; set; }
+    public List<ServiceCensusAnalysisKpi> Kpis { get; set; } = [];
+    public List<ServiceCensusAnalysisTheme> Themes { get; set; } = [];
+
+    public List<ServiceCensusAnalysisAreaRow> Areas { get; set; } = [];
+    public ServiceCensusAnalysisAreaDetail? SelectedArea { get; set; }
+
+    public ServiceCensusAnalysisQuestionDetail? SelectedQuestion { get; set; }
+    public ServiceCensusAnalysisProductDetail? SelectedProduct { get; set; }
+
+    public List<ServiceCensusAnalysisTheme> ThemeBoard { get; set; } = [];
+    public List<ServiceCensusAnalysisServiceLineNode> ServiceHierarchy { get; set; } = [];
+    public ServiceCensusAnalysisContactsView? Contacts { get; set; }
+}
+
+public sealed class ServiceCensusAnalysisKpi
+{
+    public string Label { get; set; } = "";
+    public string Value { get; set; } = "";
+    public string? Hint { get; set; }
+    public string? QuestionKey { get; set; }
+}
+
+public sealed class ServiceCensusAnalysisTheme
+{
+    public string Title { get; set; } = "";
+    public string Section { get; set; } = "";
+    public string QuestionKey { get; set; } = "";
+    public string? Description { get; set; }
+    public int ProductsAnswered { get; set; }
+    public int ProductsCannotAnswer { get; set; }
+    public List<ServiceCensusAnalysisValueCount> Values { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisValueCount
+{
+    public string Value { get; set; } = "";
+    public int ProductCount { get; set; }
+    public int Percent { get; set; }
+}
+
+public sealed class ServiceCensusAnalysisAreaRow
+{
+    public string Name { get; set; } = "";
+    public int ProductCount { get; set; }
+    public int SubmittedCount { get; set; }
+    public int SubmittedPercent { get; set; }
+    public string TopPhase { get; set; } = "—";
+    public string AiYesPercent { get; set; } = "—";
+    public string AzurePercent { get; set; } = "—";
+    public string IncidentProcessYesPercent { get; set; } = "—";
+    public string TopTechnology { get; set; } = "—";
+}
+
+public sealed class ServiceCensusAnalysisAreaDetail
+{
+    public string Name { get; set; } = "";
+    public int ProductCount { get; set; }
+    public int SubmittedCount { get; set; }
+    public List<ServiceCensusAnalysisTheme> Themes { get; set; } = [];
+    public List<ServiceCensusReportProductRow> Products { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisQuestionDetail
+{
+    public string Key { get; set; } = "";
+    public string Section { get; set; } = "";
+    public string Question { get; set; } = "";
+    public string KindLabel { get; set; } = "";
+    public bool CanGroupByAnswer { get; set; }
+    public bool IsMultiSelect { get; set; }
+    public int ProductsInScope { get; set; }
+    public int ProductsAnswered { get; set; }
+    public int ProductsCannotAnswer { get; set; }
+    public int ProductsMissing { get; set; }
+    public double AverageItemsPerProduct { get; set; }
+    public List<ServiceCensusAnalysisValueCount> ValueCounts { get; set; } = [];
+    public List<ServiceCensusAnalysisProductAnswer> ProductAnswers { get; set; } = [];
+    public List<ServiceCensusAnalysisAnswerGroup> AnswerGroups { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisAnswerGroup
+{
+    public string Answer { get; set; } = "";
+    public int ProductCount { get; set; }
+    public int Percent { get; set; }
+    public List<ServiceCensusAnalysisProductAnswer> Products { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisProductAnswer
+{
+    public Guid ProductId { get; set; }
+    public string Product { get; set; } = "";
+    public string Areas { get; set; } = "";
+    public string Status { get; set; } = "";
+    public string Summary { get; set; } = "";
+    public string? Details { get; set; }
+    public List<string> AnswerValues { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisProductDetail
+{
+    public Guid Id { get; set; }
+    public string Title { get; set; } = "";
+    public string Areas { get; set; } = "";
+    public string CensusStatus { get; set; } = "";
+    public DateTime? SubmittedAt { get; set; }
+    public string? SubmittedBy { get; set; }
+    public List<ServiceCensusAnalysisSectionAnswers> Sections { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisSectionAnswers
+{
+    public string Name { get; set; } = "";
+    public List<ServiceCensusAnalysisQuestionAnswers> Questions { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisQuestionAnswers
+{
+    public string Key { get; set; } = "";
+    public string Question { get; set; } = "";
+    public string Status { get; set; } = "";
+    public bool CannotAnswer { get; set; }
+    public string? CannotAnswerReason { get; set; }
+    public List<ServiceCensusAnalysisAnswerItem> Items { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisAnswerItem
+{
+    public string? Item { get; set; }
+    public string? Details { get; set; }
+    public string? Reference { get; set; }
+}
+
+public sealed class ServiceCensusAnalysisServiceLineNode
+{
+    public string ServiceLineName { get; set; } = "";
+    public string? Description { get; set; }
+    public int ProductCount { get; set; }
+    public List<ServiceCensusAnalysisServiceNode> Services { get; set; } = [];
+    public List<ServiceCensusAnalysisHierarchyProduct> UnassignedProducts { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisServiceNode
+{
+    public string ServiceName { get; set; } = "";
+    public int ProductCount { get; set; }
+    public List<ServiceCensusAnalysisHierarchyProduct> Products { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisHierarchyProduct
+{
+    public Guid ProductId { get; set; }
+    public string Product { get; set; } = "";
+    public string Areas { get; set; } = "";
+    public string CensusStatus { get; set; } = "";
+}
+
+public sealed class ServiceCensusAnalysisContactsView
+{
+    public int ChangedCount { get; set; }
+    public int AddedCount { get; set; }
+    public int RemovedCount { get; set; }
+    public int ConfirmedCount { get; set; }
+    public List<ServiceCensusAnalysisContactChange> Changes { get; set; } = [];
+    public List<ServiceCensusAnalysisContactChange> AddedRoles { get; set; } = [];
+    public List<ServiceCensusAnalysisContactChange> RemovedRoles { get; set; } = [];
+}
+
+public sealed class ServiceCensusAnalysisContactChange
+{
+    public Guid ProductId { get; set; }
+    public string Product { get; set; } = "";
+    public string Areas { get; set; } = "";
+    public string Role { get; set; } = "";
+    public string Change { get; set; } = "";
+    public string? OriginalName { get; set; }
+    public string? OriginalEmail { get; set; }
+    public string? NewName { get; set; }
+    public string? NewEmail { get; set; }
 }
 
 public sealed class ServiceCensusReportWeekPoint

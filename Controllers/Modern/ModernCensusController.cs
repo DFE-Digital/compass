@@ -132,6 +132,7 @@ public sealed class ModernCensusController : Controller
     }
 
     [HttpGet("report/responses")]
+    [HttpGet("/ModernCensus/Responses")]
     public async Task<IActionResult> Responses(
         string? dim,
         string? question,
@@ -220,6 +221,35 @@ public sealed class ModernCensusController : Controller
             SelectedQuestion = selectedQuestion,
             SelectedProduct = selectedProduct
         });
+    }
+
+    [HttpGet("analysis")]
+    [HttpGet("report/analysis")]
+    [HttpGet("/ModernCensus/Analysis")]
+    public async Task<IActionResult> Analysis(
+        string? view,
+        string? area,
+        string? question,
+        Guid? product,
+        bool? submittedOnly,
+        bool? groupBy,
+        string? applied,
+        CancellationToken cancellationToken = default)
+    {
+        var blocked = await RequireRegisterAsync();
+        if (blocked != null) return blocked;
+        if (!await CanExportReportAsync())
+        {
+            TempData["ErrorMessage"] = "Only admin and Central Operations users can view census analysis.";
+            return RedirectToAction(nameof(Report), new { area });
+        }
+
+        SetNav("census-analysis");
+        var submittedOnlyFlag = submittedOnly ?? string.IsNullOrWhiteSpace(applied);
+        var vm = await _census.GetAnalysisAsync(
+            area, view, question, product, submittedOnlyFlag, cancellationToken, groupBy);
+        ViewData["Title"] = "Census analysis";
+        return View("~/Views/Modern/Census/Analysis.cshtml", vm);
     }
 
     private Task<bool> CanExportReportAsync() =>
