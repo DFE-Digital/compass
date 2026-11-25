@@ -50,6 +50,8 @@ public sealed class ServiceCensusTaskListViewModel
     public bool AllComplete { get; set; }
     public bool UserIsNamedSubmitter { get; set; }
     public bool UserIsNamedOrAdmin { get; set; }
+    /// <summary>True when the current user is an ops/admin who may submit incomplete returns.</summary>
+    public bool UserIsOpsAdmin { get; set; }
     public bool Submitted { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public string? SubmittedBy { get; set; }
@@ -186,6 +188,8 @@ public sealed class ServiceCensusSubmitViewModel
     public bool ShowAll { get; set; }
     public bool CanSubmit { get; set; }
     public bool UserIsNamedOrAdmin { get; set; }
+    /// <summary>True when the current user is an ops/admin who may submit incomplete returns.</summary>
+    public bool UserIsOpsAdmin { get; set; }
     public bool AllComplete { get; set; }
     public bool Submitted { get; set; }
     public string BlockedReason { get; set; } = "";
